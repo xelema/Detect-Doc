@@ -1,21 +1,31 @@
-"""Rendu d'un document en PDF a partir d'un gabarit HTML.
+"""Rendu d'un document en PDF a partir d'un template HTML.
 
 Le formatage des montants et des dates est ecrit a la main plutot que confie a la locale
 du systeme : le corpus doit sortir identique sur n'importe quelle machine.
 """
 
+import os
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
-from jinja2 import Environment, FileSystemLoader, select_autoescape
-from markupsafe import Markup
-from weasyprint import HTML
+# Doit etre pose avant l'import de weasyprint, qui charge fontTools.
+#
+# WeasyPrint embarque un sous-ensemble de chaque police utilisee, et fontTools horodate
+# ce sous-ensemble dans sa table `head`. Sans cette variable, deux rendus successifs du
+# meme document different de trois octets et n'ont donc pas le meme hash, ce qui
+# ruine la promesse du manifest. `SOURCE_DATE_EPOCH` est la convention des compilations
+# reproductibles, fontTools la respecte. Valeur choisie : 1er janvier 2025.
+os.environ.setdefault("SOURCE_DATE_EPOCH", "1735689600")
 
-DOSSIER_GABARITS = Path(__file__).parent / "templates"
+from jinja2 import Environment, FileSystemLoader, select_autoescape  # noqa: E402
+from markupsafe import Markup  # noqa: E402
+from weasyprint import HTML  # noqa: E402
+
+DOSSIER_TEMPLATES = Path(__file__).parent / "templates"
 
 # Couleurs de logo plausibles pour un organisme de formation. Le choix est pilote par
-# la graine, donc stable d'une generation a l'autre.
+# la seed, donc stable d'une generation a l'autre.
 COULEURS_LOGO = ["#1f4e79", "#256d5b", "#7a2f2f", "#4a3b6b", "#8a5a1f", "#2f5f7a"]
 
 
@@ -45,12 +55,12 @@ def nombre(valeur: int) -> str:
     return " ".join(groupes)
 
 
-def couleur_logo(graine: int) -> str:
-    """Couleur d'accent du document, partagee entre le logo et le gabarit."""
-    return COULEURS_LOGO[graine % len(COULEURS_LOGO)]
+def couleur_logo(seed: int) -> str:
+    """Couleur d'accent du document, partagee entre le logo et le template."""
+    return COULEURS_LOGO[seed % len(COULEURS_LOGO)]
 
 
-def logo_svg(raison_sociale: str, graine: int) -> Markup:
+def logo_svg(raison_sociale: str, seed: int) -> Markup:
     """Logo invente, construit a partir des initiales de la raison sociale.
 
     Un vrai logo d'entreprise ne peut pas etre reutilise, et un document sans logo ne
@@ -58,9 +68,9 @@ def logo_svg(raison_sociale: str, graine: int) -> Markup:
     la plupart des petits organismes, et il est genere sans fichier externe.
     """
     initiales = "".join(mot[0] for mot in raison_sociale.split()[:2]).upper()
-    couleur = couleur_logo(graine)
+    couleur = couleur_logo(seed)
     # Markup, sinon l'echappement automatique de Jinja2 imprime le source SVG en clair
-    # dans le document. L'autoechappement reste actif pour tout le reste du gabarit.
+    # dans le document. L'autoechappement reste actif pour tout le reste du template.
     return Markup(
         f'<svg width="54" height="54" viewBox="0 0 54 54" xmlns="http://www.w3.org/2000/svg">'
         f'<rect width="54" height="54" rx="8" fill="{couleur}"/>'
@@ -72,7 +82,7 @@ def logo_svg(raison_sociale: str, graine: int) -> Markup:
 
 def _environnement() -> Environment:
     env = Environment(
-        loader=FileSystemLoader(DOSSIER_GABARITS),
+        loader=FileSystemLoader(DOSSIER_TEMPLATES),
         autoescape=select_autoescape(["html"]),
     )
     env.filters["euros"] = euros
@@ -81,11 +91,17 @@ def _environnement() -> Environment:
     return env
 
 
-def rendre_pdf(gabarit: str, destination: Path, **contexte) -> Path:
-    """Rend un gabarit en PDF. Retourne le chemin ecrit."""
-    html = _environnement().get_template(gabarit).render(**contexte)
+def rendre_pdf(template: str, destination: Path, **contexte) -> int:
+    """Rend un template en PDF. Retourne le nombre de pages produites.
+
+    Le nombre de pages est lu sur le document rendu plutot que relu depuis le PDF :
+    c'est gratuit ici, et ca evite une dependance de plus pour une information que
+    le manifest doit porter.
+    """
+    html = _environnement().get_template(template).render(**contexte)
 
     destination.parent.mkdir(parents=True, exist_ok=True)
-    # `base_url` permet au gabarit de referencer des ressources locales si besoin.
-    HTML(string=html, base_url=str(DOSSIER_GABARITS)).write_pdf(destination)
-    return destination
+    # `base_url` permet au template de referencer des ressources locales si besoin.
+    document = HTML(string=html, base_url=str(DOSSIER_TEMPLATES)).render()
+    document.write_pdf(destination)
+    return len(document.pages)

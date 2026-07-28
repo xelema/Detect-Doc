@@ -16,10 +16,10 @@ from data import generer_facture
 NB_ECHANTILLONS = 50
 
 
-def verifier(graine: int) -> list[str]:
+def verifier(seed: int) -> list[str]:
     """Retourne la liste des anomalies trouvees sur une facture, vide si tout est bon."""
     anomalies = []
-    facture = generer_facture(graine, professionnel=(graine % 4 != 0))
+    facture = generer_facture(seed, professionnel=(seed % 4 != 0))
     org = facture.organisme
     rib = facture.coordonnees_bancaires
 
@@ -52,16 +52,16 @@ def verifier(graine: int) -> list[str]:
 
 def main() -> None:
     total = 0
-    for graine in range(1, NB_ECHANTILLONS + 1):
-        anomalies = verifier(graine)
+    for seed in range(1, NB_ECHANTILLONS + 1):
+        anomalies = verifier(seed)
         total += len(anomalies)
         for anomalie in anomalies:
-            print(f"  graine {graine} : {anomalie}")
+            print(f"  seed {seed} : {anomalie}")
 
     print(f"\n{NB_ECHANTILLONS} factures verifiees, {total} anomalie(s).")
 
     exemple = generer_facture(1)
-    print("\nExemple, graine 1 :")
+    print("\nExemple, seed 1 :")
     print(f"  Emetteur   : {exemple.organisme.raison_sociale} "
           f"({exemple.organisme.forme_juridique})")
     print(f"  SIRET      : {exemple.organisme.siret}")

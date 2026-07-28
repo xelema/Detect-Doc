@@ -5,7 +5,7 @@ Deux principes qui commandent tout ce fichier.
 Le generateur connait les valeurs qu'il injecte : c'est la verite terrain qui permettra
 de mesurer le masquage des donnees personnelles sans annotation manuelle.
 
-Tout est pilote par une graine. Le meme numero de document redonne exactement le meme
+Tout est pilote par une seed. Le meme numero de document redonne exactement le meme
 contenu, ce qui autorise a ne pas versionner les binaires du corpus : ils se refabriquent.
 """
 
@@ -39,7 +39,7 @@ FORMES_JURIDIQUES = ["SAS", "SARL", "SASU", "EURL"]
 # Periode sur laquelle sont tirees les dates des documents.
 # Les dates sont calculees en jours entiers a partir de cette borne, et non avec
 # `Faker.date_between` : cette methode passe par des horodatages convertis en heure
-# locale et ne redonne pas le meme resultat d'une machine a l'autre a graine egale.
+# locale et ne redonne pas le meme resultat d'une machine a l'autre a seed egale.
 # Le corpus doit se refabriquer a l'identique, la generation ne peut donc dependre
 # que d'arithmetique entiere.
 DEBUT_PERIODE = date(2025, 1, 1)
@@ -221,9 +221,9 @@ class Rib:
         return " ".join(self.iban[i:i + 4] for i in range(0, len(self.iban), 4))
 
 
-def _faker(graine: int) -> Faker:
+def _faker(seed: int) -> Faker:
     fake = Faker("fr_FR")
-    fake.seed_instance(graine)
+    fake.seed_instance(seed)
     return fake
 
 
@@ -273,9 +273,9 @@ def _titulaire_par_defaut(fake: Faker) -> str:
     return fake.random_element(MOTIFS_CLIENT).format(nom=fake.last_name())
 
 
-def generer_rib(graine: int, titulaire: str | None = None,
+def generer_rib(seed: int, titulaire: str | None = None,
                 adresse: Coordonnees | None = None) -> Rib:
-    fake = _faker(graine)
+    fake = _faker(seed)
 
     code_banque = fake.numerify("#####")
     code_guichet = fake.numerify("#####")
@@ -302,8 +302,8 @@ def generer_rib(graine: int, titulaire: str | None = None,
     )
 
 
-def generer_organisme(graine: int) -> Organisme:
-    fake = _faker(graine)
+def generer_organisme(seed: int) -> Organisme:
+    fake = _faker(seed)
     # Le SIRET porte sa propre cle de Luhn sur ses 14 chiffres : le fabriquer en
     # concatenant un SIREN valide et 5 chiffres au hasard produirait un SIRET invalide.
     # On part donc du SIRET et on en deduit le SIREN, qui en est le prefixe.
@@ -330,8 +330,8 @@ def generer_organisme(graine: int) -> Organisme:
     )
 
 
-def generer_client(graine: int, professionnel: bool) -> Client:
-    fake = _faker(graine)
+def generer_client(seed: int, professionnel: bool) -> Client:
+    fake = _faker(seed)
     adresse = _coordonnees(fake)
 
     if not professionnel:
@@ -353,13 +353,13 @@ def generer_client(graine: int, professionnel: bool) -> Client:
     )
 
 
-def generer_facture(graine: int, professionnel: bool = True,
+def generer_facture(seed: int, professionnel: bool = True,
                     nouvelles_mentions: bool | None = None) -> Facture:
-    fake = _faker(graine)
+    fake = _faker(seed)
 
-    organisme = generer_organisme(graine)
-    client = generer_client(graine + 1, professionnel)
-    rib = generer_rib(graine + 2, organisme.raison_sociale, organisme.adresse)
+    organisme = generer_organisme(seed)
+    client = generer_client(seed + 1, professionnel)
+    rib = generer_rib(seed + 2, organisme.raison_sociale, organisme.adresse)
 
     intitule, duree = fake.random_element(CATALOGUE_FORMATIONS)
     nb_stagiaires = fake.random_int(1, 8) if professionnel else 1
