@@ -10,8 +10,8 @@ commande reecrit exactement les memes fichiers.
 import sys
 from pathlib import Path
 
-from data import generer_facture
-from rendu import logo_svg, rendre_pdf
+from data import generer_facture, generer_rib
+from rendu import couleur_logo, logo_svg, rendre_pdf
 
 DOSSIER_SORTIE = Path(__file__).parent / "out"
 
@@ -29,7 +29,20 @@ def produire_facture(numero: int) -> Path:
     )
 
 
-PRODUCTEURS = {"facture": produire_facture}
+def produire_rib(numero: int) -> Path:
+    rib = generer_rib(numero)
+
+    return rendre_pdf(
+        "rib_01.html",
+        DOSSIER_SORTIE / f"rib-{numero:04d}.pdf",
+        r=rib,
+        logo=logo_svg(rib.banque, numero),
+        couleur=couleur_logo(numero),
+        date_edition=rib.date_edition,
+    )
+
+
+PRODUCTEURS = {"facture": produire_facture, "rib": produire_rib}
 
 
 def main() -> None:

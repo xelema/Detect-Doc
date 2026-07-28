@@ -45,6 +45,11 @@ def nombre(valeur: int) -> str:
     return " ".join(groupes)
 
 
+def couleur_logo(graine: int) -> str:
+    """Couleur d'accent du document, partagee entre le logo et le gabarit."""
+    return COULEURS_LOGO[graine % len(COULEURS_LOGO)]
+
+
 def logo_svg(raison_sociale: str, graine: int) -> Markup:
     """Logo invente, construit a partir des initiales de la raison sociale.
 
@@ -53,7 +58,7 @@ def logo_svg(raison_sociale: str, graine: int) -> Markup:
     la plupart des petits organismes, et il est genere sans fichier externe.
     """
     initiales = "".join(mot[0] for mot in raison_sociale.split()[:2]).upper()
-    couleur = COULEURS_LOGO[graine % len(COULEURS_LOGO)]
+    couleur = couleur_logo(graine)
     # Markup, sinon l'echappement automatique de Jinja2 imprime le source SVG en clair
     # dans le document. L'autoechappement reste actif pour tout le reste du gabarit.
     return Markup(

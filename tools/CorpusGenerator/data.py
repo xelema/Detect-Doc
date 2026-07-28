@@ -92,8 +92,8 @@ VILLES = [
 # realiste dans sa forme, pas usurper une marque existante.
 BANQUES = [
     ("Banque du Cerisier", "BCERFRPP"),
-    ("Credit Meridien", "CMERFRP1"),
-    ("Banque Lafayette et Associes", "BLAAFRPX"),
+    ("Crédit Méridien", "CMERFRP1"),
+    ("Banque Lafayette et Associés", "BLAAFRPX"),
     ("Caisse de l'Ouvrage", "COUVFRP2"),
     ("Banque Atlantique du Ponant", "BAPOFRPP"),
 ]
@@ -213,6 +213,7 @@ class Rib:
     numero_compte: str
     cle: str
     iban: str
+    date_edition: date
 
     @property
     def iban_formate(self) -> str:
@@ -258,6 +259,20 @@ def _coordonnees(fake: Faker) -> Coordonnees:
     )
 
 
+def _titulaire_par_defaut(fake: Faker) -> str:
+    """Titulaire d'un RIB isole : le plus souvent une personne physique.
+
+    Un RIB depose en GED est majoritairement celui d'un stagiaire ou d'un salarie,
+    plus rarement celui d'une entreprise.
+    """
+    if fake.boolean(chance_of_getting_true=70):
+        # Le prenom est tire selon la civilite, sinon on produit des "M. Audrey".
+        if fake.boolean():
+            return f"M. {fake.first_name_male()} {fake.last_name()}"
+        return f"Mme {fake.first_name_female()} {fake.last_name()}"
+    return fake.random_element(MOTIFS_CLIENT).format(nom=fake.last_name())
+
+
 def generer_rib(graine: int, titulaire: str | None = None,
                 adresse: Coordonnees | None = None) -> Rib:
     fake = _faker(graine)
@@ -271,7 +286,7 @@ def generer_rib(graine: int, titulaire: str | None = None,
     adresse_agence = _coordonnees(fake)
 
     return Rib(
-        titulaire=titulaire or fake.company(),
+        titulaire=titulaire or _titulaire_par_defaut(fake),
         adresse_titulaire=adresse or _coordonnees(fake),
         banque=banque,
         bic=bic,
@@ -282,6 +297,8 @@ def generer_rib(graine: int, titulaire: str | None = None,
         numero_compte=numero_compte,
         cle=cle,
         iban=iban_francais(code_banque, code_guichet, numero_compte, cle),
+        date_edition=DEBUT_PERIODE + timedelta(
+            days=fake.random_int(0, (FIN_PERIODE - DEBUT_PERIODE).days)),
     )
 
 
