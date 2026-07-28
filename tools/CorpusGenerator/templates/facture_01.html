@@ -1,0 +1,229 @@
+{# Gabarit de facture, variante 01 : disposition classique des logiciels de gestion,
+   emetteur a gauche, destinataire a droite, tableau de lignes, totaux a droite.
+   Les variantes suivantes changeront la disposition et la typographie : un corpus ou
+   toutes les factures sortent du meme gabarit mesure la reconnaissance d'un gabarit,
+   pas celle d'un type documentaire. #}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Facture {{ f.numero }}</title>
+<style>
+  @page {
+    size: A4;
+    margin: 14mm 15mm 18mm 15mm;
+    /* Pied de page courant : WeasyPrint sait numeroter les pages en CSS, ce qui
+       compte pour les documents longs du corpus. */
+    @bottom-center {
+      content: "Facture {{ f.numero }} - page " counter(page) " / " counter(pages);
+      font-family: "Liberation Sans", sans-serif;
+      font-size: 7pt;
+      color: #666;
+    }
+  }
+  body {
+    font-family: "Liberation Sans", Arial, sans-serif;
+    font-size: 9pt;
+    color: #1a1a1a;
+    line-height: 1.35;
+  }
+  table { border-collapse: collapse; width: 100%; }
+  .entete td { vertical-align: top; }
+  .emetteur-nom { font-size: 13pt; font-weight: bold; }
+  .emetteur-detail { font-size: 8pt; color: #444; }
+  .titre-doc {
+    font-size: 20pt; font-weight: bold; letter-spacing: 2px;
+    text-transform: uppercase; text-align: right;
+  }
+  .bloc-client {
+    border: 1px solid #bbb; padding: 6px 8px; margin-top: 4mm;
+    width: 78mm; float: right;
+  }
+  .bloc-client .intitule {
+    font-size: 7.5pt; text-transform: uppercase; color: #666; letter-spacing: 1px;
+  }
+  .bloc-client .nom { font-weight: bold; }
+  .references { clear: both; margin-top: 6mm; width: 100%; font-size: 8.5pt; }
+  .references th {
+    background: #f0f0f0; border: 1px solid #ccc; padding: 3px 6px;
+    text-align: left; font-size: 7.5pt; text-transform: uppercase; color: #555;
+  }
+  .references td { border: 1px solid #ccc; padding: 3px 6px; }
+  .objet { margin-top: 5mm; font-size: 9.5pt; }
+  .objet .intitule { font-weight: bold; }
+  .lignes { margin-top: 3mm; }
+  .lignes th {
+    background: #333; color: #fff; padding: 5px 6px; font-size: 8pt;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .lignes td { border-bottom: 1px solid #ddd; padding: 5px 6px; }
+  .lignes .num { text-align: right; white-space: nowrap; }
+  .lignes .detail { font-size: 8pt; color: #555; }
+  .totaux { margin-top: 4mm; width: 72mm; float: right; }
+  .totaux td { padding: 3px 6px; }
+  .totaux .libelle { text-align: right; color: #444; }
+  .totaux .valeur { text-align: right; white-space: nowrap; }
+  .totaux .ttc td {
+    background: #333; color: #fff; font-weight: bold; font-size: 10.5pt;
+  }
+  .paiement { clear: both; padding-top: 6mm; }
+  .pave-rib {
+    border: 1px solid #bbb; padding: 6px 8px; font-size: 8pt; width: 105mm;
+  }
+  .pave-rib .intitule {
+    font-size: 7.5pt; text-transform: uppercase; color: #666; letter-spacing: 1px;
+    margin-bottom: 2px;
+  }
+  .pave-rib .iban { font-family: "DejaVu Sans Mono", monospace; font-size: 8.5pt; }
+  .mentions { margin-top: 5mm; font-size: 7.5pt; color: #444; }
+  .mentions p { margin: 1.5px 0; }
+  .pied-legal {
+    margin-top: 6mm; padding-top: 3px; border-top: 1px solid #ccc;
+    font-size: 6.8pt; color: #666; text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<table class="entete">
+  <tr>
+    <td style="width: 55%">
+      <table>
+        <tr>
+          <td style="width: 60px">{{ logo }}</td>
+          <td>
+            <div class="emetteur-nom">{{ f.organisme.raison_sociale }}</div>
+            <div class="emetteur-detail">
+              {{ f.organisme.adresse.ligne1 }}<br>
+              {{ f.organisme.adresse.code_postal }} {{ f.organisme.adresse.ville }}<br>
+              Tél. {{ f.organisme.telephone }}<br>
+              {{ f.organisme.email }}
+            </div>
+          </td>
+        </tr>
+      </table>
+    </td>
+    <td style="width: 45%">
+      <div class="titre-doc">Facture</div>
+    </td>
+  </tr>
+</table>
+
+<div class="bloc-client">
+  <div class="intitule">Facturé à</div>
+  <div class="nom">{{ f.client.designation }}</div>
+  {% if f.client.contact %}<div>À l'attention de {{ f.client.contact }}</div>{% endif %}
+  <div>{{ f.client.adresse.ligne1 }}</div>
+  <div>{{ f.client.adresse.code_postal }} {{ f.client.adresse.ville }}</div>
+  {% if f.client.est_professionnel %}
+    <div style="margin-top: 3px; font-size: 8pt; color: #555">
+      SIREN {{ f.client.siren }}
+      {%- if f.nouvelles_mentions %} · TVA {{ f.client.tva }}{% endif %}
+    </div>
+  {% endif %}
+</div>
+
+<table class="references">
+  <tr>
+    <th>N° de facture</th>
+    <th>Date d'émission</th>
+    <th>Date d'exécution</th>
+    <th>Échéance</th>
+    <th>Convention</th>
+  </tr>
+  <tr>
+    <td><strong>{{ f.numero }}</strong></td>
+    <td>{{ f.date_emission | date_fr }}</td>
+    <td>{{ f.date_execution | date_fr }}</td>
+    <td>{{ f.date_echeance | date_fr }}</td>
+    <td>{{ f.reference_convention }}</td>
+  </tr>
+</table>
+
+<div class="objet">
+  <span class="intitule">Objet :</span> action de formation « {{ f.intitule_action }} »
+  {% if f.stagiaires | length == 1 %}
+    — stagiaire : {{ f.stagiaires[0] }}
+  {% else %}
+    — {{ f.stagiaires | length }} stagiaires : {{ f.stagiaires | join(', ') }}
+  {% endif %}
+</div>
+
+<table class="lignes">
+  <tr>
+    <th style="width: 46%">Désignation</th>
+    <th style="width: 11%" class="num">Quantité</th>
+    <th style="width: 13%" class="num">P.U. HT</th>
+    <th style="width: 10%" class="num">TVA</th>
+    <th style="width: 20%" class="num">Total HT</th>
+  </tr>
+  {% for ligne in f.lignes %}
+  <tr>
+    <td>
+      {{ ligne.designation }}
+      <div class="detail">{{ ligne.detail }}</div>
+    </td>
+    <td class="num">{{ ligne.quantite }} {{ ligne.unite }}{{ 's' if ligne.quantite > 1 }}</td>
+    <td class="num">{{ ligne.prix_unitaire_ht | euros }}</td>
+    <td class="num">{{ ligne.taux_tva }} %</td>
+    <td class="num">{{ ligne.total_ht | euros }}</td>
+  </tr>
+  {% endfor %}
+</table>
+
+<table class="totaux">
+  <tr>
+    <td class="libelle">Total HT</td>
+    <td class="valeur">{{ f.total_ht | euros }}</td>
+  </tr>
+  <tr>
+    <td class="libelle">
+      {% if f.organisme.exonere_tva %}TVA (exonérée){% else %}TVA 20 %{% endif %}
+    </td>
+    <td class="valeur">{{ f.total_tva | euros }}</td>
+  </tr>
+  <tr class="ttc">
+    <td class="libelle" style="color: #fff">Total TTC</td>
+    <td class="valeur">{{ f.total_ttc | euros }}</td>
+  </tr>
+</table>
+
+<div class="paiement">
+  <div class="pave-rib">
+    <div class="intitule">Coordonnées bancaires</div>
+    <div>{{ f.coordonnees_bancaires.banque }} — {{ f.coordonnees_bancaires.agence }}</div>
+    <div class="iban">IBAN {{ f.coordonnees_bancaires.iban_formate }}</div>
+    <div class="iban">BIC {{ f.coordonnees_bancaires.bic }}</div>
+  </div>
+
+  <div class="mentions">
+    <p>Règlement par virement à réception, au plus tard le {{ f.date_echeance | date_fr }}.</p>
+    {% if f.client.est_professionnel %}
+    <p>En cas de retard de paiement, pénalités au taux de trois fois le taux d'intérêt
+       légal, et indemnité forfaitaire pour frais de recouvrement de 40 €.</p>
+    {% endif %}
+    {% if f.organisme.exonere_tva %}
+    <p>TVA non applicable, exonération au titre de l'article 261-4-4° a du CGI.</p>
+    {% endif %}
+    {% if f.nouvelles_mentions %}
+    <p>Nature de l'opération : {{ f.categorie_operation | lower }}.</p>
+      {% if f.adresse_livraison %}
+      <p>Adresse de livraison : {{ f.adresse_livraison.ligne1 }},
+         {{ f.adresse_livraison.code_postal }} {{ f.adresse_livraison.ville }}.</p>
+      {% endif %}
+    {% endif %}
+    <p>Déclaration d'activité enregistrée sous le numéro
+       {{ f.organisme.numero_declaration_activite }} auprès du préfet de région.
+       Cet enregistrement ne vaut pas agrément de l'État.</p>
+  </div>
+</div>
+
+<div class="pied-legal">
+  {{ f.organisme.raison_sociale }} — {{ f.organisme.forme_juridique }} au capital de
+  {{ f.organisme.capital | nombre }} € — SIRET {{ f.organisme.siret }} —
+  TVA {{ f.organisme.tva }} — RCS {{ f.organisme.rcs_ville }} —
+  {{ f.organisme.site_web }}
+</div>
+
+</body>
+</html>

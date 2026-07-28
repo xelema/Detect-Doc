@@ -9,7 +9,8 @@ Tout est pilote par une graine. Le meme numero de document redonne exactement le
 contenu, ce qui autorise a ne pas versionner les binaires du corpus : ils se refabriquent.
 """
 
-from dataclasses import dataclass, field
+import unicodedata
+from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -21,14 +22,14 @@ from cles import cle_rib, iban_francais, numero_tva_intracommunautaire
 # depuis 2022, sa certification Qualiopi. Ce sont des marqueurs forts du type "facture
 # de formation", et ils n'apparaissent sur aucun autre type de document.
 CATALOGUE_FORMATIONS = [
-    ("Habilitation electrique B1V B2V BR BC", 21),
+    ("Habilitation électrique B1V B2V BR BC", 21),
     ("SST - Sauveteur secouriste du travail", 14),
-    ("CACES R489 categorie 3 - Chariot elevateur", 21),
-    ("Prevention des risques lies a l'activite physique", 14),
-    ("Excel - Perfectionnement tableaux croises", 14),
-    ("Management d'equipe - Niveau 1", 21),
+    ("CACES R489 catégorie 3 - Chariot élévateur", 21),
+    ("Prévention des risques liés à l'activité physique", 14),
+    ("Excel - Perfectionnement tableaux croisés", 14),
+    ("Management d'équipe - Niveau 1", 21),
     ("Anglais professionnel - Niveau B1", 30),
-    ("AIPR - Operateur", 7),
+    ("AIPR - Opérateur", 7),
     ("Le RGPD pour les managers", 7),
     ("Gestes et postures au poste de travail", 7),
 ]
@@ -51,11 +52,40 @@ FIN_PERIODE = date(2026, 6, 30)
 MOTIFS_ORGANISME = [
     "Institut {nom}",
     "{nom} Formation",
-    "{nom} Competences",
+    "{nom} Compétences",
     "Campus {ville}",
     "{nom} Conseil et Formation",
-    "Academie {ville}",
+    "Académie {ville}",
     "Centre de formation {nom}",
+]
+
+# Les entreprises qui envoient des salaries en formation. Faker ne produit qu'un nom de
+# famille pour `company()`, ce qui donne des clients trop maigres pour etre credibles.
+MOTIFS_CLIENT = [
+    "Transports {nom}",
+    "{nom} et Fils",
+    "Établissements {nom}",
+    "{nom} Industrie",
+    "Logistique {nom}",
+    "Menuiserie {nom}",
+    "{nom} Maintenance",
+    "Groupe {nom}",
+    "{nom} BTP",
+    "Propreté {nom}",
+]
+
+# Couples code postal / commune reels. Faker fr_FR fabrique des noms de communes a
+# partir de patronymes et les associe a des codes postaux au hasard, ce qui donne des
+# adresses du genre "77880 Sainte Rene" : credible nulle part.
+VILLES = [
+    ("75011", "Paris"), ("69003", "Lyon"), ("13008", "Marseille"),
+    ("31000", "Toulouse"), ("33000", "Bordeaux"), ("44000", "Nantes"),
+    ("59000", "Lille"), ("67000", "Strasbourg"), ("34000", "Montpellier"),
+    ("35000", "Rennes"), ("76000", "Rouen"), ("21000", "Dijon"),
+    ("38000", "Grenoble"), ("49000", "Angers"), ("63000", "Clermont-Ferrand"),
+    ("29200", "Brest"), ("87000", "Limoges"), ("57000", "Metz"),
+    ("14000", "Caen"), ("45000", "Orléans"), ("80000", "Amiens"),
+    ("51100", "Reims"), ("83000", "Toulon"), ("42000", "Saint-Étienne"),
 ]
 
 # Noms de banques inventes. Aucune banque reelle n'est nommee : le corpus doit etre
@@ -196,16 +226,35 @@ def _faker(graine: int) -> Faker:
     return fake
 
 
+def _sans_accent(texte: str) -> str:
+    decompose = unicodedata.normalize("NFKD", texte)
+    return "".join(c for c in decompose if not unicodedata.combining(c))
+
+
+def _nom_de_domaine(raison_sociale: str) -> str:
+    """Domaine deduit de la raison sociale.
+
+    Un organisme dont l'adresse de courriel n'a aucun rapport avec son nom se repere
+    immediatement comme genere.
+    """
+    # Les mots de liaison sont ecartes, sinon "Grenier Conseil et Formation" donne
+    # un domaine tronque en "grenier-conseil-et".
+    mots = [m for m in _sans_accent(raison_sociale).lower().split() if len(m) > 2]
+    return "-".join(mots[:3]).replace("'", "") + ".fr"
+
+
 def _raison_sociale_organisme(fake: Faker) -> str:
     motif = fake.random_element(MOTIFS_ORGANISME)
-    return motif.format(nom=fake.last_name(), ville=fake.city())
+    _, ville = fake.random_element(VILLES)
+    return motif.format(nom=fake.last_name(), ville=ville)
 
 
 def _coordonnees(fake: Faker) -> Coordonnees:
+    code_postal, ville = fake.random_element(VILLES)
     return Coordonnees(
-        ligne1=fake.street_address().replace("\n", " "),
-        code_postal=fake.postcode(),
-        ville=fake.city(),
+        ligne1=f"{fake.building_number()} {fake.street_name()}",
+        code_postal=code_postal,
+        ville=ville,
     )
 
 
@@ -244,9 +293,11 @@ def generer_organisme(graine: int) -> Organisme:
     siret = fake.siret().replace(" ", "")
     siren = siret[:9]
     adresse = _coordonnees(fake)
+    raison_sociale = _raison_sociale_organisme(fake)
+    domaine = _nom_de_domaine(raison_sociale)
 
     return Organisme(
-        raison_sociale=_raison_sociale_organisme(fake),
+        raison_sociale=raison_sociale,
         forme_juridique=fake.random_element(FORMES_JURIDIQUES),
         capital=fake.random_element([10000, 25000, 50000, 100000]),
         adresse=adresse,
@@ -256,8 +307,8 @@ def generer_organisme(graine: int) -> Organisme:
         rcs_ville=adresse.ville,
         numero_declaration_activite=fake.numerify("## ## ##### ##"),
         telephone=fake.phone_number(),
-        email=fake.company_email(),
-        site_web=fake.domain_name(),
+        email=f"contact@{domaine}",
+        site_web=f"www.{domaine}",
         exonere_tva=fake.boolean(chance_of_getting_true=30),
     )
 
@@ -274,9 +325,10 @@ def generer_client(graine: int, professionnel: bool) -> Client:
         )
 
     siren = fake.siren().replace(" ", "")
+    motif = fake.random_element(MOTIFS_CLIENT)
     return Client(
         est_professionnel=True,
-        designation=fake.company(),
+        designation=motif.format(nom=fake.last_name()),
         adresse=adresse,
         siren=siren,
         tva=numero_tva_intracommunautaire(siren),
@@ -303,7 +355,8 @@ def generer_facture(graine: int, professionnel: bool = True,
     lignes = [
         LigneFacture(
             designation=intitule,
-            detail=f"Action de formation, {duree} heures, {nb_stagiaires} stagiaire(s)",
+            detail=f"Action de formation de {duree} heures, "
+                   f"{nb_stagiaires} stagiaire{'s' if nb_stagiaires > 1 else ''}",
             quantite=Decimal(duree * nb_stagiaires),
             unite="heure",
             prix_unitaire_ht=prix_heure,
@@ -314,7 +367,8 @@ def generer_facture(graine: int, professionnel: bool = True,
         lignes.append(
             LigneFacture(
                 designation="Supports pedagogiques",
-                detail=f"{nb_stagiaires} classeur(s) remis en debut de session",
+                detail=f"{nb_stagiaires} classeur{'s' if nb_stagiaires > 1 else ''} "
+                       f"remis en debut de session",
                 quantite=Decimal(nb_stagiaires),
                 unite="unite",
                 prix_unitaire_ht=Decimal("45"),
