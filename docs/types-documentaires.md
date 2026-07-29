@@ -8,7 +8,7 @@ Les fiches se recopient dans le pré-prompt du classifieur : elles sont écrites
 |---|---|---|
 | `CARTE_VISITE` | Carte de visite | [écrite](#carte_visite-carte-de-visite) |
 | `EVAL_FORM` | Évaluation de la formation | à écrire |
-| `FEUILLE_EMAR` | Feuille d'émargement | à écrire |
+| `FEUILLE_EMAR` | Feuille d'émargement | [écrite](#feuille_emar-feuille-démargement) |
 | `SEPA` | Mandat SEPA | à écrire |
 | `OFF_STAG_EMP` | Offre de stage, alternance, emploi | à écrire |
 | `RIB` | Relevé d'identité bancaire | à écrire |
@@ -90,3 +90,81 @@ Ce que le générateur doit produire pour que le type soit représentatif. Chaqu
 9. **Longueur de texte tirée entre 8 et 60 mots**, et non centrée sur une valeur moyenne.
 
 Le manifest enregistre pour chaque document le template, le régime d'acquisition, l'angle, les blocs présents et le nombre de mots, afin que le rapport puisse dire sur quel axe le classifieur décroche.
+
+## `FEUILLE_EMAR`, feuille d'émargement
+
+### Définition
+
+Document qui atteste la présence effective de participants, et le plus souvent du formateur, à une session de formation professionnelle. La présence se matérialise par une grille de signatures manuscrites tirées en regard des noms des participants, découpée par créneau : demi-journée, journée, séance ou date. Il porte toujours l'identification de la session, dates, horaires, lieu, formateur, et il émane d'un organisme de formation.
+
+### Marqueurs
+
+Le signal ne vient pas d'un vocabulaire fixe, il est instable, mais de la **coexistence d'une liste nominative de personnes et d'une grille de signatures manuscrites découpée par créneau temporel**, sous des métadonnées de session de formation.
+
+| Marqueur | Force |
+|---|---|
+| grille de signatures manuscrites en regard d'une liste de personnes nommées, découpée en créneaux, matin et après-midi, jours, ou dates | fort, et c'est le marqueur principal |
+| métadonnées de session : intitulé de formation, numéro de session ou code stage, dates, horaires, lieu | fort |
+| bloc de signature propre au formateur ou animateur, distinct de la grille des stagiaires | fort, présent sur presque tous les exemples |
+| titre « feuille d'émargement » ou « feuille de présence » | moyen, il alterne librement et manque sur 2 des 16 exemples |
+| numéro d'agrément ou de déclaration d'activité de l'organisme, mention Qualiopi | moyen |
+| annotations manuscrites `ABSENT`, `RETARD`, `excusé`, en marge ou dans une case | moyen |
+| colonnes entreprise, établissement, fonction, matricule, ou identifiant métier RPPS et ADELI | faible, très variable d'un template à l'autre |
+
+### Désambiguïsation
+
+Le risque n'est pas la confusion avec un voisin unique, aucun type du périmètre ne partage la grille de signatures par créneau. Le risque est double : **un titre trop instable pour servir de règle**, et une **frontière floue avec l'attestation individuelle de fin de formation**, d'autant que plusieurs feuilles portent la clause « en signant, j'atteste avoir reçu l'attestation de formation ».
+
+| Confusion | Ce qui tranche |
+|---|---|
+| attestation ou certificat de formation, `CERTIF_FORM`, `CERTIF_REAL` | l'attestation nomme **une seule** personne et atteste un résultat ou un nombre d'heures. La feuille d'émargement liste **plusieurs** participants et matérialise leur présence par signature datée, créneau par créneau |
+| convention, `CONVENTION` et ses spécialisations | la convention est un contrat rédigé en articles entre organisme, financeur et bénéficiaire. La feuille n'a pas de corps rédigé, seulement un en-tête de session et une grille signée |
+| tableau ou formulaire générique | la feuille porte simultanément des noms de personnes, des signatures manuscrites et le vocabulaire d'une session de formation. Un tableau quelconque n'a pas ce faisceau |
+| page presque vide, grille non remplie | une feuille peut arriver quasi vierge de signatures, ses lignes barrées en diagonale. L'en-tête de session et la structure de grille restent le signal, pas le remplissage |
+
+**Règle opérationnelle :** en présence d'une liste nominative de participants et d'une grille de signatures découpée par créneau, sous un en-tête de session de formation, répondre feuille d'émargement, **sans exiger le mot « émargement » ni « présence »** qui manquent sur une partie des documents. La présence d'un bloc de signature du formateur distinct de la grille des stagiaires renforce fortement la décision.
+
+### Ce que montrent les 16 exemples réels
+
+Fournis par le métier, non versionnés, dans `tmp/samples/FEM`. Quinze PDF et un JPEG, tous issus de la formation professionnelle française.
+
+**Le titre du document est instable, et parfois absent.** Sur les seize exemples, quatre libellés coexistent, « feuille d'émargement », « feuille de présence », « feuille collective d'émargement », « émargements par demi-journée ou soirée », et **deux documents ne portent aucun titre de ce genre** : l'un ouvre directement sur la session et la grille, l'autre est un récapitulatif mensuel d'heures. S'appuyer sur le titre seul manquerait ces deux cas et confondrait « présence » avec d'autres relevés.
+
+**Cinq familles de mise en page, sans tronc commun.**
+
+| Famille | Structure | Exemples |
+|---|---|---|
+| Séance unique | lignes stagiaires, deux colonnes de signature matin et après-midi | organisme éditeur, atelier artisanal, académie métier |
+| Grille multi-jours | lignes stagiaires, colonnes par jour, chaque jour scindé ou non en demi-journées | semaine du lundi au vendredi, trois jours, jour 1 à 3 |
+| Récapitulatif mensuel | **stagiaires en colonnes, dates en lignes**, suivi des heures cours, cumul et restant | formation en langue étalée sur un mois |
+| Feuille collective | un bloc, colonnes par journée, colonne nombre d'heures total, cachet de l'organisme | séminaire sur deux jours |
+| Format officiel sectoriel | deux tables séparées, intervenants et participants, créneaux matin, après-midi et **soirée**, clause d'attestation signée, mention CNIL, identifiants RPPS et ADELI | organisme de développement professionnel continu médical |
+
+**Trois régimes d'acquisition.** Deux PDF sont à **texte natif**, produits par l'outil de l'organisme éditeur, avec des signatures incrustées comme images. Le reste est **numérisé** : scans à plat plus ou moins dégradés, dont un très bruité au fond gris, une **photo au smartphone** posée sur un bureau avec déformation de perspective, et un JPEG scanné. Quatre documents sont en **paysage tourné à 90°** dans leur fichier. Plusieurs sont **multipages**, de deux à trois pages, la continuation reprenant l'en-tête ou prolongeant la grille.
+
+**Le bloc du formateur est presque universel.** Sur la quasi-totalité des exemples, le formateur ou animateur signe dans un cadre qui lui est propre, souvent dédoublé en matin et après-midi, séparé de la grille des stagiaires. C'est un marqueur plus stable que le titre.
+
+**Blocs facultatifs, tirés indépendamment d'un template à l'autre :** colonne entreprise ou établissement, colonne fonction, matricule ou numéro de stagiaire, identifiant professionnel RPPS ou ADELI dans le secteur médical, case « document pédagogique reçu », ligne « remise d'un support pédagogique oui/non », suivi d'heures souscrites et de report du mois précédent, clause d'attestation avec signature du responsable, cachet de l'organisme, référence d'OPCO.
+
+**Vocabulaire de conformité récurrent.** Plusieurs feuilles portent des consignes Qualiopi imprimées, du type « le formateur écrit la mention ABSENT ou RETARD en regard du nom concerné » ou « le formateur signe chaque feuille de présence ». Ces mentions et les annotations manuscrites `ABSENT`, `RETARD`, `excusé` qui en découlent sont un signal secondaire fréquent.
+
+**Numéro d'agrément systématique.** L'organisme est presque toujours identifié par un numéro de déclaration d'activité ou d'agrément de formation, marqueur du contexte réglementaire du type.
+
+**Un artefact de publipostage.** Un exemple laisse un champ de fusion non résolu visible dans le texte, `OrgFor_Nom` entre guillemets, trace d'une génération bureautique par modèle. Ce genre de résidu est un cas réel que le corpus peut reproduire.
+
+### Spécification de génération
+
+Ce que le générateur doit produire pour que le type soit représentatif. Chaque axe est tiré des observations ci-dessus.
+
+1. **Cinq familles de mise en page distinctes**, séance unique, grille multi-jours, récapitulatif mensuel à stagiaires en colonnes, feuille collective, et format officiel à deux tables. La diversité de structure est la caractéristique première du type, pas un raffinement.
+2. **Titre tiré indépendamment de la structure**, « feuille d'émargement », « feuille de présence », « feuille collective d'émargement », « émargements par demi-journée ou soirée », et **une fraction sans aucun titre de ce genre**, pour que le classifieur ne s'appuie pas sur le libellé.
+3. **En-tête de session obligatoire** : intitulé de formation, numéro de session ou code stage, dates, horaires, lieu, organisme et numéro d'agrément ou de déclaration d'activité.
+4. **Bloc de signature du formateur distinct de la grille des stagiaires**, présent sur la grande majorité des documents, souvent dédoublé matin et après-midi.
+5. **Grille de signatures découpée par créneau**, avec les découpages observés : matin et après-midi, jours multiples, dates d'un mois, et le cas médical à trois créneaux dont la soirée.
+6. **Signatures manuscrites tirées**, avec des cases vides et des lignes barrées en diagonale, jusqu'à des feuilles quasi vierges. Une minorité à signatures incrustées comme images, pour le cas du texte natif.
+7. **Blocs facultatifs tirés indépendamment** : entreprise, établissement, fonction, matricule, identifiant RPPS ou ADELI, case document pédagogique reçu, suivi d'heures, clause d'attestation, cachet, référence d'OPCO.
+8. **Annotations manuscrites d'absence** `ABSENT`, `RETARD`, `excusé`, en marge ou dans les cases, accompagnées le cas échéant de la consigne Qualiopi imprimée correspondante.
+9. **Trois chaînes de rendu**, texte natif, scan à plat plus ou moins dégradé, et photo au smartphone, avec rotation incluant les multiples de 90°, et des documents multipages où l'en-tête se répète ou la grille se prolonge.
+10. **Résidu de publipostage occasionnel**, un champ de fusion non résolu laissé visible, pour couvrir ce cas réel de génération bureautique.
+
+Le manifest enregistre pour chaque document la famille de mise en page, le titre employé ou son absence, le régime d'acquisition, l'angle, le nombre de pages, les blocs présents et le taux de remplissage de la grille, afin que le rapport puisse dire sur quel axe le classifieur décroche.
