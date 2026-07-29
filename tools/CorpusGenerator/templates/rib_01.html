@@ -10,17 +10,17 @@
 <style>
   @page { size: A4; margin: 20mm 18mm; }
   body {
-    font-family: "Liberation Sans", Arial, sans-serif;
-    font-size: 9.5pt;
+    font-family: "{{ s.police }}", Arial, sans-serif;
+    font-size: {{ s.corps_pt }}pt;
     color: #1a1a1a;
   }
   table { border-collapse: collapse; }
   .entete { width: 100%; margin-bottom: 10mm; }
   .entete td { vertical-align: top; }
-  .banque-nom { font-size: 15pt; font-weight: bold; color: {{ couleur }}; }
+  .banque-nom { font-size: 15pt; font-weight: bold; color: {{ s.couleur }}; }
   .banque-detail { font-size: 8pt; color: #555; line-height: 1.4; }
   .titre {
-    background: {{ couleur }}; color: #fff; padding: 5px 10px;
+    background: {{ s.couleur }}; color: #fff; padding: 5px 10px;
     font-size: 12pt; font-weight: bold; letter-spacing: 1.5px;
     text-transform: uppercase; text-align: center;
   }
@@ -39,13 +39,13 @@
   }
   .codes td {
     border: 1px solid #999; padding: 7px 4px; text-align: center;
-    font-family: "DejaVu Sans Mono", monospace; font-size: 11pt;
+    font-family: "{{ s.police_mono }}", monospace; font-size: 11pt;
     letter-spacing: 1px;
   }
   .international td { padding: 2px 0; vertical-align: top; }
   .international .cle { width: 22mm; font-size: 8.5pt; color: #555; }
   .valeur-mono {
-    font-family: "DejaVu Sans Mono", monospace; font-size: 11pt;
+    font-family: "{{ s.police_mono }}", monospace; font-size: 11pt;
     letter-spacing: 0.5px;
   }
   .deux-colonnes { width: 100%; }

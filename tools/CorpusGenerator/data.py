@@ -383,9 +383,9 @@ def generer_facture(seed: int, professionnel: bool = True,
     if fake.boolean(chance_of_getting_true=40):
         lignes.append(
             LigneFacture(
-                designation="Supports pedagogiques",
+                designation="Supports pédagogiques",
                 detail=f"{nb_stagiaires} classeur{'s' if nb_stagiaires > 1 else ''} "
-                       f"remis en debut de session",
+                       f"remis en début de session",
                 quantite=Decimal(nb_stagiaires),
                 unite="unite",
                 prix_unitaire_ht=Decimal("45"),

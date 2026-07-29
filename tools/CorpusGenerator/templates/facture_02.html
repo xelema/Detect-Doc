@@ -1,0 +1,192 @@
+{# Facture de cabinet : serif, aucun logo, aucune couleur, en-tete centre, destinataire
+   a droite sans cadre, tableau a filets horizontaux seuls, montant arrete en toutes
+   lettres. Ressemble davantage a une lettre commerciale qu'a une sortie de logiciel,
+   ce qui en fait le cas le plus difficile du lot pour un classifieur. #}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Facture {{ f.numero }}</title>
+<style>
+  @page {
+    size: A4;
+    margin: 20mm 22mm 20mm 22mm;
+    @bottom-right {
+      content: counter(page) "/" counter(pages);
+      font-family: "{{ s.police }}", serif;
+      font-size: 8pt;
+      color: #333;
+    }
+  }
+  body {
+    font-family: "{{ s.police }}", "Times New Roman", serif;
+    font-size: {{ s.corps_pt }}pt;
+    color: #000;
+    line-height: 1.4;
+  }
+  table { border-collapse: collapse; width: 100%; }
+  .entete { text-align: center; margin-bottom: 3mm; }
+  .entete .nom {
+    font-size: {{ s.corps_pt + 5 }}pt; font-weight: bold;
+    text-transform: uppercase; letter-spacing: 3px;
+  }
+  .entete .coordonnees { font-size: {{ s.corps_pt - 1.5 }}pt; margin-top: 2px; }
+  .regle-double {
+    border-top: 2px solid #000; border-bottom: 1px solid #000;
+    height: 3px; margin-bottom: 10mm;
+  }
+  .destinataire { width: 80mm; margin-left: auto; margin-bottom: 12mm; }
+  .destinataire .nom { font-weight: bold; }
+  .bandeau-doc { margin-bottom: 6mm; }
+  .bandeau-doc .numero {
+    font-size: {{ s.corps_pt + 3 }}pt; font-weight: bold;
+    text-transform: uppercase; letter-spacing: 1px;
+  }
+  .bandeau-doc .lieu-date { float: right; font-style: italic; }
+  .corps { margin-bottom: 6mm; }
+  .lignes { margin-bottom: 5mm; }
+  .lignes th {
+    border-top: 1px solid #000; border-bottom: 1px solid #000;
+    padding: 4px 3px; text-align: left; font-style: italic; font-weight: normal;
+    font-size: {{ s.corps_pt - 1 }}pt;
+  }
+  .lignes td { border-bottom: 1px dotted #999; padding: 5px 3px; vertical-align: top; }
+  .lignes .num { text-align: right; white-space: nowrap; }
+  .lignes .detail { font-size: {{ s.corps_pt - 1.5 }}pt; font-style: italic; color: #333; }
+  .totaux { width: 78mm; margin-left: auto; margin-bottom: 5mm; }
+  .totaux td { padding: 2px 3px; }
+  .totaux .libelle { text-align: right; }
+  .totaux .valeur { text-align: right; white-space: nowrap; }
+  .totaux .ttc td {
+    border-top: 1px solid #000; border-bottom: 3px double #000;
+    font-weight: bold; font-size: {{ s.corps_pt + 1 }}pt;
+  }
+  .arrete { margin-bottom: 6mm; font-style: italic; }
+  .reglement { margin-bottom: 5mm; }
+  .rib-ligne { font-family: "{{ s.police_mono }}", monospace;
+               font-size: {{ s.corps_pt - 1 }}pt; }
+  .mentions { font-size: {{ s.corps_pt - 2 }}pt; text-align: justify; }
+  .pied-legal {
+    margin-top: 8mm; padding-top: 2px; border-top: 1px solid #000;
+    font-size: {{ s.corps_pt - 2.5 }}pt; text-align: center;
+  }
+</style>
+</head>
+<body>
+
+{% include "_filigrane.html" %}
+
+<div class="entete">
+  <div class="nom">{{ f.organisme.raison_sociale }}</div>
+  <div class="coordonnees">
+    {{ f.organisme.adresse.ligne1 }}, {{ f.organisme.adresse.code_postal }}
+    {{ f.organisme.adresse.ville }} &nbsp;·&nbsp; Tél. {{ f.organisme.telephone }}
+    &nbsp;·&nbsp; {{ f.organisme.email }}
+  </div>
+</div>
+<div class="regle-double"></div>
+
+<div class="destinataire">
+  <div class="nom">{{ f.client.designation }}</div>
+  {% if f.client.contact %}<div>À l'attention de {{ f.client.contact }}</div>{% endif %}
+  <div>{{ f.client.adresse.ligne1 }}</div>
+  <div>{{ f.client.adresse.code_postal }} {{ f.client.adresse.ville }}</div>
+  {% if f.client.est_professionnel %}<div>SIREN {{ f.client.siren }}</div>{% endif %}
+</div>
+
+<div class="bandeau-doc">
+  <span class="lieu-date">{{ f.organisme.adresse.ville }},
+    le {{ f.date_emission | date_fr }}</span>
+  <div class="numero">Facture n° {{ f.numero }}</div>
+</div>
+
+<div class="corps">
+  Nous avons l'honneur de vous adresser la facture relative à l'action de formation
+  « {{ f.intitule_action }} », réalisée le {{ f.date_execution | date_fr }}
+  {%- if s.avec_convention %}, au titre de la convention {{ f.reference_convention }}
+  {%- endif %}.
+  {% if s.avec_stagiaires %}
+    Stagiaire{{ 's' if f.stagiaires | length > 1 }} :
+    {{ f.stagiaires | join(', ') }}.
+  {% endif %}
+</div>
+
+<table class="lignes">
+  <tr>
+    <th style="width: 52%">Désignation</th>
+    <th style="width: 12%" class="num">Quantité</th>
+    <th style="width: 16%" class="num">Prix unitaire</th>
+    <th style="width: 20%" class="num">Montant HT</th>
+  </tr>
+  {% for ligne in f.lignes %}
+  <tr>
+    <td>
+      {{ ligne.designation }}
+      <div class="detail">{{ ligne.detail }}</div>
+    </td>
+    <td class="num">{{ ligne.quantite }}</td>
+    <td class="num">{{ ligne.prix_unitaire_ht | euros }}</td>
+    <td class="num">{{ ligne.total_ht | euros }}</td>
+  </tr>
+  {% endfor %}
+</table>
+
+<table class="totaux">
+  <tr>
+    <td class="libelle">Montant hors taxes</td>
+    <td class="valeur">{{ f.total_ht | euros }}</td>
+  </tr>
+  <tr>
+    <td class="libelle">
+      {% if f.organisme.exonere_tva %}TVA non applicable{% else %}TVA au taux de 20 %{% endif %}
+    </td>
+    <td class="valeur">{{ f.total_tva | euros }}</td>
+  </tr>
+  <tr class="ttc">
+    <td class="libelle">Net à payer</td>
+    <td class="valeur">{{ f.total_ttc | euros }}</td>
+  </tr>
+</table>
+
+{% if s.avec_montant_lettres %}
+<div class="arrete">
+  Arrêtée la présente facture à la somme de {{ f.total_ttc | lettres }}.
+</div>
+{% endif %}
+
+<div class="reglement">
+  Règlement à trente jours, soit au plus tard le {{ f.date_echeance | date_fr }}.
+  {% if s.avec_rib %}
+  <div class="rib-ligne">
+    Virement : IBAN {{ f.coordonnees_bancaires.iban_formate }} —
+    BIC {{ f.coordonnees_bancaires.bic }} — {{ f.coordonnees_bancaires.banque }}
+  </div>
+  {% endif %}
+</div>
+
+<div class="mentions">
+  {% if f.client.est_professionnel %}
+  Tout retard de paiement entraîne de plein droit des pénalités calculées au taux de trois
+  fois le taux d'intérêt légal, ainsi qu'une indemnité forfaitaire pour frais de
+  recouvrement de 40 €.
+  {% endif %}
+  {% if f.organisme.exonere_tva %}
+  TVA non applicable, exonération au titre de l'article 261-4-4° a du code général des
+  impôts.
+  {% endif %}
+  {% if f.nouvelles_mentions %}
+  Nature de l'opération : {{ f.categorie_operation | lower }}.
+  {% endif %}
+  Déclaration d'activité enregistrée sous le numéro
+  {{ f.organisme.numero_declaration_activite }} auprès du préfet de région. Cet
+  enregistrement ne vaut pas agrément de l'État.
+</div>
+
+<div class="pied-legal">
+  {{ f.organisme.forme_juridique }} au capital de {{ f.organisme.capital | nombre }} €
+  · SIRET {{ f.organisme.siret }} · TVA {{ f.organisme.tva }}
+  · RCS {{ f.organisme.rcs_ville }}
+</div>
+
+</body>
+</html>

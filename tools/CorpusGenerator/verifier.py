@@ -5,6 +5,8 @@ ou les SIREN sont invalides est inexploitable pour mesurer le masquage des donne
 personnelles, et se repere immediatement comme factice.
 """
 
+from decimal import Decimal
+
 from stdnum import iban as iban_stdnum
 from stdnum.fr import siren as siren_stdnum
 from stdnum.fr import siret as siret_stdnum
@@ -12,8 +14,30 @@ from stdnum.fr import tva as tva_stdnum
 
 from cles import cle_rib
 from data import generer_facture
+from rendu import montant_en_lettres
 
 NB_ECHANTILLONS = 50
+
+# Valeurs choisies pour couvrir les pieges du francais : la plage 17 a 19 qui n'a pas de
+# nom de dizaine, la conjonction du "et un", les vingtaines au-dela de soixante, et le
+# pluriel de "quatre-vingts" et de "cents" quand aucun nombre ne les suit.
+MONTANTS_ATTENDUS = {
+    0: "zero euro",
+    1: "un euro",
+    17: "dix-sept euros",
+    21: "vingt et un euros",
+    71: "soixante et onze euros",
+    75: "soixante-quinze euros",
+    80: "quatre-vingts euros",
+    81: "quatre-vingt-un euros",
+    99: "quatre-vingt-dix-neuf euros",
+    100: "cent euros",
+    200: "deux cents euros",
+    203: "deux cent trois euros",
+    1000: "mille euros",
+    2772: "deux mille sept cent soixante-douze euros",
+    91480: "quatre-vingt-onze mille quatre cent quatre-vingts euros",
+}
 
 
 def verifier(seed: int) -> list[str]:
@@ -50,6 +74,28 @@ def verifier(seed: int) -> list[str]:
     return anomalies
 
 
+def verifier_montants_en_lettres() -> list[str]:
+    """Controle la conversion des montants en toutes lettres.
+
+    Elle n'apparait que sur une facture sur quatre, donc un montant mal converti peut
+    rester invisible longtemps si personne ne le controle explicitement.
+    """
+    anomalies = []
+    for valeur, attendu in MONTANTS_ATTENDUS.items():
+        obtenu = montant_en_lettres(Decimal(valeur))
+        if obtenu != attendu:
+            anomalies.append(f"{valeur} : « {obtenu} » au lieu de « {attendu} »")
+
+    # Aucun montant plausible ne doit faire echouer la conversion.
+    for valeur in range(0, 100000, 37):
+        try:
+            montant_en_lettres(Decimal(valeur))
+        except Exception as erreur:
+            anomalies.append(f"{valeur} : {type(erreur).__name__} {erreur}")
+
+    return anomalies
+
+
 def main() -> None:
     total = 0
     for seed in range(1, NB_ECHANTILLONS + 1):
@@ -57,6 +103,11 @@ def main() -> None:
         total += len(anomalies)
         for anomalie in anomalies:
             print(f"  seed {seed} : {anomalie}")
+
+    anomalies_lettres = verifier_montants_en_lettres()
+    total += len(anomalies_lettres)
+    for anomalie in anomalies_lettres:
+        print(f"  montant en lettres, {anomalie}")
 
     print(f"\n{NB_ECHANTILLONS} factures verifiees, {total} anomalie(s).")
 

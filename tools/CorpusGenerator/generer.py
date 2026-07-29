@@ -13,20 +13,23 @@ import sys
 
 import manifest
 from data import generer_facture, generer_rib
-from rendu import couleur_logo, logo_svg, rendre_pdf
+from rendu import logo_svg, rendre_pdf
+from styles import style_facture, style_rib
 
 
 def produire_facture(numero: int) -> dict:
     # Une facture sur quatre est adressee a un particulier : le B2B domine en GED,
     # mais le B2C existe et ses mentions obligatoires ne sont pas les memes.
     facture = generer_facture(numero, professionnel=(numero % 4 != 0))
+    style = style_facture(numero)
     identifiant = f"fac-{numero:04d}"
     chemin = manifest.DOSSIER_DOCUMENTS / f"{identifiant}.pdf"
 
     pages = rendre_pdf(
-        "facture_01.html", chemin,
+        style.template, chemin,
         f=facture,
-        logo=logo_svg(facture.organisme.raison_sociale, numero),
+        s=style,
+        logo=logo_svg(facture.organisme.raison_sociale, numero, style.couleur),
     )
 
     tags = ["b2b" if facture.client.est_professionnel else "b2c"]
@@ -34,10 +37,12 @@ def produire_facture(numero: int) -> dict:
         tags.append("tva-exoneree")
     if facture.nouvelles_mentions:
         tags.append("mentions-reforme")
+    if style.filigrane:
+        tags.append("filigrane")
 
     return manifest.construire_entree(
         identifiant, chemin, "facture", numero, pages,
-        variante={"template": "facture_01"},
+        variante=style.as_dict(),
         pii={
             "raison_sociale_emetteur": facture.organisme.raison_sociale,
             "siret_emetteur": facture.organisme.siret,
@@ -54,20 +59,21 @@ def produire_facture(numero: int) -> dict:
 
 def produire_rib(numero: int) -> dict:
     rib = generer_rib(numero)
+    style = style_rib(numero)
     identifiant = f"rib-{numero:04d}"
     chemin = manifest.DOSSIER_DOCUMENTS / f"{identifiant}.pdf"
 
     pages = rendre_pdf(
-        "rib_01.html", chemin,
+        style.template, chemin,
         r=rib,
-        logo=logo_svg(rib.banque, numero),
-        couleur=couleur_logo(numero),
+        s=style,
+        logo=logo_svg(rib.banque, numero, style.couleur),
         date_edition=rib.date_edition,
     )
 
     return manifest.construire_entree(
         identifiant, chemin, "rib", numero, pages,
-        variante={"template": "rib_01"},
+        variante=style.as_dict(),
         pii={
             "titulaire": rib.titulaire,
             "iban": rib.iban,

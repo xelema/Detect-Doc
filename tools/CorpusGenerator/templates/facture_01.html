@@ -1,8 +1,7 @@
-{# Template de facture, variante 01 : disposition classique des logiciels de gestion,
-   emetteur a gauche, destinataire a droite, tableau de lignes, totaux a droite.
-   Les variantes suivantes changeront la disposition et la typographie : un corpus ou
-   toutes les factures sortent du meme template mesure la reconnaissance d'un template,
-   pas celle d'un type documentaire. #}
+{# Facture, presentation des logiciels de facturation recents : logo, couleur d'accent,
+   destinataire encadre a droite, tableau dense, total TTC en bandeau.
+   La police, le corps, la couleur, le style de tableau et la presence de chaque bloc
+   viennent du style, pas du template. #}
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -12,85 +11,97 @@
   @page {
     size: A4;
     margin: 14mm 15mm 18mm 15mm;
-    /* Pied de page courant : WeasyPrint sait numeroter les pages en CSS, ce qui
-       compte pour les documents longs du corpus. */
     @bottom-center {
       content: "Facture {{ f.numero }} - page " counter(page) " / " counter(pages);
-      font-family: "Liberation Sans", sans-serif;
+      font-family: "{{ s.police }}", sans-serif;
       font-size: 7pt;
       color: #666;
     }
   }
   body {
-    font-family: "Liberation Sans", Arial, sans-serif;
-    font-size: 9pt;
+    font-family: "{{ s.police }}", Arial, sans-serif;
+    font-size: {{ s.corps_pt }}pt;
     color: #1a1a1a;
     line-height: 1.35;
   }
   table { border-collapse: collapse; width: 100%; }
   .entete td { vertical-align: top; }
-  .emetteur-nom { font-size: 13pt; font-weight: bold; }
-  .emetteur-detail { font-size: 8pt; color: #444; }
+  .emetteur-nom { font-size: {{ s.corps_pt + 4 }}pt; font-weight: bold; }
+  .emetteur-detail { font-size: {{ s.corps_pt - 1.5 }}pt; color: #444; }
   .titre-doc {
-    font-size: 20pt; font-weight: bold; letter-spacing: 2px;
-    text-transform: uppercase; text-align: right;
+    font-size: {{ s.corps_pt + 11 }}pt; font-weight: bold; letter-spacing: 2px;
+    text-transform: uppercase; text-align: right; color: {{ s.couleur }};
   }
   .bloc-client {
     border: 1px solid #bbb; padding: 6px 8px; margin-top: 4mm;
     width: 78mm; float: right;
   }
   .bloc-client .intitule {
-    font-size: 7.5pt; text-transform: uppercase; color: #666; letter-spacing: 1px;
+    font-size: {{ s.corps_pt - 2 }}pt; text-transform: uppercase; color: #666;
+    letter-spacing: 1px;
   }
   .bloc-client .nom { font-weight: bold; }
-  .references { clear: both; margin-top: 6mm; width: 100%; font-size: 8.5pt; }
+  .references { clear: both; margin-top: 6mm; font-size: {{ s.corps_pt - 1 }}pt; }
   .references th {
-    background: #f0f0f0; border: 1px solid #ccc; padding: 3px 6px;
-    text-align: left; font-size: 7.5pt; text-transform: uppercase; color: #555;
+    background: #f0f0f0; border: 1px solid #ccc; padding: 3px 6px; text-align: left;
+    font-size: {{ s.corps_pt - 2 }}pt; text-transform: uppercase; color: #555;
   }
   .references td { border: 1px solid #ccc; padding: 3px 6px; }
-  .objet { margin-top: 5mm; font-size: 9.5pt; }
+  .objet { margin-top: 5mm; }
   .objet .intitule { font-weight: bold; }
   .lignes { margin-top: 3mm; }
   .lignes th {
-    background: #333; color: #fff; padding: 5px 6px; font-size: 8pt;
-    text-transform: uppercase; letter-spacing: 0.5px;
+    background: {{ s.couleur }}; color: #fff; padding: 5px 6px;
+    font-size: {{ s.corps_pt - 1.5 }}pt; text-transform: uppercase;
   }
-  .lignes td { border-bottom: 1px solid #ddd; padding: 5px 6px; }
+  .lignes .detail { font-size: {{ s.corps_pt - 1.5 }}pt; color: #555; }
   .lignes .num { text-align: right; white-space: nowrap; }
-  .lignes .detail { font-size: 8pt; color: #555; }
+  {% if s.tableau == "filets" %}
+  .lignes td { border: 1px solid #ccc; padding: 5px 6px; }
+  {% elif s.tableau == "horizontaux" %}
+  .lignes td { border-bottom: 1px solid #ddd; padding: 5px 6px; }
+  {% else %}
+  .lignes td { padding: 5px 6px; }
+  .lignes tr:nth-child(even) td { background: #f4f4f4; }
+  {% endif %}
   .totaux { margin-top: 4mm; width: 72mm; float: right; }
   .totaux td { padding: 3px 6px; }
   .totaux .libelle { text-align: right; color: #444; }
   .totaux .valeur { text-align: right; white-space: nowrap; }
   .totaux .ttc td {
-    background: #333; color: #fff; font-weight: bold; font-size: 10.5pt;
+    background: {{ s.couleur }}; color: #fff; font-weight: bold;
+    font-size: {{ s.corps_pt + 1.5 }}pt;
   }
   .paiement { clear: both; padding-top: 6mm; }
   .pave-rib {
-    border: 1px solid #bbb; padding: 6px 8px; font-size: 8pt; width: 105mm;
+    border: 1px solid #bbb; padding: 6px 8px; width: 105mm;
+    font-size: {{ s.corps_pt - 1.5 }}pt;
   }
   .pave-rib .intitule {
-    font-size: 7.5pt; text-transform: uppercase; color: #666; letter-spacing: 1px;
-    margin-bottom: 2px;
+    font-size: {{ s.corps_pt - 2 }}pt; text-transform: uppercase; color: #666;
+    letter-spacing: 1px; margin-bottom: 2px;
   }
-  .pave-rib .iban { font-family: "DejaVu Sans Mono", monospace; font-size: 8.5pt; }
-  .mentions { margin-top: 5mm; font-size: 7.5pt; color: #444; }
+  .pave-rib .iban {
+    font-family: "{{ s.police_mono }}", monospace; font-size: {{ s.corps_pt - 1 }}pt;
+  }
+  .mentions { margin-top: 5mm; font-size: {{ s.corps_pt - 2 }}pt; color: #444; }
   .mentions p { margin: 1.5px 0; }
   .pied-legal {
     margin-top: 6mm; padding-top: 3px; border-top: 1px solid #ccc;
-    font-size: 6.8pt; color: #666; text-align: center;
+    font-size: {{ s.corps_pt - 2.7 }}pt; color: #666; text-align: center;
   }
 </style>
 </head>
 <body>
+
+{% include "_filigrane.html" %}
 
 <table class="entete">
   <tr>
     <td style="width: 55%">
       <table>
         <tr>
-          <td style="width: 60px">{{ logo }}</td>
+          {% if s.avec_logo %}<td style="width: 60px">{{ logo }}</td>{% endif %}
           <td>
             <div class="emetteur-nom">{{ f.organisme.raison_sociale }}</div>
             <div class="emetteur-detail">
@@ -103,9 +114,7 @@
         </tr>
       </table>
     </td>
-    <td style="width: 45%">
-      <div class="titre-doc">Facture</div>
-    </td>
+    <td style="width: 45%"><div class="titre-doc">Facture</div></td>
   </tr>
 </table>
 
@@ -116,7 +125,7 @@
   <div>{{ f.client.adresse.ligne1 }}</div>
   <div>{{ f.client.adresse.code_postal }} {{ f.client.adresse.ville }}</div>
   {% if f.client.est_professionnel %}
-    <div style="margin-top: 3px; font-size: 8pt; color: #555">
+    <div style="margin-top: 3px; font-size: {{ s.corps_pt - 1.5 }}pt; color: #555">
       SIREN {{ f.client.siren }}
       {%- if f.nouvelles_mentions %} · TVA {{ f.client.tva }}{% endif %}
     </div>
@@ -129,24 +138,26 @@
     <th>Date d'émission</th>
     <th>Date d'exécution</th>
     <th>Échéance</th>
-    <th>Convention</th>
+    {% if s.avec_convention %}<th>Convention</th>{% endif %}
   </tr>
   <tr>
     <td><strong>{{ f.numero }}</strong></td>
     <td>{{ f.date_emission | date_fr }}</td>
     <td>{{ f.date_execution | date_fr }}</td>
     <td>{{ f.date_echeance | date_fr }}</td>
-    <td>{{ f.reference_convention }}</td>
+    {% if s.avec_convention %}<td>{{ f.reference_convention }}</td>{% endif %}
   </tr>
 </table>
 
 <div class="objet">
   <span class="intitule">Objet :</span> action de formation « {{ f.intitule_action }} »
-  {% if f.stagiaires | length == 1 %}
-    — stagiaire : {{ f.stagiaires[0] }}
-  {% else %}
-    — {{ f.stagiaires | length }} stagiaires : {{ f.stagiaires | join(', ') }}
-  {% endif %}
+  {%- if s.avec_stagiaires %}
+    {% if f.stagiaires | length == 1 %}
+      — stagiaire : {{ f.stagiaires[0] }}
+    {% else %}
+      — {{ f.stagiaires | length }} stagiaires : {{ f.stagiaires | join(', ') }}
+    {% endif %}
+  {%- endif %}
 </div>
 
 <table class="lignes">
@@ -189,12 +200,14 @@
 </table>
 
 <div class="paiement">
+  {% if s.avec_rib %}
   <div class="pave-rib">
     <div class="intitule">Coordonnées bancaires</div>
     <div>{{ f.coordonnees_bancaires.banque }} — {{ f.coordonnees_bancaires.agence }}</div>
     <div class="iban">IBAN {{ f.coordonnees_bancaires.iban_formate }}</div>
     <div class="iban">BIC {{ f.coordonnees_bancaires.bic }}</div>
   </div>
+  {% endif %}
 
   <div class="mentions">
     <p>Règlement par virement à réception, au plus tard le {{ f.date_echeance | date_fr }}.</p>
@@ -207,10 +220,6 @@
     {% endif %}
     {% if f.nouvelles_mentions %}
     <p>Nature de l'opération : {{ f.categorie_operation | lower }}.</p>
-      {% if f.adresse_livraison %}
-      <p>Adresse de livraison : {{ f.adresse_livraison.ligne1 }},
-         {{ f.adresse_livraison.code_postal }} {{ f.adresse_livraison.ville }}.</p>
-      {% endif %}
     {% endif %}
     <p>Déclaration d'activité enregistrée sous le numéro
        {{ f.organisme.numero_declaration_activite }} auprès du préfet de région.

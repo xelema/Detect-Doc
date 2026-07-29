@@ -55,20 +55,98 @@ def nombre(valeur: int) -> str:
     return " ".join(groupes)
 
 
+UNITES = ["zero", "un", "deux", "trois", "quatre", "cinq", "six", "sept", "huit",
+          "neuf", "dix", "onze", "douze", "treize", "quatorze", "quinze", "seize"]
+DIZAINES = {20: "vingt", 30: "trente", 40: "quarante", 50: "cinquante", 60: "soixante"}
+
+
+def _sous_cent(valeur: int) -> str:
+    """Nombre de 0 a 99 en toutes lettres.
+
+    Le francais compte par vingtaines au-dela de soixante : 75 se dit "soixante-quinze"
+    et 92 "quatre-vingt-douze". Ces deux plages se traitent donc en retranchant 60 ou 80
+    puis en reecrivant le reste, plutot qu'avec un nom de dizaine.
+    """
+    if valeur < 17:
+        return UNITES[valeur]
+    if valeur < 20:
+        return f"dix-{UNITES[valeur - 10]}"
+
+    if valeur < 70:
+        dizaine, reste = (valeur // 10) * 10, valeur % 10
+        if reste == 0:
+            return DIZAINES[dizaine]
+        # "vingt et un", mais "vingt-deux" : seul le un prend la conjonction.
+        if reste == 1:
+            return f"{DIZAINES[dizaine]} et un"
+        return f"{DIZAINES[dizaine]}-{UNITES[reste]}"
+
+    if valeur < 80:
+        reste = valeur - 60
+        if reste == 11:
+            return "soixante et onze"
+        return f"soixante-{_sous_cent(reste)}"
+
+    # Quatre-vingts ne prend son s que lorsqu'il n'est suivi d'aucun autre nombre,
+    # et ne prend jamais la conjonction : on dit "quatre-vingt-un".
+    reste = valeur - 80
+    if reste == 0:
+        return "quatre-vingts"
+    return f"quatre-vingt-{_sous_cent(reste)}"
+
+
+def _sous_mille(valeur: int) -> str:
+    centaines, reste = divmod(valeur, 100)
+    if centaines == 0:
+        return _sous_cent(reste)
+
+    tete = "cent" if centaines == 1 else f"{UNITES[centaines]} cent"
+    if reste == 0:
+        return tete + ("s" if centaines > 1 else "")
+    return f"{tete} {_sous_cent(reste)}"
+
+
+def montant_en_lettres(montant: Decimal) -> str:
+    """Montant ecrit en toutes lettres, comme sur une facture de cabinet.
+
+    Gere jusqu'a 999 999 euros, ce qui couvre tres largement une facture de formation.
+    """
+    entier = int(montant)
+    centimes = int((montant - entier) * 100)
+
+    milliers, reste = divmod(entier, 1000)
+    if milliers == 0:
+        texte = _sous_mille(reste)
+    elif milliers == 1:
+        texte = "mille" if reste == 0 else f"mille {_sous_mille(reste)}"
+    else:
+        texte = f"{_sous_mille(milliers)} mille"
+        if reste:
+            texte += f" {_sous_mille(reste)}"
+
+    texte += " euro" + ("s" if entier > 1 else "")
+    if centimes:
+        texte += f" et {_sous_cent(centimes)} centime" + ("s" if centimes > 1 else "")
+    return texte
+
+
 def couleur_logo(seed: int) -> str:
     """Couleur d'accent du document, partagee entre le logo et le template."""
     return COULEURS_LOGO[seed % len(COULEURS_LOGO)]
 
 
-def logo_svg(raison_sociale: str, seed: int) -> Markup:
+def logo_svg(raison_sociale: str, seed: int, couleur: str = "") -> Markup:
     """Logo invente, construit a partir des initiales de la raison sociale.
 
     Un vrai logo d'entreprise ne peut pas etre reutilise, et un document sans logo ne
     ressemble a rien de reel. Un bloc de couleur avec des initiales est ce que produisent
     la plupart des petits organismes, et il est genere sans fichier externe.
+
+    La couleur vient du style quand il en impose une, pour que le logo et le document
+    s'accordent. A defaut, elle est tiree de la seed.
     """
     initiales = "".join(mot[0] for mot in raison_sociale.split()[:2]).upper()
-    couleur = couleur_logo(seed)
+    couleur = couleur or couleur_logo(seed)
     # Markup, sinon l'echappement automatique de Jinja2 imprime le source SVG en clair
     # dans le document. L'autoechappement reste actif pour tout le reste du template.
     return Markup(
@@ -88,6 +166,7 @@ def _environnement() -> Environment:
     env.filters["euros"] = euros
     env.filters["date_fr"] = date_fr
     env.filters["nombre"] = nombre
+    env.filters["lettres"] = montant_en_lettres
     return env
 
 
