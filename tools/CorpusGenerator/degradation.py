@@ -119,6 +119,27 @@ if set(POIDS_PROFILS) != set(PROFILS):
     raise ValueError("les poids doivent déclarer exactement les cinq profils")
 
 
+# Profils compatibles avec la façon dont un original physique a été repris. Photographier
+# un carton ne produit pas les mêmes défauts que le passer au scanner : appliquer les uns
+# à la place des autres donnerait un document que son propre manifest décrit de travers.
+PROFILS_PAR_ACQUISITION = {
+    "photo": ["photo-smartphone"],
+    "scan": ["scan-propre", "scan-degrade", "photocopie", "fax"],
+}
+
+
+def profil_acquisition(seed: int, acquisition: str) -> str:
+    """Profil de numérisation d'un document qui n'existe que sous forme d'objet physique.
+
+    La question n'est pas ici de savoir *si* le document est numérisé, il l'est toujours,
+    mais *comment*. Le style a déjà décidé de la reprise, photo posée sur un bureau ou
+    passage au scanner, et il ne reste qu'à choisir les défauts cohérents avec elle.
+    """
+    candidats = PROFILS_PAR_ACQUISITION[acquisition]
+    return random.Random(f"acquisition-{seed}").choices(
+        candidats, weights=[POIDS_PROFILS[nom] for nom in candidats])[0]
+
+
 def profil_degradation(seed: int) -> str | None:
     """Profil à appliquer au document, ou None s'il reste à texte natif.
 

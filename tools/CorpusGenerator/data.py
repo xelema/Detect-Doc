@@ -107,6 +107,41 @@ VILLES = [
     ("51100", "Reims"), ("83000", "Toulon"), ("42000", "Saint-Étienne"),
 ]
 
+# Fonctions portées par les cartes de visite qui atterrissent dans un dossier de
+# formation : dirigeants de petites structures, commerciaux, référents pédagogiques.
+FONCTIONS = [
+    "Gérant", "Gérante", "Président", "Directeur", "Directrice", "Co-dirigeant",
+    "Responsable commercial", "Responsable commerciale", "Ingénieur commercial",
+    "Chargé de développement", "Chargée de relation entreprises",
+    "Conseiller en formation", "Conseillère en formation", "Référent pédagogique",
+    "Référente handicap", "Coordinateur pédagogique", "Assistante de formation",
+]
+
+# Accroches imprimées sous le nom de l'entreprise. Le vocabulaire de la formation y
+# apparaît franchement, y compris en anglais : c'est précisément pour cela qu'il ne peut
+# pas servir à reconnaître les autres types documentaires du corpus.
+ACCROCHES = [
+    "La formation qui vous ressemble",
+    "Pour une montée en compétences durable",
+    "Organisme de formation certifié",
+    "Formations sur mesure pour les pros",
+    "Votre partenaire compétences",
+    "Apprendre autrement",
+    "Learning made simple",
+]
+
+# Labels affichés par un organisme de formation. Qualiopi conditionne l'accès aux
+# financements publics depuis 2022, il figure donc sur beaucoup de cartes du secteur.
+CERTIFICATIONS = [
+    "Qualiopi", "Certifié Qualiopi", "NF Service Formation",
+    "Qualiopi · Actions de formation",
+]
+
+# Indicatifs de téléphonie fixe. L'indicatif exact n'a pas à correspondre à la ville :
+# il suffit qu'il ne soit pas toujours le même, sans quoi une expression régulière de
+# masquage se réglerait sur un seul motif.
+INDICATIFS_FIXES = ["01", "02", "03", "04", "05"]
+
 # Noms de banques inventés. Aucune banque réelle n'est nommée : le corpus doit être
 # réaliste dans sa forme, pas usurper une marque existante.
 BANQUES = [
@@ -305,6 +340,51 @@ class Rib:
         return iban_stdnum.format(self.iban)
 
 
+@dataclass
+class CarteVisite:
+    """Identité professionnelle d'une personne, sur un carton de 85 par 54 millimètres.
+
+    Le type le plus pauvre en signal du corpus : quelques dizaines de mots, aucune phrase
+    verbale, aucune date, aucun montant, aucun destinataire. Ce qui le désigne n'est pas
+    un vocabulaire mais la coexistence d'un nom, d'une fonction et de coordonnées, sans
+    rien qui les relie.
+
+    Toutes les coordonnées sont portées ici et c'est le style qui décide lesquelles sont
+    imprimées, comme pour les autres types. C'est ce qui reproduit l'écart de richesse
+    observé sur les cartes réelles, d'un facteur cinq entre la plus dépouillée et la plus
+    chargée.
+    """
+
+    civilite: str
+    prenom: str
+    nom: str
+    fonction: str
+    organisme: str
+    accroche: str
+    certification: str
+    email: str
+    mobile: str
+    fixe: str
+    site: str
+    adresse: Coordonnees
+    reseau: str
+    # Horodatage incrusté par l'appareil photo, et non contenu du carton. Il n'apparaît
+    # que sur les cartes photographiées, et c'est le seul endroit où ce type porte une
+    # date : de quoi vérifier qu'un classifieur ne s'appuie pas sur la présence d'une
+    # date pour écarter la carte de visite.
+    date_prise: date
+    heure_prise: str
+
+    @property
+    def nom_complet(self) -> str:
+        return f"{self.prenom} {self.nom}"
+
+    @property
+    def adresse_complete(self) -> str:
+        return (f"{self.adresse.ligne1}, {self.adresse.code_postal} "
+                f"{self.adresse.ville}")
+
+
 def client_professionnel(seed: int) -> bool:
     """Le destinataire est-il une entreprise ?
 
@@ -403,6 +483,48 @@ def generer_rib(seed: int, titulaire: str | None = None,
         iban=iban_francais(code_banque, code_guichet, numero_compte, cle),
         date_edition=DEBUT_PERIODE + timedelta(
             days=fake.random_int(0, (FIN_PERIODE - DEBUT_PERIODE).days)),
+    )
+
+
+def _telephone(fake: Faker, indicatif: str) -> str:
+    """Numéro français écrit par groupes de deux chiffres, comme sur un carton imprimé."""
+    return indicatif + " " + " ".join(fake.numerify("##") for _ in range(4))
+
+
+def generer_carte_visite(seed: int) -> CarteVisite:
+    fake = _faker(seed)
+
+    # Le prénom suit la civilité, sinon on produit des "Mme Nicolas".
+    if fake.boolean():
+        civilite, prenom = "M.", fake.first_name_male()
+    else:
+        civilite, prenom = "Mme", fake.first_name_female()
+    nom = fake.last_name()
+
+    organisme = _raison_sociale_organisme(fake)
+    domaine = _nom_de_domaine(organisme)
+    # Le couple prénom.nom est la forme d'adresse professionnelle la plus répandue, et
+    # c'est aussi ce qui rend l'e-mail lui-même porteur du nom de la personne : le
+    # masquer ne suffira pas à masquer l'identité.
+    identifiant = f"{_sans_accent(prenom)}.{_sans_accent(nom)}".lower().replace("'", "")
+
+    return CarteVisite(
+        civilite=civilite,
+        prenom=prenom,
+        nom=nom,
+        fonction=fake.random_element(FONCTIONS),
+        organisme=organisme,
+        accroche=fake.random_element(ACCROCHES),
+        certification=fake.random_element(CERTIFICATIONS),
+        email=f"{identifiant}@{domaine}",
+        mobile=_telephone(fake, fake.random_element(["06", "07"])),
+        fixe=_telephone(fake, fake.random_element(INDICATIFS_FIXES)),
+        site=f"www.{domaine}",
+        adresse=_coordonnees(fake),
+        reseau=f"in/{identifiant.replace('.', '-')}",
+        date_prise=DEBUT_PERIODE + timedelta(
+            days=fake.random_int(0, (FIN_PERIODE - DEBUT_PERIODE).days)),
+        heure_prise=f"{fake.random_int(7, 19):02d}:{fake.random_int(0, 59):02d}",
     )
 
 

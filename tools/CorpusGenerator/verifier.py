@@ -5,6 +5,7 @@ ou les SIREN sont invalides est inexploitable pour mesurer le masquage des donn�
 personnelles, et se repère immédiatement comme factice.
 """
 
+import subprocess
 import tempfile
 from decimal import Decimal
 from pathlib import Path
@@ -15,10 +16,12 @@ from stdnum.fr import siret as siret_stdnum
 from stdnum.fr import tva as tva_stdnum
 
 from cles import cle_rib
-from data import client_professionnel, generer_devis, generer_facture
+from data import (ACCROCHES, CERTIFICATIONS, FONCTIONS, MOTIFS_CLIENT,
+                  MOTIFS_ORGANISME, VILLES, client_professionnel,
+                  generer_carte_visite, generer_devis, generer_facture)
 from manifest import hash_fichier
 from rendu import logo_svg, montant_en_lettres, rendre_pdf
-from styles import style_devis, style_facture
+from styles import POLICES_MANUSCRITES, POLICES_UTILISEES, style_devis, style_facture
 
 NB_ECHANTILLONS = 50
 
@@ -126,6 +129,88 @@ def verifier_montants_en_lettres() -> list[str]:
     return anomalies
 
 
+def _caracteres_produits() -> set[str]:
+    """Tous les caractères que la génération peut poser dans un document.
+
+    Les listes de vocabulaire sont prises telles quelles, plutôt qu'échantillonnées : une
+    fonction ou une accroche rare passerait sinon entre les mailles. Les valeurs tirées,
+    noms et adresses en tête, sont elles échantillonnées, faute de pouvoir les énumérer.
+    """
+    fixes = "".join(FONCTIONS + ACCROCHES + CERTIFICATIONS + MOTIFS_ORGANISME
+                    + MOTIFS_CLIENT + [ville for _, ville in VILLES])
+
+    cartes = [generer_carte_visite(seed) for seed in range(1, NB_ECHANTILLONS + 1)]
+    tires = "".join(
+        f"{c.civilite}{c.nom_complet}{c.organisme}{c.email}{c.mobile}{c.fixe}"
+        f"{c.site}{c.reseau}{c.adresse_complete}"
+        for c in cartes)
+
+    # Séparateurs et symboles posés par les templates eux-mêmes, absents des données.
+    templates = "·%()[]«»"
+
+    return set(fixes + tires + templates)
+
+
+# Le symbole monétaire n'apparaît que sur les pièces comptables. Les polices manuscrites
+# ne servent qu'à l'identité portée au stylo sur une carte de visite, où aucun montant ne
+# figure : le leur réclamer écarterait de bonnes polices pour un caractère qu'elles ne
+# seront jamais appelées à dessiner.
+SYMBOLE_MONETAIRE = "€"
+
+
+def _police_servie(famille: str) -> tuple[str, set[int]]:
+    """Famille réellement servie par fontconfig, et les codes qu'elle sait dessiner.
+
+    `fc-match` répond toujours quelque chose : quand la police demandée est absente, il
+    sert sa police de secours sans le signaler. Comparer les deux noms est le seul moyen
+    de savoir si la famille demandée existe vraiment.
+
+    La couverture est lue sur fontconfig plutôt que dans le fichier de police, parce que
+    les familles URW sont livrées en Type 1 et qu'aucun lecteur de tables OpenType ne
+    sait les ouvrir. fontconfig, lui, les décrit comme les autres.
+    """
+    def interroger(motif: str) -> str:
+        return subprocess.run(["fc-match", "-f", motif, famille],
+                              capture_output=True, text=True, check=True).stdout.strip()
+
+    codes = set()
+    # Le charset se lit en plages hexadécimales, « 20-7e a0 152-153 ».
+    for plage in interroger("%{charset}").split():
+        debut, _, fin = plage.partition("-")
+        codes.update(range(int(debut, 16), int(fin or debut, 16) + 1))
+
+    return interroger("%{family[0]}"), codes
+
+
+def verifier_polices() -> list[str]:
+    """Contrôle que chaque police déclarée est installée et couvre le français.
+
+    Deux pannes silencieuses, et c'est ce qui les rend dangereuses. Une police absente est
+    remplacée sans un mot par la police de secours du système, et le corpus sort avec une
+    variété typographique bien moindre que celle que le manifest annonce. Un caractère
+    non dessiné est emprunté à une autre police, si bien qu'un nom peut sortir avec un É
+    d'un autre corps et d'une autre graisse au milieu d'un mot.
+
+    Aucune erreur n'est levée dans les deux cas, et le manifest continue d'affirmer que
+    le document est en telle police. Seul ce contrôle le dit.
+    """
+    anomalies = []
+    requis = _caracteres_produits()
+
+    for famille in POLICES_UTILISEES:
+        servie, couverts = _police_servie(famille)
+        if servie.casefold() != famille.casefold():
+            anomalies.append(f"{famille} : absente, fontconfig sert « {servie} »")
+            continue
+
+        attendus = requis if famille in POLICES_MANUSCRITES else requis | {SYMBOLE_MONETAIRE}
+        manquants = sorted(c for c in attendus if ord(c) not in couverts)
+        if manquants:
+            anomalies.append(f"{famille} : ne dessine pas {''.join(manquants)}")
+
+    return anomalies
+
+
 def verifier_reproductibilite() -> list[str]:
     """Rend deux fois le même document et compare les fichiers obtenus.
 
@@ -135,7 +220,7 @@ def verifier_reproductibilite() -> list[str]:
     moindre erreur. Sans ce contrôle, seule une lecture attentive du diff du manifest
     révélerait la rupture.
 
-    Les deux types sont éprouvés : ils partagent leurs gabarits, mais pas les blocs qui
+    Les deux types sont éprouvés : ils partagent leurs templates, mais pas les blocs qui
     s'y affichent, et le cartouche d'acceptation n'apparaît que sur le devis.
     """
     anomalies = []
@@ -178,6 +263,7 @@ def main() -> None:
                 print(f"  {intitule} seed {seed} : {anomalie}")
 
     for intitule, controle in (("montant en lettres", verifier_montants_en_lettres),
+                               ("polices", verifier_polices),
                                ("reproductibilite", verifier_reproductibilite)):
         anomalies = controle()
         total += len(anomalies)

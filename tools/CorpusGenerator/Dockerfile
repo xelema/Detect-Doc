@@ -8,6 +8,11 @@ ENV PYTHONUNBUFFERED=1
 # inscriptible vaut mieux que de creer un compte et son home pour deux fichiers de cache.
 ENV HOME=/tmp
 
+# Les polices decident de ce que l'OCR voit, elles font donc partie du corpus au meme
+# titre que les templates. Trois groupes : les familles bureautiques des pieces
+# comptables, les familles d'imprimeur des cartes de visite, et les manuscrites qui
+# servent aux cartes completees a la main. Toute police retiree d'ici change le rendu du
+# corpus sans qu'aucun test ne le signale : la liste suit celle de `styles.py`.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         fonts-crosextra-caladea \
@@ -15,8 +20,21 @@ RUN apt-get update \
         fonts-croscore \
         fonts-dejavu-core \
         fonts-liberation \
-          fonts-noto-core \
-          fonts-urw-base35 \
+        fonts-noto-core \
+        fonts-urw-base35 \
+        fonts-cabin \
+        fonts-comfortaa \
+        fonts-dosis \
+        fonts-inter \
+        fonts-lato \
+        fonts-league-spartan \
+        fonts-open-sans \
+        fonts-quicksand \
+        fonts-roboto-slab \
+        fonts-breip \
+        fonts-femkeklaver \
+        fonts-kristi \
+        fonts-tlwg-purisa \
           libgl1 \
           libpango-1.0-0 \
           libpangoft2-1.0-0 \

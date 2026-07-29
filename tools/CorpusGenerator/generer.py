@@ -8,10 +8,11 @@ Les types et quantités viennent du fichier TOML global.
 
 import manifest
 from configuration import DOCUMENTS, FICHIER, SHA256
-from data import client_professionnel, generer_devis, generer_facture, generer_rib
-from degradation import degrader, profil_degradation
-from rendu import logo_svg, rendre_pdf
-from styles import style_devis, style_facture, style_rib
+from data import (client_professionnel, generer_carte_visite, generer_devis,
+                  generer_facture, generer_rib)
+from degradation import degrader, profil_acquisition, profil_degradation
+from rendu import logo_svg, portrait_svg, qr_svg, rendre_pdf
+from styles import style_carte_visite, style_devis, style_facture, style_rib
 
 
 def _jumeau_scanne(propre: dict, seed: int) -> dict | None:
@@ -148,11 +149,73 @@ def produire_rib(numero: int) -> dict:
     )
 
 
+def produire_carte_visite(numero: int) -> dict:
+    carte = generer_carte_visite(numero)
+    style = style_carte_visite(numero)
+    identifiant = f"cvi-{numero:04d}"
+    chemin = manifest.DOSSIER_DOCUMENTS / f"{identifiant}.pdf"
+
+    pages = rendre_pdf(
+        style.template, chemin,
+        c=carte,
+        s=style,
+        logo=logo_svg(carte.organisme, style.couleur),
+        qr=qr_svg(numero),
+        portrait=portrait_svg(style.couleur),
+    )
+
+    tags = [style.acquisition, style.orientation]
+    if style.angle_deg in (90, 270):
+        tags.append("quart-de-tour")
+    if style.manuscrite:
+        tags.append("manuscrite")
+    if style.verso != "aucun":
+        tags.append(f"verso-{style.verso}")
+    if not style.avec_logo:
+        tags.append("sans-logo")
+
+    # Seules les coordonnées réellement imprimées sont déclarées. Le manifest sert de
+    # vérité terrain au masquage : y annoncer une donnée absente du document la ferait
+    # compter plus tard comme une détection manquée, et le rappel mesuré serait faux.
+    pii = {
+        "nom_complet": carte.nom_complet,
+        "email": carte.email,
+        "telephone_mobile": carte.mobile,
+        "organisme": carte.organisme,
+    }
+    if style.avec_fixe:
+        pii["telephone_fixe"] = carte.fixe
+    if style.avec_adresse:
+        pii["adresse"] = carte.adresse_complete
+    if style.avec_reseau:
+        pii["reseau_social"] = carte.reseau
+
+    return manifest.construire_entree(
+        identifiant, chemin, "carte_visite", numero, pages,
+        variante=style.as_dict(),
+        pii=pii,
+        tags=tags,
+    )
+
+
 PRODUCTEURS = {
     "facture": produire_facture,
     "devis": produire_devis,
     "rib": produire_rib,
+    "carte_visite": produire_carte_visite,
 }
+
+# Types dont le document déposé est la reprise d'un objet physique. Une carte de visite
+# arrive presque toujours photographiée ou scannée, pas sous forme de fichier : en
+# produire autant d'exemplaires propres que de reprises en ferait le type le plus facile
+# du corpus, alors que c'est le plus pauvre en signal, et fausserait du même coup la
+# comparaison entre texte natif et scan sur tout le corpus.
+#
+# « Presque toujours » et non « toujours » : le style tire une minorité de documents en
+# mode `fichier`, l'export d'un outil de mise en page déposé tel quel. Ceux-là restent à
+# texte natif. Le cas est rare mais il existe, et un corpus qui n'en contiendrait aucun
+# ne dirait rien de la façon dont le service le traite.
+TYPES_PHYSIQUES = {"carte_visite"}
 
 # Les types produits et les types que le manifest accepte sont déclarés dans deux
 # modules, manifest ne pouvant pas importer generer sans cycle. Le contrôle échoue
@@ -163,11 +226,47 @@ assert set(PRODUCTEURS) == manifest.TYPES_CONNUS, (
     f"{sorted(manifest.TYPES_CONNUS)} ne concordent pas")
 
 
+def _reprise_physique(propre: dict, seed: int) -> dict:
+    """Numérise un document repris d'un objet physique, sans conserver l'original.
+
+    Le rendu propre n'est ici qu'une étape de fabrication, l'équivalent du fichier de
+    l'imprimeur : il est écrasé par sa reprise et n'entre jamais au manifest, qui ne doit
+    décrire que ce qui existe. L'entrée reste donc autonome, sans `derive_de`, à la
+    différence du jumeau scanné qui accompagne un original bien réel.
+
+    Le mode `fichier` est rendu tel quel : c'est justement le document que personne n'a
+    photographié, et il doit rester à texte natif.
+
+    Écrire la numérisation par-dessus sa source est sans danger : la rasterisation ferme
+    le fichier d'entrée avant que le nouveau PDF ne soit écrit.
+    """
+    acquisition = propre["variante"]["acquisition"]
+    if acquisition == "fichier":
+        return propre
+
+    fichier = manifest.DOSSIER_CORPUS / propre["fichier"]
+    profil = profil_acquisition(seed, acquisition)
+    effets = degrader(fichier, fichier, seed, profil)
+
+    return {
+        **propre,
+        "sha256": manifest.hash_fichier(fichier),
+        "regime": "scanne",
+        "degradations": effets,
+        "tags": propre["tags"] + [profil],
+    }
+
+
 def _produire(type_document: str, nombre: int) -> list[dict]:
     producteur = PRODUCTEURS[type_document]
     entrees = []
     for numero in range(1, nombre + 1):
         propre = producteur(numero)
+
+        if type_document in TYPES_PHYSIQUES:
+            entrees.append(_reprise_physique(propre, numero))
+            continue
+
         entrees.append(propre)
         jumeau = _jumeau_scanne(propre, numero)
         if jumeau is not None:

@@ -1,0 +1,37 @@
+{# Carte de visite, variante 02 : minimaliste.
+
+   Noir sur blanc, aucun aplat, une grande réserve vide et les coordonnées regroupées en
+   bas. C'est le cas limite du corpus : une fois océrisée, cette carte peut ne rendre que
+   huit mots, dont aucun n'appartient au vocabulaire d'un type documentaire. Le score de
+   confiance doit s'y effondrer, et c'est là que se mesure sa calibration. #}
+{% extends "_carte_page.html" %}
+
+{% block style_face %}
+  .corps { padding: 5mm 6mm; height: 100%; box-sizing: border-box; position: relative; }
+  .tete svg { width: 8mm; height: 8mm; }
+  .bloc { position: absolute; left: 6mm; right: 6mm; bottom: 5mm; }
+  .bloc .nom { font-size: 1.2em; letter-spacing: 0.4px; }
+  .bloc .fonction { font-size: 0.85em; color: #555; margin-bottom: 1.5mm; }
+  .bloc .ligne { font-size: 0.95em; }
+  .qr { position: absolute; right: 5mm; top: 5mm; }
+{% endblock %}
+
+{% block face %}
+    <div class="corps">
+      {% if s.avec_logo %}<div class="tete">{{ logo }}</div>{% endif %}
+      {% if s.avec_qr %}<div class="qr">{{ qr }}</div>{% endif %}
+
+      <div class="bloc{% if s.manuscrite %} manuscrit{% endif %}">
+        <div class="nom">{{ c.prenom }} {{ c.nom | upper }}</div>
+        {% if s.avec_fonction %}<div class="fonction">{{ c.fonction }}</div>{% endif %}
+        <div class="ligne">{{ c.email }}</div>
+        <div class="ligne">{{ c.mobile }}</div>
+        {% if s.avec_fixe %}<div class="ligne">{{ c.fixe }}</div>{% endif %}
+        {% if s.avec_site %}<div class="ligne">{{ c.site }}</div>{% endif %}
+        {% if s.avec_adresse %}
+        <div class="ligne">{{ c.adresse.ligne1 }}, {{ c.adresse.code_postal }}
+          {{ c.adresse.ville }}</div>
+        {% endif %}
+      </div>
+    </div>
+{% endblock %}

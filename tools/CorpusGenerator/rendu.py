@@ -5,6 +5,7 @@ du système : le corpus doit sortir identique sur n'importe quelle machine.
 """
 
 import os
+import random
 from datetime import date
 from decimal import Decimal
 from functools import cache
@@ -137,6 +138,58 @@ def logo_svg(raison_sociale: str, couleur: str) -> Markup:
         f'<rect width="54" height="54" rx="8" fill="{couleur}"/>'
         f'<text x="27" y="35" font-family="Liberation Sans, sans-serif" font-size="22" '
         f'font-weight="bold" fill="#ffffff" text-anchor="middle">{initiales}</text>'
+        f"</svg>"
+    )
+
+
+def qr_svg(seed: int, taille_mm: float = 15) -> Markup:
+    """Motif de QR code, factice mais de forme correcte.
+
+    Une carte de visite sur deux en porte un, et il occupe une surface que l'OCR verra
+    comme un bloc de bruit. Le contenu n'a aucune importance ici, seule la forme compte :
+    grille de 21 modules et trois cibles de repérage aux angles, comme un QR de version 1.
+    Dessiner le motif évite d'ajouter une bibliothèque d'encodage pour un carré noir.
+
+    Le QR d'une vraie carte encode les mêmes coordonnées que le texte imprimé. C'est une
+    limite à retenir pour le masquage : traiter le texte et laisser le code n'aurait rien
+    masqué du tout.
+    """
+    modules = 21
+    tirage = random.Random(f"qr-{seed}")
+    cibles = [(0, 0), (modules - 7, 0), (0, modules - 7)]
+
+    def dans_une_cible(x: int, y: int) -> bool:
+        return any(cx <= x < cx + 7 and cy <= y < cy + 7 for cx, cy in cibles)
+
+    formes = [f'<rect x="{x}" y="{y}" width="1" height="1"/>'
+              for y in range(modules) for x in range(modules)
+              if not dans_une_cible(x, y) and tirage.random() < 0.45]
+
+    for cx, cy in cibles:
+        formes.append(f'<rect x="{cx}" y="{cy}" width="7" height="7"/>')
+        formes.append(f'<rect x="{cx + 1}" y="{cy + 1}" width="5" height="5" fill="#fff"/>')
+        formes.append(f'<rect x="{cx + 2}" y="{cy + 2}" width="3" height="3"/>')
+
+    return Markup(
+        f'<svg width="{taille_mm}mm" height="{taille_mm}mm" '
+        f'viewBox="0 0 {modules} {modules}" xmlns="http://www.w3.org/2000/svg" '
+        f'shape-rendering="crispEdges" fill="#000">' + "".join(formes) + "</svg>"
+    )
+
+
+def portrait_svg(couleur: str, taille_mm: float = 17) -> Markup:
+    """Silhouette, pour les cartes qui portent la photo de la personne.
+
+    Un visage n'a pas sa place dans un corpus de test, et un disque vide ne ressemblerait
+    à rien. Une silhouette occupe la même surface et produit le même effet sur la mise en
+    page, qui est tout ce qui compte ici : la photo ne porte aucun texte.
+    """
+    return Markup(
+        f'<svg width="{taille_mm}mm" height="{taille_mm}mm" viewBox="0 0 40 40" '
+        f'xmlns="http://www.w3.org/2000/svg">'
+        f'<circle cx="20" cy="20" r="20" fill="#dcdcdc"/>'
+        f'<circle cx="20" cy="15" r="7.5" fill="{couleur}"/>'
+        f'<path d="M5 40a15 15 0 0 1 30 0z" fill="{couleur}"/>'
         f"</svg>"
     )
 

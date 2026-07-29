@@ -56,7 +56,7 @@ Le risque n'est pas la confusion avec un voisin proche : aucun autre type du pé
 
 Fournis par le métier, non versionnés, dans `tmp/samples/Cartes de visites`. Les cartes sont citées par leur entreprise, jamais par la personne.
 
-**Deux régimes d'acquisition, aucun n'est bureautique.** Il n'existe pas de carte de visite « native » : le document déposé en GED est toujours une reprise photographique d'un objet physique.
+**Deux régimes d'acquisition, aucun n'est bureautique.** Sur les quatorze exemples, le document déposé en GED est toujours la reprise photographique d'un objet physique. Rien n'interdit pourtant qu'un export d'outil de mise en page soit déposé tel quel : quatorze exemples ne font pas une loi, et le corpus doit couvrir ce cas.
 
 | Régime | Nombre | Caractéristiques |
 |---|---|---|
@@ -71,7 +71,7 @@ Fournis par le métier, non versionnés, dans `tmp/samples/Cartes de visites`. L
 
 **Amplitude de contenu, d'un facteur cinq.** La plus pauvre porte un logo, un prénom et nom en minuscules, un e-mail et un mobile, soit huit mots. La plus riche porte deux établissements avec leurs adresses, deux fixes, deux URL, une accroche, deux logos de certification et la mention de l'organisme certificateur. Entre les deux : avec ou sans photo de la personne, avec ou sans adresse postale, avec ou sans identifiant de réseau social, avec ou sans logo.
 
-**Aucune mise en page n'est partagée.** Sur quatorze cartes, quatorze compositions : texte noir sur fond blanc, texte blanc sur aplat de couleur pleine page, bandeau vertical coloré, logo centré en haut, logo en filigrane géant, colonne unique, deux colonnes séparées d'un filet. Deux cartes sont au format portrait au lieu du paysage habituel. La variété de gabarits n'est donc pas un raffinement du générateur, c'est la caractéristique première du type.
+**Aucune mise en page n'est partagée.** Sur quatorze cartes, quatorze compositions : texte noir sur fond blanc, texte blanc sur aplat de couleur pleine page, bandeau vertical coloré, logo centré en haut, logo en filigrane géant, colonne unique, deux colonnes séparées d'un filet. Deux cartes sont au format portrait au lieu du paysage habituel. La variété de templates n'est donc pas un raffinement du générateur, c'est la caractéristique première du type.
 
 **Vocabulaire du secteur.** Plusieurs cartes viennent d'organismes de formation et portent `Qualiopi`, `NF Service Formation continue`, ou des accroches en anglais sur l'apprentissage. Le vocabulaire de la formation apparaît donc sur des cartes de visite, ce qui interdit de s'appuyer dessus pour classer.
 
@@ -79,14 +79,14 @@ Fournis par le métier, non versionnés, dans `tmp/samples/Cartes de visites`. L
 
 Ce que le générateur doit produire pour que le type soit représentatif. Chaque axe est tiré des observations ci-dessus.
 
-1. **Ne jamais produire une carte cadrée seule.** Le document final est une page A4 très majoritairement vide avec la carte dans un coin, ou une photo où la carte occupe une fraction du cadre sur un fond de bureau.
-2. **Deux chaînes de rendu distinctes**, scan à plat et photo au smartphone, dans une proportion voisine de celle observée, soit un peu plus de photos que de scans.
+1. **Presque jamais de carte cadrée seule.** Le document final est une page A4 très majoritairement vide avec la carte dans un coin, ou une photo où la carte occupe une fraction du cadre sur un fond de bureau. Une minorité, environ un sur sept, fait exception : l'export d'un outil de mise en page, page à la taille du carton et à texte natif. Aucun des quatorze exemples ne s'y trouve, mais rien ne l'empêche en production, et c'est le seul cas où l'OCR n'a rien à faire sur ce type.
+2. **Trois chaînes de rendu distinctes**, scan à plat, photo au smartphone et fichier exporté, la photo restant majoritaire comme sur les exemples.
 3. **Rotation obligatoire**, incluant les multiples de 90° et pas seulement de petits angles.
 4. **Incrustations de l'appareil photo** sur la variante photo : modèle et horodatage dans les coins, en blanc.
-5. **Gabarits nombreux et sans tronc commun**, portrait comme paysage, avec et sans aplat de couleur, texte clair sur fond sombre inclus.
+5. **Templates nombreux et sans tronc commun**, portrait comme paysage, avec et sans aplat de couleur, texte clair sur fond sombre inclus.
 6. **Blocs optionnels tirés indépendamment** : photo de la personne, QR code, adresse postale, second numéro, URL, identifiant de réseau social, logo de certification, accroche. C'est leur combinatoire qui produit l'amplitude observée.
 7. **Variante recto verso sur deux pages**, dont un cas où la page nominative est la seconde et un cas où le verso est une publicité sans nom.
 8. **Variante manuscrite**, jusqu'au cas extrême de la carte vierge de tout sauf le logo, complétée à la main.
 9. **Longueur de texte tirée entre 8 et 60 mots**, et non centrée sur une valeur moyenne.
 
-Le manifest enregistre pour chaque document le gabarit, le régime d'acquisition, l'angle, les blocs présents et le nombre de mots, afin que le rapport puisse dire sur quel axe le classifieur décroche.
+Le manifest enregistre pour chaque document le template, le régime d'acquisition, l'angle, les blocs présents et le nombre de mots, afin que le rapport puisse dire sur quel axe le classifieur décroche.

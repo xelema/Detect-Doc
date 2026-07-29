@@ -1,0 +1,62 @@
+{# Carte de visite, variante 03 : impression en fond perdu.
+
+   Aplat de couleur sur toute la carte, texte en réserve blanche, souvent une photo et un
+   QR code. C'est le cas hostile du type : beaucoup de binarisations d'OCR supposent du
+   texte sombre sur fond clair et rendent une page vide sur un document comme celui-ci. #}
+{% extends "_carte_page.html" %}
+
+{% block style_face %}
+  .carte { background: {{ s.couleur }}; color: #ffffff; }
+  .corps { padding: 4.5mm 5.5mm; position: relative; height: 100%; box-sizing: border-box; }
+
+  {# Logo repris en très grand et en faible opacité, comme le font les imprimeurs pour
+     meubler l'aplat. Il brouille le fond sous le texte, ce qui gêne la segmentation. #}
+  .filigrane {
+    position: absolute; right: -8mm; top: 6mm;
+    opacity: 0.16;
+  }
+  .filigrane svg { width: 40mm; height: 40mm; }
+
+  .portrait { float: left; margin-right: 3mm; }
+  .identite .nom { font-size: 1.3em; letter-spacing: 0.3px; }
+  .identite .fonction { font-size: 0.88em; opacity: 0.85; }
+  .accroche { font-size: 0.8em; opacity: 0.8; margin-top: 1mm; }
+  .contacts { clear: both; margin-top: 2.5mm; font-size: 0.95em; }
+  .certif { margin-top: 1.5mm; font-size: 0.75em; opacity: 0.8; }
+
+  {# Un QR ne se lit pas en réserve blanche : il est toujours posé sur un carré blanc,
+     y compris sur une carte imprimée en fond perdu. #}
+  .qr {
+    position: absolute; right: 4mm; bottom: 4mm;
+    background: #ffffff; padding: 1mm; line-height: 0;
+  }
+{% endblock %}
+
+{% block face %}
+    {% if s.avec_logo %}<div class="filigrane">{{ logo }}</div>{% endif %}
+
+    <div class="corps">
+      {% if s.avec_photo %}<div class="portrait">{{ portrait }}</div>{% endif %}
+
+      <div class="identite{% if s.manuscrite %} manuscrit{% endif %}">
+        <div class="nom">{{ c.prenom }} {{ c.nom | upper }}</div>
+        {% if s.avec_fonction %}<div class="fonction">{{ c.fonction }}</div>{% endif %}
+        <div style="margin-top: 1mm; font-weight: bold">{{ c.organisme }}</div>
+        {% if s.avec_accroche %}<div class="accroche">{{ c.accroche }}</div>{% endif %}
+      </div>
+
+      <div class="contacts{% if s.manuscrite %} manuscrit{% endif %}">
+        <div>{{ c.mobile }}</div>
+        {% if s.avec_fixe %}<div>{{ c.fixe }}</div>{% endif %}
+        <div>{{ c.email }}</div>
+        {% if s.avec_site %}<div>{{ c.site }}</div>{% endif %}
+        {% if s.avec_reseau %}<div>{{ c.reseau }}</div>{% endif %}
+        {% if s.avec_adresse %}
+        <div>{{ c.adresse.ligne1 }} · {{ c.adresse.code_postal }} {{ c.adresse.ville }}</div>
+        {% endif %}
+        {% if s.avec_certification %}<div class="certif">{{ c.certification }}</div>{% endif %}
+      </div>
+    </div>
+
+    {% if s.avec_qr %}<div class="qr">{{ qr }}</div>{% endif %}
+{% endblock %}

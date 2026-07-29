@@ -26,11 +26,16 @@ Le conteneur tourne sous l'uid 1000 et non sous `root`, sans quoi il laisserait 
 Sans Docker, l'outil tourne sous WSL, pas directement sous Windows : WeasyPrint dépend des bibliothèques GTK (Pango, Cairo) qui n'existent pas nativement sous Windows.
 
 ```bash
-# Prérequis système, une fois
+# Prérequis système, une fois. La liste des polices doit rester alignée sur celle du
+# Dockerfile et sur les listes de styles.py : `verifier.py` échoue si l'une manque.
 sudo apt-get install python3-venv libpango-1.0-0 libpangoft2-1.0-0 \
                      poppler-utils fonts-liberation fonts-dejavu-core \
                      fonts-crosextra-carlito fonts-crosextra-caladea \
-                     fonts-croscore fonts-urw-base35 fonts-noto-core
+                     fonts-croscore fonts-urw-base35 fonts-noto-core \
+                     fonts-cabin fonts-comfortaa fonts-dosis fonts-inter \
+                     fonts-lato fonts-league-spartan fonts-open-sans \
+                     fonts-quicksand fonts-roboto-slab \
+                     fonts-breip fonts-femkeklaver fonts-kristi fonts-tlwg-purisa
 
 # Environnement Python, une fois
 python3 -m venv .venv
@@ -103,7 +108,7 @@ Deux modules n'ont volontairement aucune connaissance l'un de l'autre : **`data.
 
 ## La paire facture et devis
 
-Les deux types partagent leurs quatre gabarits, `piece_01.html` à `piece_04.html`, et le tronc commun `Piece` du modèle de données. Ce n'est pas une économie de code, c'est la condition pour que le corpus mesure quelque chose : un organisme édite son devis et sa facture avec le même logiciel, donc sur le même papier à en-tête. Leur donner des mises en page distinctes offrirait un raccourci visuel qui n'existe pas en production, et un classifieur entraîné dessus s'effondrerait sur des documents réels.
+Les deux types partagent leurs quatre templates, `piece_01.html` à `piece_04.html`, et le tronc commun `Piece` du modèle de données. Ce n'est pas une économie de code, c'est la condition pour que le corpus mesure quelque chose : un organisme édite son devis et sa facture avec le même logiciel, donc sur le même papier à en-tête. Leur donner des mises en page distinctes offrirait un raccourci visuel qui n'existe pas en production, et un classifieur entraîné dessus s'effondrerait sur des documents réels.
 
 Ce qui les sépare tient donc entièrement au texte, et c'est exactement ce que la détection devra apprendre à lire.
 
@@ -279,11 +284,37 @@ Comparer un résultat sur un document propre et sur son jumeau isole exactement 
 
 Un document et son jumeau tombent toujours dans le même jeu, puisqu'ils partagent la seed. Les séparer ferait fuiter le contenu du jeu de réglage dans le jeu de mesure, et le validateur du manifest le refuse.
 
+### Les types repris d'un objet physique
+
+Certains types ne se déposent presque jamais sous forme de fichier. Une carte de visite est la reprise d'un carton : on la photographie ou on la scanne. Ces types sont déclarés dans `TYPES_PHYSIQUES`, et leur rendu propre n'est qu'une étape de fabrication, écrasée par sa numérisation. Ils n'ont donc **ni jumeau ni `derive_de`** : une seule entrée au manifest par unité déclarée au TOML, là où les autres types en produisent deux environ.
+
+Le style tire l'un de **trois modes d'acquisition**, et le reste de la chaîne le suit.
+
+| Mode | Ce que le document est | Régime |
+|---|---|---|
+| `photo` | carton posé sur un plan de travail, photographié de travers, horodatage incrusté | `scanne` |
+| `scan` | carton dans un coin d'une feuille A4 vide, bande de couvercle | `scanne` |
+| `fichier` | export d'un outil de mise en page, page à la taille du carton, droit | `texte-natif` |
+
+`fichier` est minoritaire, environ un document sur sept, et il est indispensable. Le cas est rare en production mais il existe, et un corpus qui n'en contiendrait aucun ne dirait rien de la façon dont le service le traite. C'est aussi la seule carte de visite sur laquelle l'OCR n'a rien à faire.
+
+Le profil de dégradation n'est pas tiré au hasard mais déduit du mode, par `profil_acquisition`. Une carte composée sur un bureau reçoit les défauts d'une photo, une carte composée sur une feuille A4 ceux d'un scanner. Le tirage libre produirait des documents que leur propre manifest décrirait de travers.
+
+## Les polices
+
+Les polices décident de ce que l'OCR voit : elles font partie du corpus au même titre que les templates. `styles.py` en déclare trois groupes, les familles bureautiques des pièces comptables, les familles d'imprimeur des cartes de visite, et les manuscrites.
+
+Deux pannes silencieuses guettent, et `verifier.py` les contrôle. Une police absente du système est remplacée sans un mot par la police de secours, et le corpus sort avec bien moins de variété que le manifest n'en annonce. Un caractère non dessiné est emprunté ailleurs, si bien qu'un nom peut sortir avec un `É` d'un autre corps au milieu d'un mot. Les capitales accentuées sont le vrai piège : la plupart des polices manuscrites libres ne les dessinent pas.
+
+Toute police ajoutée à `styles.py` doit donc l'être aussi au `Dockerfile` et à la commande d'installation plus haut.
+
 ## Faire évoluer
 
 **Ajouter une mise en page à la facture et au devis.** Écrire le template dans `templates/`, ajouter une fabrique dans `styles.py` et l'inscrire dans `FABRIQUES_PIECE`. Le template est choisi en tournant sur la seed plutôt qu'au hasard, pour qu'aucune mise en page ne reste sous-représentée sur un corpus de taille modeste.
 
-**Ajouter un type de document.** Une classe dans `data.py` avec sa fonction de génération, un template, une fabrique de style, une fonction `produire_*` dans `generer.py` inscrite dans `PRODUCTEURS`, et le type ajouté à `TYPES_CONNUS` dans `manifest.py`. Si le nouveau type a un voisin confondable déjà présent, lui faire partager ses gabarits plutôt que d'en écrire de nouveaux.
+**Ajouter un type de document.** Une classe dans `data.py` avec sa fonction de génération, un template, une fabrique de style, une fonction `produire_*` dans `generer.py` inscrite dans `PRODUCTEURS`, le type ajouté à `TYPES_CONNUS` dans `manifest.py`, et son quota dans le TOML. Si le nouveau type a un voisin confondable déjà présent, lui faire partager ses templates plutôt que d'en écrire de nouveaux. S'il circule surtout comme reprise d'un objet physique, l'inscrire dans `TYPES_PHYSIQUES`.
+
+**Ajouter un type dont la page n'est pas le document.** La carte de visite occupe un coin d'une feuille par ailleurs vide. Son template `_carte_page.html` décrit le support, feuille de scanner ou plan de travail, et les trois `carte_0X.html` en héritent pour ne décrire que la face imprimée. Reprendre ce découpage pour tout type dont le support compte autant que le contenu.
 
 Dans les deux cas, reporter l'ajout sur les schémas ci-dessus : ils ne servent qu'à condition de décrire le code tel qu'il est.
 
