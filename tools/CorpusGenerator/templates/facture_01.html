@@ -151,12 +151,14 @@
 
 <div class="objet">
   <span class="intitule">Objet :</span> action de formation « {{ f.intitule_action }} »
-  {%- if s.avec_stagiaires %}
-    {% if f.stagiaires | length == 1 %}
-      — stagiaire : {{ f.stagiaires[0] }}
-    {% else %}
-      — {{ f.stagiaires | length }} stagiaires : {{ f.stagiaires | join(', ') }}
-    {% endif %}
+  {#- Les marqueurs de rognage sont indispensables ici : sans eux, le saut de ligne du
+      template devient une espace avant la virgule, ce qui ne se fait pas en francais. -#}
+  {%- if s.avec_stagiaires -%}
+    {%- if f.stagiaires | length == 1 -%}
+      , stagiaire : {{ f.stagiaires[0] }}
+    {%- else -%}
+      , {{ f.stagiaires | length }} stagiaires : {{ f.stagiaires | join(', ') }}
+    {%- endif -%}
   {%- endif %}
 </div>
 
@@ -203,7 +205,7 @@
   {% if s.avec_rib %}
   <div class="pave-rib">
     <div class="intitule">Coordonnées bancaires</div>
-    <div>{{ f.coordonnees_bancaires.banque }} — {{ f.coordonnees_bancaires.agence }}</div>
+    <div>{{ f.coordonnees_bancaires.banque }} · {{ f.coordonnees_bancaires.agence }}</div>
     <div class="iban">IBAN {{ f.coordonnees_bancaires.iban_formate }}</div>
     <div class="iban">BIC {{ f.coordonnees_bancaires.bic }}</div>
   </div>
@@ -228,9 +230,9 @@
 </div>
 
 <div class="pied-legal">
-  {{ f.organisme.raison_sociale }} — {{ f.organisme.forme_juridique }} au capital de
-  {{ f.organisme.capital | nombre }} € — SIRET {{ f.organisme.siret }} —
-  TVA {{ f.organisme.tva }} — RCS {{ f.organisme.rcs_ville }} —
+  {{ f.organisme.raison_sociale }} · {{ f.organisme.forme_juridique }} au capital de
+  {{ f.organisme.capital | nombre }} € · SIRET {{ f.organisme.siret }} ·
+  TVA {{ f.organisme.tva }} · RCS {{ f.organisme.rcs_ville }} ·
   {{ f.organisme.site_web }}
 </div>
 

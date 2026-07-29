@@ -158,8 +158,8 @@
   Règlement à trente jours, soit au plus tard le {{ f.date_echeance | date_fr }}.
   {% if s.avec_rib %}
   <div class="rib-ligne">
-    Virement : IBAN {{ f.coordonnees_bancaires.iban_formate }} —
-    BIC {{ f.coordonnees_bancaires.bic }} — {{ f.coordonnees_bancaires.banque }}
+    Virement : IBAN {{ f.coordonnees_bancaires.iban_formate }} ·
+    BIC {{ f.coordonnees_bancaires.bic }} · {{ f.coordonnees_bancaires.banque }}
   </div>
   {% endif %}
 </div>
