@@ -4,9 +4,24 @@ Fabrique les documents du corpus de test : des PDF français réalistes, entièr
 
 Aucune donnée personnelle réelle n'entre ni ne sort d'ici. Les identifiants produits (IBAN, SIREN, SIRET, TVA) portent des clés de contrôle justes, mais ne désignent personne.
 
-## Exécuter
+## Exécuter avec Docker
 
-L'outil tourne sous WSL, pas sous Windows : WeasyPrint dépend des bibliothèques GTK (Pango, Cairo) qui n'existent pas nativement sous Windows.
+Depuis le dossier `CorpusGenerator` :
+
+```bash
+docker compose build
+docker compose run --rm generator
+
+# Contrôler
+docker compose run --rm --entrypoint python generator manifest.py
+docker compose run --rm --entrypoint python generator verifier.py
+```
+
+Le corpus est écrit directement dans `Detect-Doc/corpus` grâce au volume défini dans `compose.yaml`. Le fichier TOML local est monté en lecture seule dans le conteneur.
+
+## Exécuter sans Docker
+
+Sans Docker, l'outil tourne sous WSL, pas directement sous Windows : WeasyPrint dépend des bibliothèques GTK (Pango, Cairo) qui n'existent pas nativement sous Windows.
 
 ```bash
 # Prérequis système, une fois

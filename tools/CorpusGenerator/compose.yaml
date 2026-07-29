@@ -1,0 +1,8 @@
+services:
+  generator:
+    build:
+      context: .
+    image: valia-corpus-generator:local
+    volumes:
+      - ../../corpus:/corpus
+      - ./corpus-generator.toml:/app/corpus-generator.toml:ro
