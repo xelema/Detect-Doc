@@ -24,8 +24,11 @@ SENSIBILITES = {"public", "interne_assaini", "production_valide"}
 
 CHAMPS_OBLIGATOIRES = [
     "id", "fichier", "sha256", "type_attendu", "source", "licence", "sensibilite",
-    "langue", "pages", "regime", "seed", "variante", "degradations", "split",
+    "langue", "pages", "regime", "seed", "variante", "degradations", "derive_de",
+    "split",
 ]
+
+REGIMES = {"texte-natif", "scanne"}
 
 
 def hash_fichier(chemin: Path) -> str:
@@ -45,9 +48,15 @@ def _split(seed: int) -> str:
 
 
 def construire_entree(identifiant: str, chemin: Path, type_attendu: str, seed: int,
-                      pages: int, variante: dict, pii: dict,
-                      tags: list[str]) -> dict:
-    """Assemble la ligne de manifest d'un document qui vient d'etre produit."""
+                      pages: int, variante: dict, pii: dict, tags: list[str],
+                      regime: str = "texte-natif", degradations: list[str] | None = None,
+                      derive_de: str | None = None) -> dict:
+    """Assemble la ligne de manifest d'un document qui vient d'etre produit.
+
+    `derive_de` relie un document scanne a l'original propre dont il provient. Comparer
+    un resultat sur les deux isole exactement ce que la reconnaissance de caracteres
+    coute en qualite, sur un contenu strictement identique.
+    """
     return {
         "id": identifiant,
         "fichier": str(chemin.relative_to(DOSSIER_CORPUS)).replace("\\", "/"),
@@ -60,11 +69,11 @@ def construire_entree(identifiant: str, chemin: Path, type_attendu: str, seed: i
         "sensibilite": "public",
         "langue": "fr",
         "pages": pages,
-        # `texte-natif` tant que le document n'est pas rasterise puis degrade.
-        "regime": "texte-natif",
+        "regime": regime,
         "seed": seed,
         "variante": variante,
-        "degradations": [],
+        "degradations": degradations or [],
+        "derive_de": derive_de,
         "tags": tags,
         # Verite terrain des donnees personnelles presentes dans le document. Le
         # generateur connait les valeurs qu'il a injectees, ce qui permettra plus tard
@@ -128,6 +137,18 @@ def valider() -> list[str]:
                 f"{identifiant} : sensibilite inconnue '{entree.get('sensibilite')}'")
         if entree.get("split") not in {"dev", "test"}:
             anomalies.append(f"{identifiant} : split invalide '{entree.get('split')}'")
+        if entree.get("regime") not in REGIMES:
+            anomalies.append(f"{identifiant} : regime inconnu '{entree.get('regime')}'")
+
+        origine = entree.get("derive_de")
+        if origine is not None:
+            if origine not in entrees:
+                anomalies.append(f"{identifiant} : derive d'un document absent '{origine}'")
+            # Un document et son jumeau scanne portent le meme contenu. Les separer
+            # entre le jeu de reglage et le jeu de mesure ferait fuiter l'un dans
+            # l'autre et rendrait toute mesure trop optimiste.
+            elif entrees[origine]["split"] != entree["split"]:
+                anomalies.append(f"{identifiant} : split different de son original")
 
         chemin = DOSSIER_CORPUS / entree.get("fichier", "")
         if not chemin.exists():
@@ -140,23 +161,23 @@ def valider() -> list[str]:
 
 def resume() -> str:
     entrees = lire()
-    par_type: dict[str, int] = {}
-    par_split: dict[str, int] = {}
-    par_variante: dict[str, int] = {}
+    compteurs: dict[str, dict[str, int]] = {
+        "type": {}, "jeu": {}, "regime": {}, "template": {},
+    }
 
     for entree in entrees.values():
-        par_type[entree["type_attendu"]] = par_type.get(entree["type_attendu"], 0) + 1
-        par_split[entree["split"]] = par_split.get(entree["split"], 0) + 1
-        template = entree.get("variante", {}).get("template", "?")
-        par_variante[template] = par_variante.get(template, 0) + 1
+        for axe, valeur in (
+            ("type", entree["type_attendu"]),
+            ("jeu", entree["split"]),
+            ("regime", entree["regime"]),
+            ("template", entree.get("variante", {}).get("template", "?")),
+        ):
+            compteurs[axe][valeur] = compteurs[axe].get(valeur, 0) + 1
 
     lignes = [f"{len(entrees)} document(s) au manifest"]
-    lignes.append("  par type      : " + ", ".join(
-        f"{cle} {valeur}" for cle, valeur in sorted(par_type.items())))
-    lignes.append("  par jeu       : " + ", ".join(
-        f"{cle} {valeur}" for cle, valeur in sorted(par_split.items())))
-    lignes.append("  par template  : " + ", ".join(
-        f"{cle} {valeur}" for cle, valeur in sorted(par_variante.items())))
+    for axe, valeurs in compteurs.items():
+        detail = ", ".join(f"{cle} {n}" for cle, n in sorted(valeurs.items()))
+        lignes.append(f"  par {axe:<9}: {detail}")
     return "\n".join(lignes)
 
 

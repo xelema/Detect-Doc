@@ -1,4 +1,9 @@
+augraphy==8.2.6
 faker==40.36.0
 jinja2==3.1.6
+# numpy est epingle : numba, tire par augraphy, refuse toute version superieure a 2.4,
+# et augraphy a des chemins de code qui cassent avec numpy 1.
+numpy==2.4.6
+pymupdf==1.28.0
 python-stdnum==2.2
 weasyprint==69.0

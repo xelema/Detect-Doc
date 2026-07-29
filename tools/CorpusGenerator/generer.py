@@ -13,8 +13,37 @@ import sys
 
 import manifest
 from data import generer_facture, generer_rib
+from degradation import degrader, profil_degradation
 from rendu import logo_svg, rendre_pdf
 from styles import style_facture, style_rib
+
+
+def _jumeau_scanne(propre: dict, seed: int) -> dict | None:
+    """Version scannee d'un document, si la seed lui en attribue une.
+
+    Le jumeau reprend la seed de son original, donc il tombe forcement dans le meme jeu
+    que lui : un document de reglage et sa version scannee ne peuvent pas se retrouver
+    de part et d'autre de la frontiere avec le jeu de mesure.
+    """
+    profil = profil_degradation(seed)
+    if profil is None:
+        return None
+
+    identifiant = f"{propre['id']}-d"
+    chemin = manifest.DOSSIER_DOCUMENTS / f"{identifiant}.pdf"
+    effets = degrader(manifest.DOSSIER_CORPUS / propre["fichier"], chemin, seed, profil)
+
+    return manifest.construire_entree(
+        identifiant, chemin, propre["type_attendu"], seed, propre["pages"],
+        # Meme contenu et meme mise en page que l'original : seul le regime change.
+        # C'est ce qui rend les deux comparables.
+        variante=propre["variante"],
+        pii=propre["pii_injectees"],
+        tags=propre["tags"] + [profil],
+        regime="scanne",
+        degradations=effets,
+        derive_de=propre["id"],
+    )
 
 
 def produire_facture(numero: int) -> dict:
@@ -97,11 +126,20 @@ def main() -> None:
         sys.exit(1)
 
     producteur = PRODUCTEURS[sys.argv[1]]
-    entrees = [producteur(numero) for numero in range(1, int(sys.argv[2]) + 1)]
+
+    entrees = []
+    for numero in range(1, int(sys.argv[2]) + 1):
+        propre = producteur(numero)
+        entrees.append(propre)
+        jumeau = _jumeau_scanne(propre, numero)
+        if jumeau is not None:
+            entrees.append(jumeau)
+
     manifest.enregistrer(entrees)
 
     for entree in entrees:
-        print(f"  {entree['id']}  {entree['split']:<4}  {', '.join(entree['tags'])}")
+        print(f"  {entree['id']:<12} {entree['split']:<4} {entree['regime']:<12} "
+              f"{', '.join(entree['tags'])}")
     print(f"\n{len(entrees)} document(s) ecrits, manifest mis a jour.")
 
 

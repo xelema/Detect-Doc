@@ -40,6 +40,7 @@ graph TD
     data[data.py<br/>données du document]
     styles[styles.py<br/>présentation]
     rendu[rendu.py<br/>HTML vers PDF]
+    degradation[degradation.py<br/>scan et photo]
     manifest[manifest.py<br/>traçabilité]
     cles[cles.py<br/>clés de contrôle]
     verifier[verifier.py<br/>contrôles]
@@ -48,6 +49,7 @@ graph TD
     generer --> data
     generer --> styles
     generer --> rendu
+    generer --> degradation
     generer --> manifest
     data --> cles
     rendu --> tpl
@@ -58,6 +60,8 @@ graph TD
     faker([Faker]) -.-> data
     jinja([Jinja2]) -.-> rendu
     weasy([WeasyPrint]) -.-> rendu
+    augraphy([Augraphy]) -.-> degradation
+    pymupdf([PyMuPDF, OpenCV]) -.-> degradation
     stdnum([python-stdnum]) -.-> verifier
 ```
 
@@ -160,6 +164,7 @@ sequenceDiagram
     participant D as data.py
     participant S as styles.py
     participant R as rendu.py
+    participant X as degradation.py
     participant M as manifest.py
 
     G->>D: generer_facture(seed)
@@ -171,12 +176,37 @@ sequenceDiagram
     R->>R: Jinja2 puis WeasyPrint
     R-->>G: nombre de pages
     G->>M: construire_entree(...)
-    M->>M: SHA-256 du fichier, répartition dev/test
-    M-->>G: entrée
+    M-->>G: entrée du document propre
+
+    G->>X: profil_degradation(seed)
+    X-->>G: profil, ou None
+    opt un profil est tiré
+        G->>X: degrader(source, cible, seed, profil)
+        X->>X: rastérisation, effets Augraphy, PDF image
+        X-->>G: effets appliqués
+        G->>M: construire_entree(..., derive_de)
+        M-->>G: entrée du jumeau scanné
+    end
     G->>M: enregistrer(entrees)
 ```
 
-La seed pilote tout : le contenu, la présentation et la répartition entre le jeu de réglage et le jeu de mesure. Rien n'est tiré au hasard sans elle.
+La seed pilote tout : le contenu, la présentation, la dégradation et la répartition entre le jeu de réglage et le jeu de mesure. Rien n'est tiré au hasard sans elle.
+
+## Les deux régimes
+
+Un document sur deux environ reçoit un **jumeau scanné**, produit en rastérisant le PDF propre puis en lui appliquant les défauts d'une chaîne d'impression et de numérisation réelle. Les deux versions coexistent dans le corpus, reliées par le champ `derive_de`.
+
+| Profil | Ce qu'il simule |
+|---|---|
+| `scan-propre` | numérisation correcte sur matériel entretenu |
+| `scan-degrade` | rouleaux sales, encre qui bave, compression agressive |
+| `photocopie` | copie de copie, caractères rongés, tambour sale |
+| `photo-smartphone` | éclairage inégal, ombre portée, cadrage de travers |
+| `fax` | binarisation brutale et lignes manquantes |
+
+Comparer un résultat sur un document propre et sur son jumeau isole exactement ce que la reconnaissance de caractères coûte en qualité, sur un contenu strictement identique. Les deux régimes doivent donc rester bien représentés : sans documents propres il n'y a plus de référence, sans documents dégradés on ne mesure pas l'OCR du tout.
+
+Un document et son jumeau tombent toujours dans le même jeu, puisqu'ils partagent la seed. Les séparer ferait fuiter le contenu du jeu de réglage dans le jeu de mesure, et le validateur du manifest le refuse.
 
 ## Faire évoluer
 

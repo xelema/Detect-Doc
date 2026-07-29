@@ -1,0 +1,11 @@
+# Environnements Python locaux du generateur de corpus. Jamais partages entre Windows
+# et WSL : chacun recree le sien a partir de requirements.txt.
+.venv/
+__pycache__/
+*.pyc
+
+# Documents produits par le generateur. Ils ne sont pas versionnes : le manifest et la
+# seed de generation suffisent a les refabriquer a l'identique.
+# `corpus/manifest.jsonl` est versionne, lui : c'est le livrable.
+corpus/raw/
+augraphy_cache/
