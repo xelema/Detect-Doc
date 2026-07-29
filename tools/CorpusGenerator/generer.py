@@ -8,14 +8,14 @@ Les types et quantités viennent du fichier TOML global.
 
 import manifest
 from configuration import DOCUMENTS, FICHIER, SHA256
-from data import client_professionnel, generer_facture, generer_rib
+from data import client_professionnel, generer_devis, generer_facture, generer_rib
 from degradation import degrader, profil_degradation
 from rendu import logo_svg, rendre_pdf
-from styles import style_facture, style_rib
+from styles import style_devis, style_facture, style_rib
 
 
 def _jumeau_scanne(propre: dict, seed: int) -> dict | None:
-    """Version scannee d'un document, si la seed lui en attribue une."""
+    """Version scannée d'un document, si la seed lui en attribue une."""
     profil = profil_degradation(seed)
     if profil is None:
         return None
@@ -29,6 +29,34 @@ def _jumeau_scanne(propre: dict, seed: int) -> dict | None:
         regime="scanne", degradations=effets, tags=propre["tags"] + [profil])
 
 
+def _pii_piece(piece) -> dict:
+    """Vérité terrain des données personnelles d'une facture ou d'un devis.
+
+    Les deux types portent exactement les mêmes identifiants aux mêmes endroits : c'est
+    d'ailleurs ce qui les rend confondables. Un seul extracteur pour les deux évite que
+    l'un des deux se mette à déclarer moins que l'autre sans raison.
+    """
+    return {
+        "raison_sociale_emetteur": piece.organisme.raison_sociale,
+        "siret_emetteur": piece.organisme.siret,
+        "email_emetteur": piece.organisme.email,
+        "telephone_emetteur": piece.organisme.telephone,
+        "designation_client": piece.client.designation,
+        "contact_client": piece.client.contact,
+        "iban": piece.coordonnees_bancaires.iban,
+        "noms": piece.stagiaires,
+    }
+
+
+def _tags_piece(piece, style) -> list[str]:
+    tags = ["b2b" if piece.client.est_professionnel else "b2c"]
+    if piece.organisme.exonere_tva:
+        tags.append("tva-exoneree")
+    if style.filigrane:
+        tags.append("filigrane")
+    return tags
+
+
 def produire_facture(numero: int) -> dict:
     facture = generer_facture(numero, professionnel=client_professionnel(numero))
     style = style_facture(numero)
@@ -37,34 +65,56 @@ def produire_facture(numero: int) -> dict:
 
     pages = rendre_pdf(
         style.template, chemin,
-        f=facture,
+        p=facture,
         s=style,
         logo=logo_svg(facture.organisme.raison_sociale, style.couleur),
-        # Date portee par le tampon a l'encre, quand le style en pose un.
+        # Date portée par le tampon à l'encre, quand le style en pose un.
         date_marque=facture.date_echeance,
     )
 
-    tags = ["b2b" if facture.client.est_professionnel else "b2c"]
-    if facture.organisme.exonere_tva:
-        tags.append("tva-exoneree")
+    tags = _tags_piece(facture, style)
     if facture.nouvelles_mentions:
         tags.append("mentions-reforme")
-    if style.filigrane:
-        tags.append("filigrane")
 
     return manifest.construire_entree(
         identifiant, chemin, "facture", numero, pages,
         variante=style.as_dict(),
-        pii={
-            "raison_sociale_emetteur": facture.organisme.raison_sociale,
-            "siret_emetteur": facture.organisme.siret,
-            "email_emetteur": facture.organisme.email,
-            "telephone_emetteur": facture.organisme.telephone,
-            "designation_client": facture.client.designation,
-            "contact_client": facture.client.contact,
-            "iban": facture.coordonnees_bancaires.iban,
-            "noms": facture.stagiaires,
-        },
+        pii=_pii_piece(facture),
+        tags=tags,
+    )
+
+
+def produire_devis(numero: int) -> dict:
+    devis = generer_devis(numero, professionnel=client_professionnel(numero))
+    style = style_devis(numero)
+    identifiant = f"dev-{numero:04d}"
+    chemin = manifest.DOSSIER_DOCUMENTS / f"{identifiant}.pdf"
+
+    pages = rendre_pdf(
+        style.template, chemin,
+        p=devis,
+        s=style,
+        logo=logo_svg(devis.organisme.raison_sociale, style.couleur),
+        # Un devis se tamponne le jour où il est accepté, donc au plus tard à l'échéance
+        # de sa validité.
+        date_marque=devis.date_validite,
+    )
+
+    # L'intitulé et le cartouche sont les deux marqueurs qui séparent le devis de la
+    # facture. Les écrire dans le manifest permettra de mesurer leur poids réel : un
+    # classifieur qui ne tiendrait que grâce au mot « devis » s'effondrera sur les
+    # « proposition commerciale », et le rapport doit pouvoir le montrer.
+    tags = _tags_piece(devis, style)
+    tags.append(devis.libelle.split()[0].lower())
+    if style.avec_acceptation:
+        tags.append("cartouche-accord")
+    if devis.acompte_pourcentage:
+        tags.append("acompte")
+
+    return manifest.construire_entree(
+        identifiant, chemin, "devis", numero, pages,
+        variante=style.as_dict(),
+        pii=_pii_piece(devis),
         tags=tags,
     )
 
@@ -98,11 +148,15 @@ def produire_rib(numero: int) -> dict:
     )
 
 
-PRODUCTEURS = {"facture": produire_facture, "rib": produire_rib}
+PRODUCTEURS = {
+    "facture": produire_facture,
+    "devis": produire_devis,
+    "rib": produire_rib,
+}
 
-# Les types produits et les types que le manifest accepte sont declares dans deux
-# modules, `manifest` ne pouvant pas importer `generer` sans cycle. Le controle echoue
-# bruyamment plutot que de laisser le validateur signaler chaque nouveau document comme
+# Les types produits et les types que le manifest accepte sont déclarés dans deux
+# modules, manifest ne pouvant pas importer generer sans cycle. Le contrôle échoue
+# bruyamment plutôt que de laisser le validateur signaler chaque nouveau document comme
 # un type inconnu.
 assert set(PRODUCTEURS) == manifest.TYPES_CONNUS, (
     f"types produits {sorted(PRODUCTEURS)} et types connus du manifest "

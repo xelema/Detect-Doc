@@ -1,7 +1,7 @@
-"""Rendu d'un document en PDF a partir d'un template HTML.
+"""Rendu d'un document en PDF à partir d'un template HTML.
 
-Le formatage des montants et des dates est ecrit a la main plutot que confie a la locale
-du systeme : le corpus doit sortir identique sur n'importe quelle machine.
+Le formatage des montants et des dates est écrit à la main plutôt que confié à la locale
+du système : le corpus doit sortir identique sur n'importe quelle machine.
 """
 
 import os
@@ -10,15 +10,15 @@ from decimal import Decimal
 from functools import cache
 from pathlib import Path
 
-# Doit etre pose avant l'import de weasyprint, qui charge fontTools.
+# Doit être posé avant l'import de weasyprint, qui charge fontTools.
 #
-# WeasyPrint embarque un sous-ensemble de chaque police utilisee, et fontTools horodate
-# ce sous-ensemble dans sa table `head`. Sans cette variable, deux rendus successifs du
-# meme document different de trois octets et n'ont donc pas le meme hash, ce qui
-# ruine la promesse du manifest. `SOURCE_DATE_EPOCH` est la convention des compilations
+# WeasyPrint embarque un sous-ensemble de chaque police utilisée, et fontTools horodate
+# ce sous-ensemble dans sa table head. Sans cette variable, deux rendus successifs du
+# même document diffèrent de trois octets et n'ont donc pas le même hash, ce qui
+# ruine la promesse du manifest. SOURCE_DATE_EPOCH est la convention des compilations
 # reproductibles, fontTools la respecte. Valeur choisie : 1er janvier 2025.
-# Affectation directe et non `setdefault` : un shell ou un conteneur qui aurait deja
-# pose la variable imposerait sinon sa propre date, et le corpus produit differerait sans
+# Affectation directe et non setdefault : un shell ou un conteneur qui aurait déjà
+# posé la variable imposerait sinon sa propre date, et le corpus produit différerait sans
 # que rien ne l'explique.
 os.environ["SOURCE_DATE_EPOCH"] = "1735689600"
 
@@ -29,15 +29,15 @@ from weasyprint import HTML  # noqa: E402
 DOSSIER_TEMPLATES = Path(__file__).parent / "templates"
 
 
-# Le separateur de milliers du format `,` est fixe, contrairement a `n` qui suit la
-# locale du systeme. Le corpus sort donc identique sur n'importe quelle machine.
+# Le séparateur de milliers du format ',' est fixe, contrairement à 'n' qui suit la
+# locale du système. Le corpus sort donc identique sur n'importe quelle machine.
 def euros(montant: Decimal) -> str:
-    """Formate un montant a la francaise : 12 345,67 EUR."""
+    """Formate un montant à la française : 12 345,67 EUR."""
     return f"{montant:,.2f}".replace(",", " ").replace(".", ",") + " €"
 
 
 def nombre(valeur: int) -> str:
-    """Separe les milliers par une espace : 10 000."""
+    """Sépare les milliers par une espace : 10 000."""
     return f"{valeur:,}".replace(",", " ")
 
 
@@ -51,11 +51,11 @@ DIZAINES = {20: "vingt", 30: "trente", 40: "quarante", 50: "cinquante", 60: "soi
 
 
 def _sous_cent(valeur: int) -> str:
-    """Nombre de 0 a 99 en toutes lettres.
+    """Nombre de 0 à 99 en toutes lettres.
 
-    Le francais compte par vingtaines au-dela de soixante : 75 se dit "soixante-quinze"
+    Le français compte par vingtaines au-delà de soixante : 75 se dit "soixante-quinze"
     et 92 "quatre-vingt-douze". Ces deux plages se traitent donc en retranchant 60 ou 80
-    puis en reecrivant le reste, plutot qu'avec un nom de dizaine.
+    puis en réécrivant le reste, plutôt qu'avec un nom de dizaine.
     """
     if valeur < 17:
         return UNITES[valeur]
@@ -97,9 +97,9 @@ def _sous_mille(valeur: int) -> str:
 
 
 def montant_en_lettres(montant: Decimal) -> str:
-    """Montant ecrit en toutes lettres, comme sur une facture de cabinet.
+    """Montant écrit en toutes lettres, comme sur une facture de cabinet.
 
-    Gere jusqu'a 999 999 euros, ce qui couvre tres largement une facture de formation.
+    Gère jusqu'à 999 999 euros, ce qui couvre très largement une facture de formation.
     """
     entier = int(montant)
     centimes = int((montant - entier) * 100)
@@ -121,17 +121,17 @@ def montant_en_lettres(montant: Decimal) -> str:
 
 
 def logo_svg(raison_sociale: str, couleur: str) -> Markup:
-    """Logo invente, construit a partir des initiales de la raison sociale.
+    """Logo inventé, construit à partir des initiales de la raison sociale.
 
-    Un vrai logo d'entreprise ne peut pas etre reutilise, et un document sans logo ne
-    ressemble a rien de reel. Un bloc de couleur avec des initiales est ce que produisent
-    la plupart des petits organismes, et il est genere sans fichier externe.
+    Un vrai logo d'entreprise ne peut pas être réutilisé, et un document sans logo ne
+    ressemble à rien de réel. Un bloc de couleur avec des initiales est ce que produisent
+    la plupart des petits organismes, et il est généré sans fichier externe.
 
     La couleur vient du style, pour que le logo et le document s'accordent.
     """
     initiales = "".join(mot[0] for mot in raison_sociale.split()[:2]).upper()
-    # Markup, sinon l'echappement automatique de Jinja2 imprime le source SVG en clair
-    # dans le document. L'autoechappement reste actif pour tout le reste du template.
+    # Markup, sinon l'échappement automatique de Jinja2 imprime le source SVG en clair
+    # dans le document. L'auto-échappement reste actif pour tout le reste du template.
     return Markup(
         f'<svg width="54" height="54" viewBox="0 0 54 54" xmlns="http://www.w3.org/2000/svg">'
         f'<rect width="54" height="54" rx="8" fill="{couleur}"/>'
@@ -145,8 +145,8 @@ def logo_svg(raison_sociale: str, couleur: str) -> Markup:
 def _environnement() -> Environment:
     """Environnement Jinja2, construit une seule fois.
 
-    L'environnement porte le cache des templates compiles. En reconstruire un a chaque
-    document recompilerait les cinq templates a chaque fois, ce qui coute seize
+    L'environnement porte le cache des templates compilés. En reconstruire un à chaque
+    document recompilerait les cinq templates à chaque fois, ce qui coûte seize
     millisecondes par document pour rien.
     """
     env = Environment(
@@ -163,14 +163,14 @@ def _environnement() -> Environment:
 def rendre_pdf(template: str, destination: Path, **contexte) -> int:
     """Rend un template en PDF. Retourne le nombre de pages produites.
 
-    Le nombre de pages est lu sur le document rendu plutot que relu depuis le PDF :
-    c'est gratuit ici, et ca evite une dependance de plus pour une information que
+    Le nombre de pages est lu sur le document rendu plutôt que relu depuis le PDF :
+    c'est gratuit ici, et ça évite une dépendance de plus pour une information que
     le manifest doit porter.
     """
     html = _environnement().get_template(template).render(**contexte)
 
     destination.parent.mkdir(parents=True, exist_ok=True)
-    # `base_url` permet au template de referencer des ressources locales si besoin.
+    # ase_url permet au template de référencer des ressources locales si besoin.
     document = HTML(string=html, base_url=str(DOSSIER_TEMPLATES)).render()
     document.write_pdf(destination)
     return len(document.pages)

@@ -1,13 +1,13 @@
-"""Lecture, ecriture et validation du manifest du corpus.
+"""Lecture, écriture et validation du manifest du corpus.
 
-Chaque document du corpus y porte sa source, sa licence, sa tracabilite et son statut de
-sensibilite. Le manifest est versionne dans Git ; les documents eux-memes ne le sont pas,
-puisque la seed et le template suffisent a les refabriquer a l'identique. Le hash
-SHA-256 est ce qui rend cette promesse verifiable plutot que declarative.
+Chaque document du corpus y porte sa source, sa licence, sa traçabilité et son statut de
+sensibilité. Le manifest est versionné dans Git ; les documents eux-mêmes ne le sont pas,
+puisque la seed et le template suffisent à les refabriquer à l'identique. Le hash
+SHA-256 est ce qui rend cette promesse vérifiable plutôt que déclarative.
 
-Format : JSON Lines, une ligne par document, trie par identifiant. Ce format se diffe
-proprement en revue de pull request, contrairement a un JSON unique reindente a chaque
-regeneration.
+Format : JSON Lines, une ligne par document, trié par identifiant. Ce format se différencie
+proprement en revue de pull request, contrairement à un JSON unique réindenté à chaque
+régénération.
 """
 
 import hashlib
@@ -25,12 +25,12 @@ from configuration import (
 FICHIER_MANIFEST = DOSSIER_CORPUS / "manifest.jsonl"
 DOSSIER_DOCUMENTS = DOSSIER_CORPUS / "raw"
 
-TYPES_CONNUS = {"facture", "rib"}
+TYPES_CONNUS = {"facture", "devis", "rib"}
 SENSIBILITES = {"public", "interne_assaini", "production_valide"}
 
-# Toutes les cles ecrites par `construire_entree`. La liste doit rester alignee avec
-# elle : un champ oublie ici est un champ que le validateur laisserait disparaitre du
-# manifest sans rien dire, `pii_injectees` en tete.
+# Toutes les clés écrites par construire_entree. La liste doit rester alignée avec
+# elle : un champ oublié ici est un champ que le validateur laisserait disparaître du
+# manifest sans rien dire, pii_injectees en tête.
 CHAMPS_OBLIGATOIRES = [
     "id", "fichier", "sha256", "type_attendu", "source", "licence", "sensibilite",
     "langue", "pages", "regime", "seed", "variante", "degradations", "derive_de",
@@ -46,18 +46,18 @@ def hash_fichier(chemin: Path) -> str:
 
 
 def _split(seed: int) -> str:
-    """Repartition dev / test, scellee des le premier document.
+    """Répartition dev / test, scellée dès le premier document.
 
-    Un quart du corpus va dans `dev`, qui sert au reglage du prompt et de l'OCR ; le jeu
-    `test` ne s'ouvre qu'aux jalons de mesure.
+    Un quart du corpus va dans dev, qui sert au réglage du prompt et de l'OCR ; le jeu
+    	est ne s'ouvre qu'aux jalons de mesure.
 
-    Le tirage passe par un flux nomme plutot que par un `seed % 4` : d'autres facettes du
+    Le tirage passe par un flux nommé plutôt que par un seed % 4 : d'autres facettes du
     document, comme le choix du template, tournent elles aussi sur la seed, et un modulo
-    partage les ferait toutes s'aligner. Le jeu de reglage se retrouverait alors reduit a
-    une seule mise en page, ce qui viderait de son sens tout reglage fait dessus.
+    partagé les ferait toutes s'aligner. Le jeu de réglage se retrouverait alors réduit à
+    une seule mise en page, ce qui viderait de son sens tout réglage fait dessus.
 
-    Le flux depend du seul numero du document : ajouter des documents ne redistribue
-    jamais ceux qui existent deja.
+    Le flux dépend du seul numéro du document : ajouter des documents ne redistribue
+    jamais ceux qui existent déjà.
     """
     return "dev" if random.Random(f"split-{seed}").random() < PROBABILITE_DEV else "test"
 
@@ -68,14 +68,14 @@ def _chemin_relatif(chemin: Path) -> str:
 
 def construire_entree(identifiant: str, chemin: Path, type_attendu: str, seed: int,
                       pages: int, variante: dict, pii: dict, tags: list[str]) -> dict:
-    """Assemble la ligne de manifest d'un document qui vient d'etre produit."""
+    """Assemble la ligne de manifest d'un document qui vient d'être produit."""
     return {
         "id": identifiant,
         "fichier": _chemin_relatif(chemin),
         "sha256": hash_fichier(chemin),
         "type_attendu": type_attendu,
-        # Documents fabriques de toutes pieces : aucune donnee personnelle reelle,
-        # aucune licence a respecter, sensibilite publique.
+        # Documents fabriqués de toutes pièces : aucune donnée personnelle réelle,
+        # aucune licence à respecter, sensibilité publique.
         "source": "genere",
         "licence": "interne",
         "sensibilite": "public",
@@ -87,15 +87,15 @@ def construire_entree(identifiant: str, chemin: Path, type_attendu: str, seed: i
         "degradations": [],
         "derive_de": None,
         "tags": tags,
-        # Verite terrain des donnees personnelles presentes dans le document. Le
-        # generateur connait les valeurs qu'il a injectees, ce qui permettra plus tard
-        # d'evaluer un masquage automatique sans annoter le corpus a la main.
+        # Vérité terrain des données personnelles présentes dans le document. Le
+        # générateur connaît les valeurs qu'il a injectées, ce qui permettra plus tard
+        # d'évaluer un masquage automatique sans annoter le corpus à la main.
         "pii_injectees": pii,
         "split": _split(seed),
         "configuration_sha256": CONFIGURATION_SHA256,
-        # Renseignes le jour ou le perimetre du corpus est valide par un responsable.
+        # Renseignés le jour où le périmètre du corpus est validé par un responsable.
         # Tant qu'ils sont nuls, aucune validation n'a eu lieu : ne jamais les
-        # pre-remplir, ils font foi.
+        # pré-remplir, ils font foi.
         "valide_par": None,
         "date_validation": None,
     }
@@ -103,15 +103,15 @@ def construire_entree(identifiant: str, chemin: Path, type_attendu: str, seed: i
 
 def entree_derivee(original: dict, identifiant: str, chemin: Path, regime: str,
                    degradations: list[str], tags: list[str]) -> dict:
-    """Ligne de manifest d'un document produit a partir d'un autre.
+    """Ligne de manifest d'un document produit à partir d'un autre.
 
-    L'entree est une copie de celle de l'original, dont seul ce qui a reellement change
-    est remplace. Copier plutot que reconstruire garantit que les deux documents portent
-    le meme type attendu, la meme verite terrain et surtout **le meme jeu** : separer un
-    document de son derive entre le jeu de reglage et le jeu de mesure ferait fuiter le
+    L'entrée est une copie de celle de l'original, dont seul ce qui a réellement changé
+    est remplacé. Copier plutôt que reconstruire garantit que les deux documents portent
+    le même type attendu, la même vérité terrain et surtout **le même jeu** : séparer un
+    document de son dérivé entre le jeu de réglage et le jeu de mesure ferait fuiter le
     contenu de l'un dans l'autre.
 
-    C'est aussi ce qui evite d'avoir a propager ici chaque champ ajoute au manifest.
+    C'est aussi ce qui évite d'avoir à propager ici chaque champ ajouté au manifest.
     """
     return {
         **original,
@@ -145,7 +145,7 @@ def enregistrer(nouvelles: list[dict]) -> None:
 
 
 def valider() -> list[str]:
-    """Controle le manifest. Retourne la liste des anomalies, vide si tout est bon."""
+    """Contrôle le manifest. Retourne la liste des anomalies, vide si tout est bon."""
     anomalies = []
 
     if not FICHIER_MANIFEST.exists():
@@ -179,8 +179,8 @@ def valider() -> list[str]:
         if origine is not None:
             if origine not in entrees:
                 anomalies.append(f"{identifiant} : derive d'un document absent '{origine}'")
-            # Un document et son jumeau scanne portent le meme contenu. Les separer
-            # entre le jeu de reglage et le jeu de mesure ferait fuiter l'un dans
+            # Un document et son jumeau scanné portent le même contenu. Les séparer
+            # entre le jeu de réglage et le jeu de mesure ferait fuiter l'un dans
             # l'autre et rendrait toute mesure trop optimiste.
             elif entrees[origine]["split"] != entree["split"]:
                 anomalies.append(f"{identifiant} : split different de son original")

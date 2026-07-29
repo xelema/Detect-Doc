@@ -1,24 +1,24 @@
-"""Choix de la presentation d'un document, pilote par la seed.
+"""Choix de la présentation d'un document, piloté par la seed.
 
-Deux axes, qui ne se testent pas pareil et qu'il faut donc faire varier separement.
+Deux axes, qui ne se testent pas pareil et qu'il faut donc faire varier séparément.
 
-La **structure** decide de ce que le classifieur voit : quels blocs existent, ou ils sont
-poses, comment les intitules sont formules. Si tous les documents d'un type partagent une
-seule mise en page, un modele apprend la mise en page et pas le type.
+La **structure** décide de ce que le classifieur voit : quels blocs existent, où ils sont
+posés, comment les intitulés sont formulés. Si tous les documents d'un type partagent une
+seule mise en page, un modèle apprend la mise en page et pas le type.
 
-La **typographie** decide de ce que l'OCR voit : famille, corps, contraste, filets du
+La **typographie** décide de ce que l'OCR voit : famille, corps, contraste, filets du
 tableau. Une facture rouge et une facture bleue sont identiques pour un OCR ; du 7 points
-condense gris clair ne l'est pas du tout.
+condensé gris clair ne l'est pas du tout.
 
-Chaque style est ecrit tel quel dans le manifest. C'est ce qui permettra de dire "ce
+Chaque style est écrit tel quel dans le manifest. C'est ce qui permettra de dire "ce
 moteur perd N points sur telle famille de police" au lieu d'une moyenne inexploitable.
 """
 
 import random
 from dataclasses import asdict, dataclass
 
-# Familles reellement presentes sur des documents de gestion francais. Carlito et Arimo
-# ont les metriques de Calibri et d'Arial, Tinos celles de Times New Roman, Cousine
+# Familles réellement présentes sur des documents de gestion français. Carlito et Arimo
+# ont les métriques de Calibri et d'Arial, Tinos celles de Times New Roman, Cousine
 # celles de Courier New : ce sont les polices que produisent les suites bureautiques.
 POLICES_SANS = ["Carlito", "Arimo", "Liberation Sans", "Noto Sans", "Nimbus Sans"]
 POLICES_SERIF = ["Tinos", "Caladea", "C059", "Nimbus Roman", "URW Bookman"]
@@ -27,37 +27,43 @@ POLICES_CONDENSEES = ["Liberation Sans Narrow", "Nimbus Sans Narrow"]
 
 COULEURS = ["#1f4e79", "#256d5b", "#7a2f2f", "#4a3b6b", "#8a5a1f", "#2f5f7a", "#333333"]
 
-# Marques portees par une facture reelle. Le filigrane en diagonale et la mosaique sont
-# imprimes par le logiciel emetteur ; le tampon est appose apres coup, a l'encre, ce qui
-# lui donne une couleur qui tranche et une opacite bien plus forte.
+# Marques portées par une pièce réelle. Le filigrane en diagonale et la mosaïque sont
+# imprimés par le logiciel émetteur ; le tampon est apposé après coup, à l'encre, ce qui
+# lui donne une couleur qui tranche et une opacité bien plus forte.
 FILIGRANES_IMPRIMES = ["DUPLICATA", "COPIE", "ORIGINAL"]
-TAMPONS = ["PAYÉE", "ACQUITTÉE", "RÉGLÉE", "BON POUR ACCORD"]
 ENCRES_TAMPON = ["#b02020", "#1c3f8f", "#1f6b3a"]
+
+# Les deux types ne reçoivent pas les mêmes cachets, et c'est un signal à part entière :
+# une facture se tamponne une fois payée, un devis une fois accepté. Mélanger les deux
+# listes apprendrait au classifieur une association fausse.
+TAMPONS_FACTURE = ["PAYÉE", "ACQUITTÉE", "RÉGLÉE"]
+TAMPONS_DEVIS = ["BON POUR ACCORD", "ACCEPTÉ", "SIGNÉ"]
 
 
 def _taille_filigrane(texte: str) -> int:
-    """Corps a donner a un filigrane en diagonale pour qu'il traverse la page sans etre
-    coupe par les bords.
+    """Corps à donner à un filigrane en diagonale pour qu'il traverse la page sans être
+    coupé par les bords.
 
-    Un mot court doit etre ecrit bien plus gros qu'un mot long pour couvrir la meme
-    largeur, d'ou le calcul plutot qu'une valeur fixe.
+    Un mot court doit être écrit bien plus gros qu'un mot long pour couvrir la même
+    largeur, d'où le calcul plutôt qu'une valeur fixe.
 
-    La largeur visee tient compte de l'inclinaison : un texte incline de 32 degres occupe
+    La largeur visée tient compte de l'inclinaison : un texte incliné de 32 degrés occupe
     en largeur cos(32) fois sa longueur, soit environ 85 %. Viser la diagonale de la page
-    ferait donc deborder le mot des deux cotes. Ce n'est pas qu'une question d'aspect :
-    un filigrane tronque rend faux ce que le manifest declare sur le document.
+    ferait donc déborder le mot des deux côtés. Ce n'est pas qu'une question d'aspect :
+    un filigrane tronqué rend faux ce que le manifest déclare sur le document.
     """
     largeur_visee_pt = 620
     largeur_moyenne_caractere = 0.62
     return min(int(largeur_visee_pt / (len(texte) * largeur_moyenne_caractere)), 200)
 
 
-def _marque(tirage: random.Random, probabilite: float, types: list[str]) -> dict:
+def _marque(tirage: random.Random, probabilite: float, types: list[str],
+            devis: bool = False) -> dict:
     """Tire une marque et retourne les champs correspondants du style.
 
-    Retourner un fragment de style plutot qu'un tuple evite de recopier les quatre champs
-    dans chacune des fabriques : un cinquieme champ de marque n'imposerait alors aucune
-    edition ailleurs.
+    Retourner un fragment de style plutôt qu'un tuple évite de recopier les quatre champs
+    dans chacune des fabriques : un cinquième champ de marque n'imposerait alors aucune
+    édition ailleurs.
     """
     aucune = {"filigrane": "", "filigrane_type": "", "filigrane_taille_pt": 0,
               "filigrane_encre": ""}
@@ -66,13 +72,14 @@ def _marque(tirage: random.Random, probabilite: float, types: list[str]) -> dict
 
     type_marque = tirage.choice(types)
     if type_marque == "tampon":
-        return {**aucune, "filigrane": tirage.choice(TAMPONS),
+        return {**aucune,
+                "filigrane": tirage.choice(TAMPONS_DEVIS if devis else TAMPONS_FACTURE),
                 "filigrane_type": type_marque,
                 "filigrane_encre": tirage.choice(ENCRES_TAMPON)}
 
     texte = tirage.choice(FILIGRANES_IMPRIMES)
-    # Seule la diagonale ecrit le mot en un seul bloc dont la taille doit etre calculee.
-    # La mosaique repete le mot a taille fixe : lui annoncer un corps qu'elle n'applique
+    # Seule la diagonale écrit le mot en un seul bloc dont la taille doit être calculée.
+    # La mosaïque répète le mot à taille fixe : lui annoncer un corps qu'elle n'applique
     # pas ferait mentir le manifest.
     taille = _taille_filigrane(texte) if type_marque == "diagonal" else 0
     return {**aucune, "filigrane": texte, "filigrane_type": type_marque,
@@ -81,7 +88,7 @@ def _marque(tirage: random.Random, probabilite: float, types: list[str]) -> dict
 
 @dataclass
 class Style:
-    """Presentation d'un document. Serialise tel quel dans le manifest."""
+    """Présentation d'un document. Sérialisé tel quel dans le manifest."""
 
     template: str
     police: str
@@ -92,7 +99,11 @@ class Style:
     avec_logo: bool
     avec_rib: bool
     avec_stagiaires: bool
-    avec_convention: bool
+    avec_reference: bool
+    # Cartouche « Bon pour accord », date et signature du client. Réservé au devis :
+    # c'est son marqueur visuel le plus net, et le seul bloc qu'une facture n'a jamais.
+    # Les devis qui en sont dépourvus forment volontairement le cas le plus difficile.
+    avec_acceptation: bool
     filigrane: str
     filigrane_type: str
     filigrane_taille_pt: int
@@ -102,10 +113,10 @@ class Style:
         return asdict(self)
 
 
-def _facture_moderne(tirage: random.Random) -> Style:
-    """Mise en page des logiciels de facturation recents : logo, couleur, tableau dense."""
+def _piece_moderne(tirage: random.Random, devis: bool) -> Style:
+    """Mise en page des logiciels de facturation récents : logo, couleur, tableau dense."""
     return Style(
-        template="facture_01.html",
+        template="piece_01.html",
         police=tirage.choice(POLICES_SANS),
         police_mono="DejaVu Sans Mono",
         corps_pt=tirage.choice([8.5, 9.0, 9.5]),
@@ -114,19 +125,20 @@ def _facture_moderne(tirage: random.Random) -> Style:
         avec_logo=tirage.random() < 0.85,
         avec_rib=tirage.random() < 0.8,
         avec_stagiaires=tirage.random() < 0.7,
-        avec_convention=tirage.random() < 0.8,
-        **_marque(tirage, 0.25, ["diagonal", "tampon"]),
+        avec_reference=tirage.random() < 0.8,
+        avec_acceptation=devis and tirage.random() < 0.8,
+        **_marque(tirage, 0.25, ["diagonal", "tampon"], devis),
     )
 
 
-def _facture_classique(tirage: random.Random) -> Style:
-    """Facture de cabinet : serif, aucun logo, aucune couleur, montant en lettres.
+def _piece_classique(tirage: random.Random, devis: bool) -> Style:
+    """Pièce de cabinet : serif, aucun logo, aucune couleur, montant en lettres.
 
-    C'est la forme la plus difficile pour un classifieur, parce qu'elle ressemble a une
-    lettre commerciale plus qu'a une facture de logiciel.
+    C'est la forme la plus difficile pour un classifieur, parce qu'elle ressemble à une
+    lettre commerciale plus qu'à une sortie de logiciel.
     """
     return Style(
-        template="facture_02.html",
+        template="piece_02.html",
         police=tirage.choice(POLICES_SERIF),
         police_mono="Nimbus Mono PS",
         corps_pt=tirage.choice([9.5, 10.0, 10.5]),
@@ -135,21 +147,24 @@ def _facture_classique(tirage: random.Random) -> Style:
         avec_logo=False,
         avec_rib=tirage.random() < 0.6,
         avec_stagiaires=tirage.random() < 0.4,
-        avec_convention=tirage.random() < 0.5,
-        # Une facture de cabinet est imprimee puis manipulee : elle porte un tampon a
-        # l'encre plutot qu'un filigrane, que seul un logiciel emetteur sait produire.
-        **_marque(tirage, 0.25, ["tampon"]),
+        avec_reference=tirage.random() < 0.5,
+        # Un devis de cabinet part par courrier et revient signé : le cartouche y est
+        # la règle plutôt que l'exception.
+        avec_acceptation=devis and tirage.random() < 0.9,
+        # Une pièce de cabinet est imprimée puis manipulée : elle porte un tampon à
+        # l'encre plutôt qu'un filigrane, que seul un logiciel émetteur sait produire.
+        **_marque(tirage, 0.25, ["tampon"], devis),
     )
 
 
-def _facture_listing(tirage: random.Random) -> Style:
+def _piece_listing(tirage: random.Random, devis: bool) -> Style:
     """Sortie d'un logiciel de gestion ancien : chasse fixe, majuscules, filets en tirets.
 
-    Beaucoup d'ERP editent encore comme ca. Le rendu est pauvre mais tres regulier, ce
-    qui en fait un cas interessant : facile pour l'OCR, trompeur pour le classifieur.
+    Beaucoup d'ERP éditent encore comme ça. Le rendu est pauvre mais très régulier, ce
+    qui en fait un cas intéressant : facile pour l'OCR, trompeur pour le classifieur.
     """
     return Style(
-        template="facture_03.html",
+        template="piece_03.html",
         police=tirage.choice(POLICES_MONO),
         police_mono=tirage.choice(POLICES_MONO),
         corps_pt=tirage.choice([7.5, 8.0, 8.5]),
@@ -158,20 +173,21 @@ def _facture_listing(tirage: random.Random) -> Style:
         avec_logo=False,
         avec_rib=tirage.random() < 0.5,
         avec_stagiaires=tirage.random() < 0.5,
-        # Un progiciel de gestion imprime toujours sa reference de dossier.
-        avec_convention=True,
-        **_marque(tirage, 0.2, ["tampon", "diagonal"]),
+        # Un progiciel de gestion imprime toujours sa référence de dossier.
+        avec_reference=True,
+        avec_acceptation=devis and tirage.random() < 0.7,
+        **_marque(tirage, 0.2, ["tampon", "diagonal"], devis),
     )
 
 
-def _facture_dense(tirage: random.Random) -> Style:
-    """Facture d'un service en ligne : bandeau colore, condense, petit corps, filigrane.
+def _piece_dense(tirage: random.Random, devis: bool) -> Style:
+    """Pièce d'un service en ligne : bandeau coloré, condensé, petit corps, filigrane.
 
-    Le cas le plus hostile a l'OCR du lot : corps reduit, police condensee, texte clair
-    sur fond teinte, et parfois un filigrane par-dessus le contenu.
+    Le cas le plus hostile à l'OCR du lot : corps réduit, police condensée, texte clair
+    sur fond teinté, et parfois un filigrane par-dessus le contenu.
     """
     return Style(
-        template="facture_04.html",
+        template="piece_04.html",
         police=tirage.choice(POLICES_CONDENSEES + ["Carlito"]),
         police_mono="Cousine",
         corps_pt=tirage.choice([7.0, 7.5, 8.0]),
@@ -180,36 +196,56 @@ def _facture_dense(tirage: random.Random) -> Style:
         avec_logo=tirage.random() < 0.5,
         avec_rib=tirage.random() < 0.7,
         avec_stagiaires=tirage.random() < 0.5,
-        avec_convention=tirage.random() < 0.6,
-        **_marque(tirage, 0.4, ["diagonal", "repete", "tampon"]),
+        avec_reference=tirage.random() < 0.6,
+        # Un service en ligne fait accepter son devis d'un clic : le cartouche à signer
+        # y est bien plus rare qu'ailleurs.
+        avec_acceptation=devis and tirage.random() < 0.4,
+        **_marque(tirage, 0.4, ["diagonal", "repete", "tampon"], devis),
     )
 
 
-FABRIQUES_FACTURE = [
-    _facture_moderne,
-    _facture_classique,
-    _facture_listing,
-    _facture_dense,
+# Les quatre mises en page servent les deux types. Un organisme édite son devis et sa
+# facture avec le même logiciel, donc sur le même papier à en-tête : leur donner des
+# gabarits distincts offrirait au classifieur un raccourci visuel qui n'existe pas en
+# production, et masquerait la seule difficulté qui compte, celle du texte.
+FABRIQUES_PIECE = [
+    _piece_moderne,
+    _piece_classique,
+    _piece_listing,
+    _piece_dense,
 ]
 
 
-def style_facture(seed: int) -> Style:
-    """Style d'une facture.
+def _style_piece(seed: int, tirage: random.Random, devis: bool) -> Style:
+    """Style d'une facture ou d'un devis.
 
-    Le template tourne sur la seed plutot que d'etre tire au hasard : sur un corpus de
-    taille modeste, un tirage aleatoire produirait des templates sous-representes, et
-    donc des mesures moins fiables la ou on en a le plus besoin.
+    Le template tourne sur la seed plutôt que d'être tiré au hasard : sur un corpus de
+    taille modeste, un tirage aléatoire produirait des templates sous-représentés, et
+    donc des mesures moins fiables là où on en a le plus besoin.
     """
-    tirage = random.Random(seed)
-    return FABRIQUES_FACTURE[seed % len(FABRIQUES_FACTURE)](tirage)
+    return FABRIQUES_PIECE[seed % len(FABRIQUES_PIECE)](tirage, devis)
+
+
+def style_facture(seed: int) -> Style:
+    return _style_piece(seed, random.Random(seed), devis=False)
+
+
+def style_devis(seed: int) -> Style:
+    """Style d'un devis.
+
+    Le tirage passe par un flux nommé, sinon le devis n° 1 et la facture n° 1 sortiraient
+    non seulement sur le même gabarit, ce qui est voulu, mais aussi avec la même police,
+    le même corps et la même couleur, ce qui réduirait la variété du corpus de moitié.
+    """
+    return _style_piece(seed, random.Random(f"devis-{seed}"), devis=True)
 
 
 def style_rib(seed: int) -> Style:
     """Style d'un RIB.
 
-    Volontairement peu variable : dans la realite, les RIB se ressemblent presque tous,
-    leur forme etant quasi normalisee. Inventer six presentations rendrait le corpus
-    moins representatif, pas plus.
+    Volontairement peu variable : dans la réalité, les RIB se ressemblent presque tous,
+    leur forme étant quasi normalisée. Inventer six présentations rendrait le corpus
+    moins représentatif, pas plus.
     """
     tirage = random.Random(seed)
     return Style(
@@ -222,7 +258,8 @@ def style_rib(seed: int) -> Style:
         avec_logo=True,
         avec_rib=True,
         avec_stagiaires=False,
-        avec_convention=False,
-        # Un releve d'identite bancaire n'est ni tamponne ni filigrane.
+        avec_reference=False,
+        avec_acceptation=False,
+        # Un relevé d'identité bancaire n'est ni tamponné ni filigrané.
         **_marque(tirage, 0, []),
     )

@@ -1,12 +1,14 @@
-{# Facture de cabinet : serif, aucun logo, aucune couleur, en-tete centre, destinataire
+{# Piece de cabinet : serif, aucun logo, aucune couleur, en-tete centre, destinataire
    a droite sans cadre, tableau a filets horizontaux seuls, montant arrete en toutes
    lettres. Ressemble davantage a une lettre commerciale qu'a une sortie de logiciel,
-   ce qui en fait le cas le plus difficile du lot pour un classifieur. #}
+   ce qui en fait le cas le plus difficile du lot pour un classifieur.
+   Sert la facture comme le devis : seuls le corps de la lettre, les mentions et le
+   cartouche d'acceptation changent. #}
 <!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<title>Facture {{ f.numero }}</title>
+<title>{{ p.libelle }} {{ p.numero }}</title>
 <style>
   @page {
     size: A4;
@@ -66,6 +68,12 @@
   .rib-ligne { font-family: "{{ s.police_mono }}", monospace;
                font-size: {{ s.corps_pt - 1 }}pt; }
   .mentions { font-size: {{ s.corps_pt - 2 }}pt; text-align: justify; }
+  .acceptation { margin-top: 8mm; width: 82mm; }
+  .acceptation .intitule { font-weight: bold; }
+  .acceptation .consigne { font-size: {{ s.corps_pt - 2 }}pt; font-style: italic; }
+  .acceptation .trait {
+    border-bottom: 1px solid #000; height: 18mm; margin-top: 2mm;
+  }
   .pied-legal {
     margin-top: 8mm; padding-top: 2px; border-top: 1px solid #000;
     font-size: {{ s.corps_pt - 2.5 }}pt; text-align: center;
@@ -77,37 +85,48 @@
 {% include "_filigrane.html" %}
 
 <div class="entete">
-  <div class="nom">{{ f.organisme.raison_sociale }}</div>
+  <div class="nom">{{ p.organisme.raison_sociale }}</div>
   <div class="coordonnees">
-    {{ f.organisme.adresse.ligne1 }}, {{ f.organisme.adresse.code_postal }}
-    {{ f.organisme.adresse.ville }} &nbsp;·&nbsp; Tél. {{ f.organisme.telephone }}
-    &nbsp;·&nbsp; {{ f.organisme.email }}
+    {{ p.organisme.adresse.ligne1 }}, {{ p.organisme.adresse.code_postal }}
+    {{ p.organisme.adresse.ville }} &nbsp;·&nbsp; Tél. {{ p.organisme.telephone }}
+    &nbsp;·&nbsp; {{ p.organisme.email }}
   </div>
 </div>
 <div class="regle-double"></div>
 
 <div class="destinataire">
-  <div class="nom">{{ f.client.designation }}</div>
-  {% if f.client.contact %}<div>À l'attention de {{ f.client.contact }}</div>{% endif %}
-  <div>{{ f.client.adresse.ligne1 }}</div>
-  <div>{{ f.client.adresse.code_postal }} {{ f.client.adresse.ville }}</div>
-  {% if f.client.est_professionnel %}<div>SIREN {{ f.client.siren }}</div>{% endif %}
+  <div class="nom">{{ p.client.designation }}</div>
+  {% if p.client.contact %}<div>À l'attention de {{ p.client.contact }}</div>{% endif %}
+  <div>{{ p.client.adresse.ligne1 }}</div>
+  <div>{{ p.client.adresse.code_postal }} {{ p.client.adresse.ville }}</div>
+  {% if p.client.est_professionnel %}<div>SIREN {{ p.client.siren }}</div>{% endif %}
 </div>
 
 <div class="bandeau-doc">
-  <span class="lieu-date">{{ f.organisme.adresse.ville }},
-    le {{ f.date_emission | date_fr }}</span>
-  <div class="numero">Facture n° {{ f.numero }}</div>
+  <span class="lieu-date">{{ p.organisme.adresse.ville }},
+    le {{ p.date_emission | date_fr }}</span>
+  <div class="numero">{{ p.libelle }} n° {{ p.numero }}</div>
 </div>
 
 <div class="corps">
+  {% if p.est_devis %}
+  Comme suite à votre demande, nous avons le plaisir de vous adresser notre proposition
+  chiffrée pour l'action de formation « {{ p.intitule_action }} », qui se déroulerait
+  sur {{ p.delai_realisation }} à compter du {{ p.date_debut_prevue | date_fr }}
+  {%- if s.avec_reference %}, sous la référence {{ p.reference_dossier }}{% endif %}.
+  {% if s.avec_stagiaires %}
+    Participant{{ 's' if p.stagiaires | length > 1 }} pressenti{{ 's' if p.stagiaires | length > 1 }} :
+    {{ p.stagiaires | join(', ') }}.
+  {% endif %}
+  {% else %}
   Nous avons l'honneur de vous adresser la facture relative à l'action de formation
-  « {{ f.intitule_action }} », réalisée le {{ f.date_execution | date_fr }}
-  {%- if s.avec_convention %}, au titre de la convention {{ f.reference_convention }}
+  « {{ p.intitule_action }} », réalisée le {{ p.date_execution | date_fr }}
+  {%- if s.avec_reference %}, au titre de la convention {{ p.reference_dossier }}
   {%- endif %}.
   {% if s.avec_stagiaires %}
-    Stagiaire{{ 's' if f.stagiaires | length > 1 }} :
-    {{ f.stagiaires | join(', ') }}.
+    Stagiaire{{ 's' if p.stagiaires | length > 1 }} :
+    {{ p.stagiaires | join(', ') }}.
+  {% endif %}
   {% endif %}
 </div>
 
@@ -118,7 +137,7 @@
     <th style="width: 16%" class="num">Prix unitaire</th>
     <th style="width: 20%" class="num">Montant HT</th>
   </tr>
-  {% for ligne in f.lignes %}
+  {% for ligne in p.lignes %}
   <tr>
     <td>
       {{ ligne.designation }}
@@ -134,59 +153,88 @@
 <table class="totaux">
   <tr>
     <td class="libelle">Montant hors taxes</td>
-    <td class="valeur">{{ f.total_ht | euros }}</td>
+    <td class="valeur">{{ p.total_ht | euros }}</td>
   </tr>
   <tr>
     <td class="libelle">
-      {% if f.organisme.exonere_tva %}TVA non applicable
-      {%- else %}TVA au taux de {{ f.taux_tva }} %{% endif %}
+      {% if p.organisme.exonere_tva %}TVA non applicable
+      {%- else %}TVA au taux de {{ p.taux_tva }} %{% endif %}
     </td>
-    <td class="valeur">{{ f.total_tva | euros }}</td>
+    <td class="valeur">{{ p.total_tva | euros }}</td>
   </tr>
   <tr class="ttc">
-    <td class="libelle">Net à payer</td>
-    <td class="valeur">{{ f.total_ttc | euros }}</td>
+    <td class="libelle">{% if p.est_devis %}Montant TTC{% else %}Net à payer{% endif %}</td>
+    <td class="valeur">{{ p.total_ttc | euros }}</td>
   </tr>
 </table>
 
 {# Le montant en toutes lettres est une marque de fabrique de cette presentation :
    il n'apparait sur aucune des trois autres. #}
 <div class="arrete">
-  Arrêtée la présente facture à la somme de {{ f.total_ttc | lettres }}.
+  {% if p.est_devis %}
+  Arrêtée la présente proposition à la somme de {{ p.total_ttc | lettres }}.
+  {% else %}
+  Arrêtée la présente facture à la somme de {{ p.total_ttc | lettres }}.
+  {% endif %}
 </div>
 
 <div class="reglement">
-  Règlement à trente jours, soit au plus tard le {{ f.date_echeance | date_fr }}.
+  {% if p.est_devis %}
+  Offre valable {{ p.duree_validite_jours }} jours, soit jusqu'au
+  {{ p.date_validite | date_fr }}. L'établissement du présent devis est gratuit.
+  {% if p.acompte_pourcentage %}
+  Un acompte de {{ p.acompte_pourcentage }} %, soit {{ p.montant_acompte | euros }},
+  est demandé à la commande, le solde étant réglé à l'issue de la formation.
+  {% else %}
+  Règlement à trente jours à l'issue de la formation.
+  {% endif %}
+  {% else %}
+  Règlement à trente jours, soit au plus tard le {{ p.date_echeance | date_fr }}.
+  {% endif %}
   {% if s.avec_rib %}
   <div class="rib-ligne">
-    Virement : IBAN {{ f.coordonnees_bancaires.iban_formate }} ·
-    BIC {{ f.coordonnees_bancaires.bic }} · {{ f.coordonnees_bancaires.banque }}
+    Virement : IBAN {{ p.coordonnees_bancaires.iban_formate }} ·
+    BIC {{ p.coordonnees_bancaires.bic }} · {{ p.coordonnees_bancaires.banque }}
   </div>
   {% endif %}
 </div>
 
 <div class="mentions">
-  {% if f.client.est_professionnel %}
+  {% if p.est_devis %}
+  Une convention de formation professionnelle sera établie après acceptation,
+  conformément à l'article L. 6353-1 du code du travail.
+  {% else %}
+  {% if p.client.est_professionnel %}
   Tout retard de paiement entraîne de plein droit des pénalités calculées au taux de trois
   fois le taux d'intérêt légal, ainsi qu'une indemnité forfaitaire pour frais de
   recouvrement de 40 €.
   {% endif %}
-  {% if f.organisme.exonere_tva %}
+  {% if p.nouvelles_mentions %}
+  Nature de l'opération : {{ p.categorie_operation | lower }}.
+  {% endif %}
+  {% endif %}
+  {% if p.organisme.exonere_tva %}
   TVA non applicable, exonération au titre de l'article 261-4-4° a du code général des
   impôts.
   {% endif %}
-  {% if f.nouvelles_mentions %}
-  Nature de l'opération : {{ f.categorie_operation | lower }}.
-  {% endif %}
   Déclaration d'activité enregistrée sous le numéro
-  {{ f.organisme.numero_declaration_activite }} auprès du préfet de région. Cet
+  {{ p.organisme.numero_declaration_activite }} auprès du préfet de région. Cet
   enregistrement ne vaut pas agrément de l'État.
 </div>
 
+{% if s.avec_acceptation %}
+<div class="acceptation">
+  <div class="intitule">Bon pour accord</div>
+  <div class="consigne">À retourner daté et signé, précédé de la mention manuscrite
+    « Bon pour accord ».</div>
+  <div class="trait"></div>
+</div>
+{% endif %}
+
 <div class="pied-legal">
-  {{ f.organisme.forme_juridique }} au capital de {{ f.organisme.capital | nombre }} €
-  · SIRET {{ f.organisme.siret }} · TVA {{ f.organisme.tva }}
-  · RCS {{ f.organisme.rcs_ville }}
+  {{ p.organisme.forme_juridique }} au capital de {{ p.organisme.capital | nombre }} €
+  · SIRET {{ p.organisme.siret }} · TVA {{ p.organisme.tva }}
+  · RCS {{ p.organisme.rcs_ville }}
 </div>
 
 </body>

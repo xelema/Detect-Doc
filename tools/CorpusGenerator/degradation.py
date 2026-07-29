@@ -1,16 +1,16 @@
-"""Transforme un document propre en document scanne, photocopie ou photographie.
+"""Transforme un document propre en document scanné, photocopié ou photographié.
 
-Un PDF a texte natif se lit sans OCR : il ne dit rien de la qualite d'un moteur de
-reconnaissance. Ce module produit le jumeau degrade d'un document propre, en le
-rasterisant puis en lui appliquant les defauts d'une chaine d'impression et de
-numerisation reelle.
+Un PDF à texte natif se lit sans OCR : il ne dit rien de la qualité d'un moteur de
+reconnaissance. Ce module produit le jumeau dégradé d'un document propre, en le
+rasterisant puis en lui appliquant les défauts d'une chaîne d'impression et de
+numérisation réelle.
 
-Les deux versions coexistent dans le corpus et sont reliees l'une a l'autre. Comparer un
-resultat sur le document propre et sur son jumeau isole exactement ce que l'OCR coute en
-qualite, sur un contenu strictement identique.
+Les deux versions coexistent dans le corpus et sont reliées l'une à l'autre. Comparer un
+résultat sur le document propre et sur son jumeau isole exactement ce que l'OCR coûte en
+qualité, sur un contenu strictement identique.
 
-Le nom des effets appliques est releve sur les objets eux-memes plutot que saisi a la
-main : une liste ecrite en dur finirait par mentir sur ce que le document a subi.
+Le nom des effets appliqués est relevé sur les objets eux-mêmes plutôt que saisi à la
+main : une liste écrite en dur finirait par mentir sur ce que le document a subi.
 """
 
 import hashlib
@@ -24,15 +24,15 @@ from configuration import (
     RESOLUTION_DPI,
 )
 
-# Doit etre pose avant l'import d'augraphy, qui charge numba.
+# Doit être posé avant l'import d'augraphy, qui charge numba.
 #
-# Augraphy accelere une partie de ses calculs en compilant du code avec numba. Les
-# versions installees ici ne s'accordent pas : ShadowCast et BadPhotoCopy echouent a la
-# compilation. Desactiver la compilation les fait passer en Python pur, ce qui coute
-# environ 2,8 secondes pour douze effets sur une page A4 a 200 dpi. Negligeable pour un
+# Augraphy accélère une partie de ses calculs en compilant du code avec numba. Les
+# versions installées ici ne s'accordent pas : ShadowCast et BadPhotoCopy échouent à la
+# compilation. Désactiver la compilation les fait passer en Python pur, ce qui coûte
+# environ 2,8 secondes pour douze effets sur une page A4 à 200 dpi. Négligeable pour un
 # outil qui fabrique quelques centaines de documents une fois.
-# Affectation directe et non `setdefault` : un shell ou un conteneur qui aurait deja
-# pose la variable imposerait sinon son propre reglage, et le corpus produit differerait
+# Affectation directe et non setdefault : un shell ou un conteneur qui aurait déjà
+# posé la variable imposerait sinon son propre réglage, et le corpus produit différerait
 # sans que rien ne l'explique.
 os.environ["NUMBA_DISABLE_JIT"] = "1"
 
@@ -44,15 +44,15 @@ from augraphy import (AugraphyPipeline, DirtyDrum, DirtyRollers,  # noqa: E402
                       LightingGradient, LowInkRandomLines, NoiseTexturize,
                       ShadowCast, SubtleNoise)
 
-# `BadPhotoCopy` est volontairement absent de ce module. Il choisit son algorithme de
-# bruit au hasard et l'une de ses branches echoue avec numpy 2, environ une fois sur
-# sept. Un effet qui fait echouer la generation par intermittence n'a pas sa place ici,
-# et le rendu de photocopie s'obtient tres bien avec Letterpress et DirtyDrum.
+# BadPhotoCopy est volontairement absent de ce module. Il choisit son algorithme de
+# bruit au hasard et l'une de ses branches échoue avec numpy 2, environ une fois sur
+# sept. Un effet qui fait échouer la génération par intermittence n'a pas sa place ici,
+# et le rendu de photocopie s'obtient très bien avec Letterpress et DirtyDrum.
 
-# Resolution des scanners de bureau. En dessous de 150 l'OCR se degrade pour une raison
-# qui n'a rien a voir avec le document lui-meme, ce qui fausserait la comparaison.
+# Résolution des scanners de bureau. En dessous de 150 l'OCR se dégrade pour une raison
+# qui n'a rien à voir avec le document lui-même, ce qui fausserait la comparaison.
 def _scan_propre() -> dict:
-    """Numerisation correcte sur un materiel entretenu : le cas favorable."""
+    """Numérisation correcte sur un matériel entretenu : le cas favorable."""
     return {
         "ink": [],
         "paper": [],
@@ -62,7 +62,7 @@ def _scan_propre() -> dict:
 
 
 def _scan_degrade() -> dict:
-    """Scanner fatigue : rouleaux sales, encre qui bave, compression agressive."""
+    """Scanner fatigué : rouleaux sales, encre qui bave, compression agressive."""
     return {
         "ink": [InkBleed(intensity_range=(0.4, 0.7))],
         "paper": [NoiseTexturize(sigma_range=(3, 8))],
@@ -72,7 +72,7 @@ def _scan_degrade() -> dict:
 
 
 def _photocopie() -> dict:
-    """Copie de copie : caracteres ronges, tambour sale, contraste ecrase."""
+    """Copie de copie : caractères rongés, tambour sale, contraste écrasé."""
     return {
         "ink": [Letterpress(n_samples=(200, 500))],
         "paper": [DirtyDrum()],
@@ -81,10 +81,10 @@ def _photocopie() -> dict:
 
 
 def _photo_smartphone() -> dict:
-    """Photo prise a la main : eclairage inegal, ombre portee, cadrage de travers.
+    """Photo prise à la main : éclairage inégal, ombre portée, cadrage de travers.
 
-    Cas tres frequent des documents deposes depuis un telephone, et l'un des plus durs
-    pour un OCR a cause du gradient de luminosite.
+    Cas très fréquent des documents déposés depuis un téléphone, et l'un des plus durs
+    pour un OCR à cause du gradient de luminosité.
     """
     return {
         "ink": [],
@@ -96,7 +96,7 @@ def _photo_smartphone() -> dict:
 
 
 def _fax() -> dict:
-    """Telecopie : binarisation brutale et lignes manquantes. Le cas le plus hostile."""
+    """Télécopie : binarisation brutale et lignes manquantes. Le cas le plus hostile."""
     return {
         "ink": [LowInkRandomLines(count_range=(4, 9))],
         "paper": [],
@@ -112,25 +112,25 @@ PROFILS = {
     "photocopie": _photocopie,
 }
 
-# Repartition volontairement inegale : en production, un scan correct est bien plus
-# frequent qu'un fax. Un corpus qui donnerait autant de poids a chaque profil
-# surestimerait la difficulte moyenne.
+# Répartition volontairement inégale : en production, un scan correct est bien plus
+# fréquent qu'un fax. Un corpus qui donnerait autant de poids à chaque profil
+# surestimerait la difficulté moyenne.
 if set(POIDS_PROFILS) != set(PROFILS):
     raise ValueError("les poids doivent déclarer exactement les cinq profils")
 
 
 def profil_degradation(seed: int) -> str | None:
-    """Profil a appliquer au document, ou None s'il reste a texte natif.
+    """Profil à appliquer au document, ou None s'il reste à texte natif.
 
-    Les deux regimes doivent rester bien representes : sans documents propres, on perd
-    la reference qui permet de chiffrer le cout de l'OCR ; sans documents degrades, on
+    Les deux régimes doivent rester bien représentés : sans documents propres, on perd
+    la référence qui permet de chiffrer le coût de l'OCR ; sans documents dégradés, on
     ne mesure pas l'OCR du tout.
     """
     tirage = random.Random(f"degradation-{seed}")
     if tirage.random() >= PROPORTION_DEGRADES:
         return None
-    # Le tirage parcourt `PROFILS` et non `POIDS_PROFILS` : un profil ajoute a la table
-    # des poids sans fabrique echoue alors franchement, au lieu de n'etre jamais tire.
+    # Le tirage parcourt PROFILS et non POIDS_PROFILS : un profil ajouté à la table
+    # des poids sans fabrique échoue alors franchement, au lieu de n'être jamais tiré.
     return tirage.choices(list(PROFILS), weights=[POIDS_PROFILS[n] for n in PROFILS])[0]
 
 
@@ -151,17 +151,17 @@ def _rasteriser(source: Path) -> list[np.ndarray]:
 def _ecrire_pdf(pages: list[np.ndarray], destination: Path, seed: int) -> None:
     """Enveloppe les images dans un PDF, comme le ferait un scanner.
 
-    Deux precautions pour que le fichier soit reproductible octet pour octet. Les
-    metadonnees sont videes, sinon PyMuPDF y ecrit la date du jour. Et l'identifiant de
-    document du trailer, que PyMuPDF tire au hasard a chaque sauvegarde, est calcule a
-    partir de la seed : c'etait le seul reste de non-determinisme, cinquante-neuf octets
-    qui suffisaient a changer l'empreinte du fichier.
+    Deux précautions pour que le fichier soit reproductible octet pour octet. Les
+    métadonnées sont vidées, sinon PyMuPDF y écrit la date du jour. Et l'identifiant de
+    document du trailer, que PyMuPDF tire au hasard à chaque sauvegarde, est calculé à
+    partir de la seed : c'était le seul reste de non-déterminisme, cinquante-neuf octets
+    qui suffisaient à changer l'empreinte du fichier.
     """
     document = fitz.open()
     try:
         for page in pages:
-            # OpenCV encode en BGR. Nos images sont en RGB, d'ou l'inversion des canaux,
-            # sans laquelle les couleurs d'accent ressortiraient inversees.
+            # OpenCV encode en BGR. Nos images sont en RGB, d'où l'inversion des canaux,
+            # sans laquelle les couleurs d'accent ressortiraient inversées.
             succes, tampon = cv2.imencode(
                 ".jpg", page[:, :, ::-1],
                 [int(cv2.IMWRITE_JPEG_QUALITY), QUALITE_CONTENEUR])
@@ -179,7 +179,7 @@ def _ecrire_pdf(pages: list[np.ndarray], destination: Path, seed: int) -> None:
         document.xref_set_key(-1, "ID", f"[<{empreinte}><{empreinte}>]")
 
         destination.parent.mkdir(parents=True, exist_ok=True)
-        # `no_new_id` empeche PyMuPDF de regenerer un identifiant a la sauvegarde,
+        # 'no_new_id' empêche PyMuPDF de régénérer un identifiant à la sauvegarde,
         # ce qui annulerait celui qu'on vient de fixer.
         document.save(destination, garbage=4, deflate=True, no_new_id=True)
     finally:
@@ -187,12 +187,12 @@ def _ecrire_pdf(pages: list[np.ndarray], destination: Path, seed: int) -> None:
 
 
 def degrader(source: Path, destination: Path, seed: int, profil: str) -> list[str]:
-    """Produit le jumeau degrade d'un document. Retourne les effets reellement appliques."""
+    """Produit le jumeau dégradé d'un document. Retourne les effets réellement appliqués."""
     phases = PROFILS[profil]()
 
-    # Le `random_seed` de la chaine ne suffit pas : plusieurs effets tirent directement
-    # dans les generateurs globaux de Python et de numpy. Sans ces deux lignes, deux
-    # executions du meme document produisent deux fichiers differents.
+    # Le random_seed de la chaîne ne suffit pas : plusieurs effets tirent directement
+    # dans les générateurs globaux de Python et de numpy. Sans ces deux lignes, deux
+    # exécutions du même document produisent deux fichiers différents.
     random.seed(seed)
     np.random.seed(seed)
 

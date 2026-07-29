@@ -2,7 +2,10 @@
 output_dir = "../../corpus"
 
 [documents]
+# Facture et devis a parite : c'est la paire confondable du corpus, et une matrice de
+# confusion ne se lit que sur des effectifs comparables.
 facture = 12
+devis = 12
 rib = 4
 
 [split]

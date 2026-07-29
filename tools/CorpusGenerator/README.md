@@ -19,6 +19,8 @@ docker compose run --rm --entrypoint python generator verifier.py
 
 Le corpus est écrit directement dans `Detect-Doc/corpus` grâce au volume défini dans `compose.yaml`. Le fichier TOML local est monté en lecture seule dans le conteneur.
 
+Le conteneur tourne sous l'uid 1000 et non sous `root`, sans quoi il laisserait dans `corpus/raw/` des fichiers qu'une exécution suivante hors Docker ne pourrait plus remplacer. Les deux modes s'alternent donc librement sur le même corpus.
+
 ## Exécuter sans Docker
 
 Sans Docker, l'outil tourne sous WSL, pas directement sous Windows : WeasyPrint dépend des bibliothèques GTK (Pango, Cairo) qui n'existent pas nativement sous Windows.
@@ -97,26 +99,57 @@ graph TD
 
 Les dépendances vont toutes dans le même sens, sans cycle. `cles.py` ne dépend de rien et `configuration.py` ne dépend que de la bibliothèque standard.
 
-Deux modules n'ont volontairement aucune connaissance l'un de l'autre : **`data.py` ignore tout de la présentation, et `styles.py` ignore tout du contenu.** C'est ce qui permet de rendre la même facture dans quatre mises en page sans y toucher, et inversement de changer une règle métier sans regarder un seul template.
+Deux modules n'ont volontairement aucune connaissance l'un de l'autre : **`data.py` ignore tout de la présentation, et `styles.py` ignore tout du contenu.** C'est ce qui permet de rendre la même pièce dans quatre mises en page sans y toucher, et inversement de changer une règle métier sans regarder un seul template.
+
+## La paire facture et devis
+
+Les deux types partagent leurs quatre gabarits, `piece_01.html` à `piece_04.html`, et le tronc commun `Piece` du modèle de données. Ce n'est pas une économie de code, c'est la condition pour que le corpus mesure quelque chose : un organisme édite son devis et sa facture avec le même logiciel, donc sur le même papier à en-tête. Leur donner des mises en page distinctes offrirait un raccourci visuel qui n'existe pas en production, et un classifieur entraîné dessus s'effondrerait sur des documents réels.
+
+Ce qui les sépare tient donc entièrement au texte, et c'est exactement ce que la détection devra apprendre à lire.
+
+| Sur le devis seulement | Sur la facture seulement |
+|---|---|
+| intitulé `Devis`, `Proposition commerciale` ou `Offre de prix` | intitulé `Facture` |
+| durée de validité et date limite d'acceptation | date d'échéance de paiement |
+| date de début prévue, postérieure à l'émission | date d'exécution, antérieure à l'émission |
+| mention de gratuité du devis | pénalités de retard et indemnité de 40 € |
+| acompte à la commande | mentions de la réforme de la facturation électronique |
+| convention de formation annoncée pour après acceptation | référence de la convention déjà signée |
+| cartouche « Bon pour accord » à dater et signer | tampon `PAYÉE`, `ACQUITTÉE` ou `RÉGLÉE` |
+
+Tout le reste est commun : émetteur, destinataire, tableau des lignes, totaux HT et TTC, coordonnées bancaires, numéro de déclaration d'activité, exonération de TVA.
+
+Les cas volontairement difficiles sont ceux où ces marqueurs s'effacent : un devis intitulé `Offre de prix`, sans cartouche d'acceptation et portant un RIB, ne se distingue plus d'une facture que par ses dates et sa durée de validité. Les tags du manifest (`devis`, `proposition`, `offre`, `cartouche-accord`, `acompte`) permettront de mesurer le poids réel de chacun.
 
 ## Le modèle de données
 
 ```mermaid
 classDiagram
-    class Facture {
+    class Piece {
         +str numero
         +date date_emission
-        +date date_execution
-        +date date_echeance
-        +str reference_convention
+        +str reference_dossier
         +str intitule_action
         +list~str~ stagiaires
-        +bool nouvelles_mentions
-        +str categorie_operation
         +Decimal total_ht
         +Decimal total_tva
         +Decimal total_ttc
         +Decimal taux_tva
+    }
+    class Facture {
+        +date date_execution
+        +date date_echeance
+        +bool nouvelles_mentions
+        +str categorie_operation
+    }
+    class Devis {
+        +str libelle
+        +date date_validite
+        +int duree_validite_jours
+        +date date_debut_prevue
+        +str delai_realisation
+        +int acompte_pourcentage
+        +Decimal montant_acompte
     }
     class Organisme {
         +str raison_sociale
@@ -135,7 +168,7 @@ classDiagram
         +str tva
         +str contact
     }
-    class LigneFacture {
+    class Ligne {
         +str designation
         +str detail
         +Decimal quantite
@@ -171,21 +204,26 @@ classDiagram
         +bool avec_logo
         +bool avec_rib
         +bool avec_stagiaires
-        +bool avec_convention
+        +bool avec_reference
+        +bool avec_acceptation
         +str filigrane
         +str filigrane_type
     }
 
-    Facture "1" --> "1" Organisme : emetteur
-    Facture "1" --> "1" Client : destinataire
-    Facture "1" --> "*" LigneFacture : lignes
-    Facture "1" --> "1" Rib : coordonnées bancaires
+    Piece <|-- Facture
+    Piece <|-- Devis
+    Piece "1" --> "1" Organisme : emetteur
+    Piece "1" --> "1" Client : destinataire
+    Piece "1" --> "*" Ligne : lignes
+    Piece "1" --> "1" Rib : coordonnées bancaires
     Organisme --> Coordonnees : adresse
     Client --> Coordonnees : adresse
     Rib --> Coordonnees : titulaire et agence
 ```
 
-`Style` n'est rattaché à aucun document : il est choisi séparément à partir de la même seed, puis passé au template à côté du document. Un `Rib` mène une double vie, comme document à part entière et comme pavé de coordonnées bancaires au bas d'une facture.
+`Style` n'est rattaché à aucun document : il est choisi séparément à partir de la même seed, puis passé au template à côté du document. Un `Rib` mène une double vie, comme document à part entière et comme pavé de coordonnées bancaires au bas d'une pièce.
+
+Le devis n'est pas tiré sur la même seed que la facture de même numéro. Sans ce décalage, `dev-0001` et `fac-0001` sortiraient avec le même organisme, le même client et les mêmes montants : le corpus contiendrait des paires de quasi-jumeaux textuels, et la matrice de confusion mesurerait un cas de figure qui n'existe pas en production.
 
 ## Ce qui se passe pour un document
 
@@ -198,12 +236,12 @@ sequenceDiagram
     participant X as degradation.py
     participant M as manifest.py
 
-    G->>D: generer_facture(seed)
+    G->>D: generer_facture(seed) ou generer_devis(seed)
     D->>D: Faker seedé, clés de contrôle calculées
-    D-->>G: Facture
-    G->>S: style_facture(seed)
+    D-->>G: Piece
+    G->>S: style_facture(seed) ou style_devis(seed)
     S-->>G: Style (template, police, corps, marque)
-    G->>R: rendre_pdf(template, chemin, f, s, logo)
+    G->>R: rendre_pdf(template, chemin, p, s, logo)
     R->>R: Jinja2 puis WeasyPrint
     R-->>G: nombre de pages
     G->>M: construire_entree(...)
@@ -243,9 +281,9 @@ Un document et son jumeau tombent toujours dans le même jeu, puisqu'ils partage
 
 ## Faire évoluer
 
-**Ajouter une mise en page à un type existant.** Écrire le template dans `templates/`, ajouter une fabrique dans `styles.py` et l'inscrire dans `FABRIQUES_FACTURE`. Le template est choisi en tournant sur la seed plutôt qu'au hasard, pour qu'aucune mise en page ne reste sous-représentée sur un corpus de taille modeste.
+**Ajouter une mise en page à la facture et au devis.** Écrire le template dans `templates/`, ajouter une fabrique dans `styles.py` et l'inscrire dans `FABRIQUES_PIECE`. Le template est choisi en tournant sur la seed plutôt qu'au hasard, pour qu'aucune mise en page ne reste sous-représentée sur un corpus de taille modeste.
 
-**Ajouter un type de document.** Une classe dans `data.py` avec sa fonction de génération, un template, une fabrique de style, une fonction `produire_*` dans `generer.py` inscrite dans `PRODUCTEURS`, et le type ajouté à `TYPES_CONNUS` dans `manifest.py`.
+**Ajouter un type de document.** Une classe dans `data.py` avec sa fonction de génération, un template, une fabrique de style, une fonction `produire_*` dans `generer.py` inscrite dans `PRODUCTEURS`, et le type ajouté à `TYPES_CONNUS` dans `manifest.py`. Si le nouveau type a un voisin confondable déjà présent, lui faire partager ses gabarits plutôt que d'en écrire de nouveaux.
 
 Dans les deux cas, reporter l'ajout sur les schémas ci-dessus : ils ne servent qu'à condition de décrire le code tel qu'il est.
 
