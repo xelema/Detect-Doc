@@ -12,19 +12,14 @@ fichiers, avec les memes hash.
 import sys
 
 import manifest
-from data import generer_facture, generer_rib
+from data import client_professionnel, generer_facture, generer_rib
 from degradation import degrader, profil_degradation
 from rendu import logo_svg, rendre_pdf
 from styles import style_facture, style_rib
 
 
 def _jumeau_scanne(propre: dict, seed: int) -> dict | None:
-    """Version scannee d'un document, si la seed lui en attribue une.
-
-    Le jumeau reprend la seed de son original, donc il tombe forcement dans le meme jeu
-    que lui : un document de reglage et sa version scannee ne peuvent pas se retrouver
-    de part et d'autre de la frontiere avec le jeu de mesure.
-    """
+    """Version scannee d'un document, si la seed lui en attribue une."""
     profil = profil_degradation(seed)
     if profil is None:
         return None
@@ -33,23 +28,13 @@ def _jumeau_scanne(propre: dict, seed: int) -> dict | None:
     chemin = manifest.DOSSIER_DOCUMENTS / f"{identifiant}.pdf"
     effets = degrader(manifest.DOSSIER_CORPUS / propre["fichier"], chemin, seed, profil)
 
-    return manifest.construire_entree(
-        identifiant, chemin, propre["type_attendu"], seed, propre["pages"],
-        # Meme contenu et meme mise en page que l'original : seul le regime change.
-        # C'est ce qui rend les deux comparables.
-        variante=propre["variante"],
-        pii=propre["pii_injectees"],
-        tags=propre["tags"] + [profil],
-        regime="scanne",
-        degradations=effets,
-        derive_de=propre["id"],
-    )
+    return manifest.entree_derivee(
+        propre, identifiant, chemin,
+        regime="scanne", degradations=effets, tags=propre["tags"] + [profil])
 
 
 def produire_facture(numero: int) -> dict:
-    # Une facture sur quatre est adressee a un particulier : le B2B domine en GED,
-    # mais le B2C existe et ses mentions obligatoires ne sont pas les memes.
-    facture = generer_facture(numero, professionnel=(numero % 4 != 0))
+    facture = generer_facture(numero, professionnel=client_professionnel(numero))
     style = style_facture(numero)
     identifiant = f"fac-{numero:04d}"
     chemin = manifest.DOSSIER_DOCUMENTS / f"{identifiant}.pdf"
@@ -58,7 +43,9 @@ def produire_facture(numero: int) -> dict:
         style.template, chemin,
         f=facture,
         s=style,
-        logo=logo_svg(facture.organisme.raison_sociale, numero, style.couleur),
+        logo=logo_svg(facture.organisme.raison_sociale, style.couleur),
+        # Date portee par le tampon a l'encre, quand le style en pose un.
+        date_marque=facture.date_echeance,
     )
 
     tags = ["b2b" if facture.client.est_professionnel else "b2c"]
@@ -96,8 +83,7 @@ def produire_rib(numero: int) -> dict:
         style.template, chemin,
         r=rib,
         s=style,
-        logo=logo_svg(rib.banque, numero, style.couleur),
-        date_edition=rib.date_edition,
+        logo=logo_svg(rib.banque, style.couleur),
     )
 
     return manifest.construire_entree(
@@ -111,12 +97,20 @@ def produire_rib(numero: int) -> dict:
                                  f"{rib.adresse_titulaire.code_postal} "
                                  f"{rib.adresse_titulaire.ville}",
         },
-        tags=["titulaire-personne" if rib.titulaire.startswith(("M.", "Mme"))
+        tags=["titulaire-personne" if rib.titulaire_est_personne
               else "titulaire-entreprise"],
     )
 
 
 PRODUCTEURS = {"facture": produire_facture, "rib": produire_rib}
+
+# Les types produits et les types que le manifest accepte sont declares dans deux
+# modules, `manifest` ne pouvant pas importer `generer` sans cycle. Le controle echoue
+# bruyamment plutot que de laisser le validateur signaler chaque nouveau document comme
+# un type inconnu.
+assert set(PRODUCTEURS) == manifest.TYPES_CONNUS, (
+    f"types produits {sorted(PRODUCTEURS)} et types connus du manifest "
+    f"{sorted(manifest.TYPES_CONNUS)} ne concordent pas")
 
 
 def main() -> None:

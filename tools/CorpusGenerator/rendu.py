@@ -7,6 +7,7 @@ du systeme : le corpus doit sortir identique sur n'importe quelle machine.
 import os
 from datetime import date
 from decimal import Decimal
+from functools import cache
 from pathlib import Path
 
 # Doit etre pose avant l'import de weasyprint, qui charge fontTools.
@@ -16,7 +17,10 @@ from pathlib import Path
 # meme document different de trois octets et n'ont donc pas le meme hash, ce qui
 # ruine la promesse du manifest. `SOURCE_DATE_EPOCH` est la convention des compilations
 # reproductibles, fontTools la respecte. Valeur choisie : 1er janvier 2025.
-os.environ.setdefault("SOURCE_DATE_EPOCH", "1735689600")
+# Affectation directe et non `setdefault` : un shell ou un conteneur qui aurait deja
+# pose la variable imposerait sinon sa propre date, et le corpus produit differerait sans
+# que rien ne l'explique.
+os.environ["SOURCE_DATE_EPOCH"] = "1735689600"
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape  # noqa: E402
 from markupsafe import Markup  # noqa: E402
@@ -24,35 +28,21 @@ from weasyprint import HTML  # noqa: E402
 
 DOSSIER_TEMPLATES = Path(__file__).parent / "templates"
 
-# Couleurs de logo plausibles pour un organisme de formation. Le choix est pilote par
-# la seed, donc stable d'une generation a l'autre.
-COULEURS_LOGO = ["#1f4e79", "#256d5b", "#7a2f2f", "#4a3b6b", "#8a5a1f", "#2f5f7a"]
 
-
+# Le separateur de milliers du format `,` est fixe, contrairement a `n` qui suit la
+# locale du systeme. Le corpus sort donc identique sur n'importe quelle machine.
 def euros(montant: Decimal) -> str:
     """Formate un montant a la francaise : 12 345,67 EUR."""
-    entier, _, decimales = f"{montant:.2f}".partition(".")
-    groupes = []
-    while len(entier) > 3:
-        groupes.insert(0, entier[-3:])
-        entier = entier[:-3]
-    groupes.insert(0, entier)
-    return f"{' '.join(groupes)},{decimales} €"
-
-
-def date_fr(jour: date) -> str:
-    return jour.strftime("%d/%m/%Y")
+    return f"{montant:,.2f}".replace(",", " ").replace(".", ",") + " €"
 
 
 def nombre(valeur: int) -> str:
     """Separe les milliers par une espace : 10 000."""
-    texte = str(valeur)
-    groupes = []
-    while len(texte) > 3:
-        groupes.insert(0, texte[-3:])
-        texte = texte[:-3]
-    groupes.insert(0, texte)
-    return " ".join(groupes)
+    return f"{valeur:,}".replace(",", " ")
+
+
+def date_fr(jour: date) -> str:
+    return jour.strftime("%d/%m/%Y")
 
 
 UNITES = ["zero", "un", "deux", "trois", "quatre", "cinq", "six", "sept", "huit",
@@ -130,23 +120,16 @@ def montant_en_lettres(montant: Decimal) -> str:
     return texte
 
 
-def couleur_logo(seed: int) -> str:
-    """Couleur d'accent du document, partagee entre le logo et le template."""
-    return COULEURS_LOGO[seed % len(COULEURS_LOGO)]
-
-
-def logo_svg(raison_sociale: str, seed: int, couleur: str = "") -> Markup:
+def logo_svg(raison_sociale: str, couleur: str) -> Markup:
     """Logo invente, construit a partir des initiales de la raison sociale.
 
     Un vrai logo d'entreprise ne peut pas etre reutilise, et un document sans logo ne
     ressemble a rien de reel. Un bloc de couleur avec des initiales est ce que produisent
     la plupart des petits organismes, et il est genere sans fichier externe.
 
-    La couleur vient du style quand il en impose une, pour que le logo et le document
-    s'accordent. A defaut, elle est tiree de la seed.
+    La couleur vient du style, pour que le logo et le document s'accordent.
     """
     initiales = "".join(mot[0] for mot in raison_sociale.split()[:2]).upper()
-    couleur = couleur or couleur_logo(seed)
     # Markup, sinon l'echappement automatique de Jinja2 imprime le source SVG en clair
     # dans le document. L'autoechappement reste actif pour tout le reste du template.
     return Markup(
@@ -158,7 +141,14 @@ def logo_svg(raison_sociale: str, seed: int, couleur: str = "") -> Markup:
     )
 
 
+@cache
 def _environnement() -> Environment:
+    """Environnement Jinja2, construit une seule fois.
+
+    L'environnement porte le cache des templates compiles. En reconstruire un a chaque
+    document recompilerait les cinq templates a chaque fois, ce qui coute seize
+    millisecondes par document pour rien.
+    """
     env = Environment(
         loader=FileSystemLoader(DOSSIER_TEMPLATES),
         autoescape=select_autoescape(["html"]),

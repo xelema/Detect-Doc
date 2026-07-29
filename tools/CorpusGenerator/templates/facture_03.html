@@ -126,7 +126,8 @@ REGLEMENT      VIREMENT</pre>
   </tr>
   <tr>
     <td></td>
-    <td>{% if f.organisme.exonere_tva %}TVA EXONEREE{% else %}TVA 20,00%{% endif %}</td>
+    <td>{% if f.organisme.exonere_tva %}TVA EXONEREE
+        {%- else %}TVA {{ f.taux_tva }},00%{% endif %}</td>
     <td class="num">{{ f.total_tva | euros }}</td>
   </tr>
   <tr class="gras">
@@ -136,7 +137,7 @@ REGLEMENT      VIREMENT</pre>
   </tr>
 </table>
 
-<div class="separateur" style="margin-top: 2mm">==========================================================================================</div>
+<div class="separateur" style="margin-top: 2mm">{{ "=" * 250 }}</div>
 
 <div class="bloc" style="margin-top: 4mm">
   <pre>{% if s.avec_rib %}BANQUE   {{ f.coordonnees_bancaires.banque | upper }}

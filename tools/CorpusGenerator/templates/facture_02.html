@@ -138,7 +138,8 @@
   </tr>
   <tr>
     <td class="libelle">
-      {% if f.organisme.exonere_tva %}TVA non applicable{% else %}TVA au taux de 20 %{% endif %}
+      {% if f.organisme.exonere_tva %}TVA non applicable
+      {%- else %}TVA au taux de {{ f.taux_tva }} %{% endif %}
     </td>
     <td class="valeur">{{ f.total_tva | euros }}</td>
   </tr>
@@ -148,11 +149,11 @@
   </tr>
 </table>
 
-{% if s.avec_montant_lettres %}
+{# Le montant en toutes lettres est une marque de fabrique de cette presentation :
+   il n'apparait sur aucune des trois autres. #}
 <div class="arrete">
   Arrêtée la présente facture à la somme de {{ f.total_ttc | lettres }}.
 </div>
-{% endif %}
 
 <div class="reglement">
   Règlement à trente jours, soit au plus tard le {{ f.date_echeance | date_fr }}.

@@ -12,6 +12,8 @@ regeneration.
 
 import hashlib
 import json
+import random
+from collections import Counter
 from pathlib import Path
 
 RACINE_POC = Path(__file__).resolve().parents[2]
@@ -22,10 +24,13 @@ DOSSIER_DOCUMENTS = DOSSIER_CORPUS / "raw"
 TYPES_CONNUS = {"facture", "rib"}
 SENSIBILITES = {"public", "interne_assaini", "production_valide"}
 
+# Toutes les cles ecrites par `construire_entree`. La liste doit rester alignee avec
+# elle : un champ oublie ici est un champ que le validateur laisserait disparaitre du
+# manifest sans rien dire, `pii_injectees` en tete.
 CHAMPS_OBLIGATOIRES = [
     "id", "fichier", "sha256", "type_attendu", "source", "licence", "sensibilite",
     "langue", "pages", "regime", "seed", "variante", "degradations", "derive_de",
-    "split",
+    "tags", "pii_injectees", "split", "valide_par", "date_validation",
 ]
 
 REGIMES = {"texte-natif", "scanne"}
@@ -38,28 +43,30 @@ def hash_fichier(chemin: Path) -> str:
 def _split(seed: int) -> str:
     """Repartition dev / test, scellee des le premier document.
 
-    Une seed sur quatre va dans `dev`, soit un quart du corpus. La regle
-    est arithmetique et non aleatoire : un document ne peut pas changer de camp entre
-    deux executions, ce qui serait le meilleur moyen de fausser toutes les mesures.
-    Le jeu `dev` sert au reglage du prompt et de l'OCR, le jeu `test` ne s'ouvre qu'aux
-    jalons de mesure.
+    Un quart du corpus va dans `dev`, qui sert au reglage du prompt et de l'OCR ; le jeu
+    `test` ne s'ouvre qu'aux jalons de mesure.
+
+    Le tirage passe par un flux nomme plutot que par un `seed % 4` : d'autres facettes du
+    document, comme le choix du template, tournent elles aussi sur la seed, et un modulo
+    partage les ferait toutes s'aligner. Le jeu de reglage se retrouverait alors reduit a
+    une seule mise en page, ce qui viderait de son sens tout reglage fait dessus.
+
+    Le flux depend du seul numero du document : ajouter des documents ne redistribue
+    jamais ceux qui existent deja.
     """
-    return "dev" if seed % 4 == 1 else "test"
+    return "dev" if random.Random(f"split-{seed}").random() < 0.25 else "test"
+
+
+def _chemin_relatif(chemin: Path) -> str:
+    return str(chemin.relative_to(DOSSIER_CORPUS)).replace("\\", "/")
 
 
 def construire_entree(identifiant: str, chemin: Path, type_attendu: str, seed: int,
-                      pages: int, variante: dict, pii: dict, tags: list[str],
-                      regime: str = "texte-natif", degradations: list[str] | None = None,
-                      derive_de: str | None = None) -> dict:
-    """Assemble la ligne de manifest d'un document qui vient d'etre produit.
-
-    `derive_de` relie un document scanne a l'original propre dont il provient. Comparer
-    un resultat sur les deux isole exactement ce que la reconnaissance de caracteres
-    coute en qualite, sur un contenu strictement identique.
-    """
+                      pages: int, variante: dict, pii: dict, tags: list[str]) -> dict:
+    """Assemble la ligne de manifest d'un document qui vient d'etre produit."""
     return {
         "id": identifiant,
-        "fichier": str(chemin.relative_to(DOSSIER_CORPUS)).replace("\\", "/"),
+        "fichier": _chemin_relatif(chemin),
         "sha256": hash_fichier(chemin),
         "type_attendu": type_attendu,
         # Documents fabriques de toutes pieces : aucune donnee personnelle reelle,
@@ -69,11 +76,11 @@ def construire_entree(identifiant: str, chemin: Path, type_attendu: str, seed: i
         "sensibilite": "public",
         "langue": "fr",
         "pages": pages,
-        "regime": regime,
+        "regime": "texte-natif",
         "seed": seed,
         "variante": variante,
-        "degradations": degradations or [],
-        "derive_de": derive_de,
+        "degradations": [],
+        "derive_de": None,
         "tags": tags,
         # Verite terrain des donnees personnelles presentes dans le document. Le
         # generateur connait les valeurs qu'il a injectees, ce qui permettra plus tard
@@ -85,6 +92,30 @@ def construire_entree(identifiant: str, chemin: Path, type_attendu: str, seed: i
         # pre-remplir, ils font foi.
         "valide_par": None,
         "date_validation": None,
+    }
+
+
+def entree_derivee(original: dict, identifiant: str, chemin: Path, regime: str,
+                   degradations: list[str], tags: list[str]) -> dict:
+    """Ligne de manifest d'un document produit a partir d'un autre.
+
+    L'entree est une copie de celle de l'original, dont seul ce qui a reellement change
+    est remplace. Copier plutot que reconstruire garantit que les deux documents portent
+    le meme type attendu, la meme verite terrain et surtout **le meme jeu** : separer un
+    document de son derive entre le jeu de reglage et le jeu de mesure ferait fuiter le
+    contenu de l'un dans l'autre.
+
+    C'est aussi ce qui evite d'avoir a propager ici chaque champ ajoute au manifest.
+    """
+    return {
+        **original,
+        "id": identifiant,
+        "fichier": _chemin_relatif(chemin),
+        "sha256": hash_fichier(chemin),
+        "regime": regime,
+        "degradations": degradations,
+        "derive_de": original["id"],
+        "tags": tags,
     }
 
 
@@ -161,18 +192,13 @@ def valider() -> list[str]:
 
 def resume() -> str:
     entrees = lire()
-    compteurs: dict[str, dict[str, int]] = {
-        "type": {}, "jeu": {}, "regime": {}, "template": {},
+    documents = entrees.values()
+    compteurs = {
+        "type": Counter(e["type_attendu"] for e in documents),
+        "jeu": Counter(e["split"] for e in documents),
+        "regime": Counter(e["regime"] for e in documents),
+        "template": Counter(e["variante"].get("template", "?") for e in documents),
     }
-
-    for entree in entrees.values():
-        for axe, valeur in (
-            ("type", entree["type_attendu"]),
-            ("jeu", entree["split"]),
-            ("regime", entree["regime"]),
-            ("template", entree.get("variante", {}).get("template", "?")),
-        ):
-            compteurs[axe][valeur] = compteurs[axe].get(valeur, 0) + 1
 
     lignes = [f"{len(entrees)} document(s) au manifest"]
     for axe, valeurs in compteurs.items():

@@ -6,6 +6,8 @@ surtout ils fausseraient plus tard la mesure du masquage des donnees personnelle
 un detecteur d'IBAN qui valide la cle ne se comporte pas pareil sur un IBAN invalide.
 """
 
+from stdnum import iban as iban_stdnum
+
 
 def cle_rib(code_banque: str, code_guichet: str, numero_compte: str) -> str:
     """Cle RIB sur 2 chiffres, calculee modulo 97.
@@ -23,16 +25,13 @@ def iban_francais(code_banque: str, code_guichet: str, numero_compte: str, cle: 
 
     L'IBAN contient le BBAN, c'est-a-dire exactement les codes imprimes dans le pave RIB.
     Les calculer ensemble est ce qui garantit qu'un document ne se contredit pas lui-meme.
+
+    Le calcul des chiffres de controle est confie a `stdnum`, la meme bibliotheque qui
+    sert ensuite a valider le resultat : produire avec du code maison ce qu'on controle
+    avec une bibliotheque ne verifie rien d'autre que la coherence du code maison.
     """
     bban = f"{code_banque}{code_guichet}{numero_compte}{cle}"
-
-    # Norme ISO 13616 : on deplace le code pays et "00" a la fin, puis on convertit
-    # chaque lettre en nombre (A vaut 10, B vaut 11, et ainsi de suite).
-    provisoire = f"{bban}FR00"
-    numerique = "".join(str(int(c, 36)) for c in provisoire)
-    contexte = 98 - (int(numerique) % 97)
-
-    return f"FR{contexte:02d}{bban}"
+    return f"FR{iban_stdnum.calc_check_digits(f'FR00{bban}')}{bban}"
 
 
 def cle_tva_intracommunautaire(siren: str) -> str:

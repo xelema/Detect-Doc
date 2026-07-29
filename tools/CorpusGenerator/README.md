@@ -86,6 +86,7 @@ classDiagram
         +Decimal total_ht
         +Decimal total_tva
         +Decimal total_ttc
+        +Decimal taux_tva
     }
     class Organisme {
         +str raison_sociale
@@ -115,6 +116,7 @@ classDiagram
     }
     class Rib {
         +str titulaire
+        +bool titulaire_est_personne
         +str banque
         +str bic
         +str code_banque
@@ -140,7 +142,6 @@ classDiagram
         +bool avec_rib
         +bool avec_stagiaires
         +bool avec_convention
-        +bool avec_montant_lettres
         +str filigrane
         +str filigrane_type
     }
@@ -191,6 +192,8 @@ sequenceDiagram
 ```
 
 La seed pilote tout : le contenu, la présentation, la dégradation et la répartition entre le jeu de réglage et le jeu de mesure. Rien n'est tiré au hasard sans elle.
+
+Chaque facette tire dans un **flux nommé** distinct, `random.Random(f"split-{seed}")` par exemple. C'est indispensable : plusieurs facettes dérivées d'un même `seed % 4` finiraient par s'aligner, et le jeu de réglage se retrouverait réduit à une seule mise en page.
 
 ## Les deux régimes
 

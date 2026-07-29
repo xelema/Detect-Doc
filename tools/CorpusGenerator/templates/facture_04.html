@@ -182,7 +182,8 @@
     </tr>
     <tr>
       <td class="libelle">
-        {% if f.organisme.exonere_tva %}TVA exonérée{% else %}TVA 20 %{% endif %}
+        {% if f.organisme.exonere_tva %}TVA exonérée
+        {%- else %}TVA {{ f.taux_tva }} %{% endif %}
       </td>
       <td class="valeur">{{ f.total_tva | euros }}</td>
     </tr>

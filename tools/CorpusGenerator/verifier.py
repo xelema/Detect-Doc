@@ -5,7 +5,9 @@ ou les SIREN sont invalides est inexploitable pour mesurer le masquage des donne
 personnelles, et se repere immediatement comme factice.
 """
 
+import tempfile
 from decimal import Decimal
+from pathlib import Path
 
 from stdnum import iban as iban_stdnum
 from stdnum.fr import siren as siren_stdnum
@@ -13,8 +15,10 @@ from stdnum.fr import siret as siret_stdnum
 from stdnum.fr import tva as tva_stdnum
 
 from cles import cle_rib
-from data import generer_facture
-from rendu import montant_en_lettres
+from data import client_professionnel, generer_facture
+from manifest import hash_fichier
+from rendu import logo_svg, montant_en_lettres, rendre_pdf
+from styles import style_facture
 
 NB_ECHANTILLONS = 50
 
@@ -43,7 +47,7 @@ MONTANTS_ATTENDUS = {
 def verifier(seed: int) -> list[str]:
     """Retourne la liste des anomalies trouvees sur une facture, vide si tout est bon."""
     anomalies = []
-    facture = generer_facture(seed, professionnel=(seed % 4 != 0))
+    facture = generer_facture(seed, professionnel=client_professionnel(seed))
     org = facture.organisme
     rib = facture.coordonnees_bancaires
 
@@ -96,6 +100,32 @@ def verifier_montants_en_lettres() -> list[str]:
     return anomalies
 
 
+def verifier_reproductibilite() -> list[str]:
+    """Rend deux fois le meme document et compare les fichiers obtenus.
+
+    C'est la promesse centrale de l'outil : le corpus n'est pas versionne parce qu'il se
+    refabrique a l'identique. Elle repose sur plusieurs precautions eparpillees, dont un
+    horodatage de police et un identifiant de document PDF, et elle casse sans lever la
+    moindre erreur. Sans ce controle, seule une lecture attentive du diff du manifest
+    revelerait la rupture.
+    """
+    facture = generer_facture(1, professionnel=True)
+    style = style_facture(1)
+
+    empreintes = []
+    with tempfile.TemporaryDirectory() as dossier:
+        for essai in range(2):
+            chemin = Path(dossier) / f"essai-{essai}.pdf"
+            rendre_pdf(style.template, chemin, f=facture, s=style,
+                       logo=logo_svg(facture.organisme.raison_sociale, style.couleur),
+                       date_marque=facture.date_echeance)
+            empreintes.append(hash_fichier(chemin))
+
+    if empreintes[0] != empreintes[1]:
+        return ["deux rendus du meme document produisent des fichiers differents"]
+    return []
+
+
 def main() -> None:
     total = 0
     for seed in range(1, NB_ECHANTILLONS + 1):
@@ -104,10 +134,12 @@ def main() -> None:
         for anomalie in anomalies:
             print(f"  seed {seed} : {anomalie}")
 
-    anomalies_lettres = verifier_montants_en_lettres()
-    total += len(anomalies_lettres)
-    for anomalie in anomalies_lettres:
-        print(f"  montant en lettres, {anomalie}")
+    for intitule, controle in (("montant en lettres", verifier_montants_en_lettres),
+                               ("reproductibilite", verifier_reproductibilite)):
+        anomalies = controle()
+        total += len(anomalies)
+        for anomalie in anomalies:
+            print(f"  {intitule}, {anomalie}")
 
     print(f"\n{NB_ECHANTILLONS} factures verifiees, {total} anomalie(s).")
 

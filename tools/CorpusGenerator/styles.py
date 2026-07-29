@@ -27,8 +27,6 @@ POLICES_CONDENSEES = ["Liberation Sans Narrow", "Nimbus Sans Narrow"]
 
 COULEURS = ["#1f4e79", "#256d5b", "#7a2f2f", "#4a3b6b", "#8a5a1f", "#2f5f7a", "#333333"]
 
-STYLES_TABLEAU = ["filets", "horizontaux", "aucun", "bandes"]
-
 # Marques portees par une facture reelle. Le filigrane en diagonale et la mosaique sont
 # imprimes par le logiciel emetteur ; le tampon est appose apres coup, a l'encre, ce qui
 # lui donne une couleur qui tranche et une opacite bien plus forte.
@@ -54,19 +52,31 @@ def _taille_filigrane(texte: str) -> int:
     return min(int(largeur_visee_pt / (len(texte) * largeur_moyenne_caractere)), 200)
 
 
-def _marque(tirage: random.Random, probabilite: float,
-            types: list[str]) -> tuple[str, str, int, str]:
-    """Tire une marque : texte, type, corps et encre. Chaine vide si aucune marque."""
+def _marque(tirage: random.Random, probabilite: float, types: list[str]) -> dict:
+    """Tire une marque et retourne les champs correspondants du style.
+
+    Retourner un fragment de style plutot qu'un tuple evite de recopier les quatre champs
+    dans chacune des fabriques : un cinquieme champ de marque n'imposerait alors aucune
+    edition ailleurs.
+    """
+    aucune = {"filigrane": "", "filigrane_type": "", "filigrane_taille_pt": 0,
+              "filigrane_encre": ""}
     if tirage.random() >= probabilite:
-        return "", "", 0, ""
+        return aucune
 
     type_marque = tirage.choice(types)
     if type_marque == "tampon":
-        texte = tirage.choice(TAMPONS)
-        return texte, type_marque, 0, tirage.choice(ENCRES_TAMPON)
+        return {**aucune, "filigrane": tirage.choice(TAMPONS),
+                "filigrane_type": type_marque,
+                "filigrane_encre": tirage.choice(ENCRES_TAMPON)}
 
     texte = tirage.choice(FILIGRANES_IMPRIMES)
-    return texte, type_marque, _taille_filigrane(texte), ""
+    # Seule la diagonale ecrit le mot en un seul bloc dont la taille doit etre calculee.
+    # La mosaique repete le mot a taille fixe : lui annoncer un corps qu'elle n'applique
+    # pas ferait mentir le manifest.
+    taille = _taille_filigrane(texte) if type_marque == "diagonal" else 0
+    return {**aucune, "filigrane": texte, "filigrane_type": type_marque,
+            "filigrane_taille_pt": taille}
 
 
 @dataclass
@@ -83,7 +93,6 @@ class Style:
     avec_rib: bool
     avec_stagiaires: bool
     avec_convention: bool
-    avec_montant_lettres: bool
     filigrane: str
     filigrane_type: str
     filigrane_taille_pt: int
@@ -95,8 +104,6 @@ class Style:
 
 def _facture_moderne(tirage: random.Random) -> Style:
     """Mise en page des logiciels de facturation recents : logo, couleur, tableau dense."""
-    filigrane, type_filigrane, taille, encre = _marque(
-        tirage, 0.25, ["diagonal", "tampon"])
     return Style(
         template="facture_01.html",
         police=tirage.choice(POLICES_SANS),
@@ -108,11 +115,7 @@ def _facture_moderne(tirage: random.Random) -> Style:
         avec_rib=tirage.random() < 0.8,
         avec_stagiaires=tirage.random() < 0.7,
         avec_convention=tirage.random() < 0.8,
-        avec_montant_lettres=False,
-        filigrane=filigrane,
-        filigrane_type=type_filigrane,
-        filigrane_taille_pt=taille,
-        filigrane_encre=encre,
+        **_marque(tirage, 0.25, ["diagonal", "tampon"]),
     )
 
 
@@ -122,9 +125,6 @@ def _facture_classique(tirage: random.Random) -> Style:
     C'est la forme la plus difficile pour un classifieur, parce qu'elle ressemble a une
     lettre commerciale plus qu'a une facture de logiciel.
     """
-    # Une facture de cabinet est imprimee puis manipulee : elle porte un tampon a l'encre
-    # plutot qu'un filigrane, que seul un logiciel emetteur sait produire.
-    filigrane, type_filigrane, taille, encre = _marque(tirage, 0.25, ["tampon"])
     return Style(
         template="facture_02.html",
         police=tirage.choice(POLICES_SERIF),
@@ -136,11 +136,9 @@ def _facture_classique(tirage: random.Random) -> Style:
         avec_rib=tirage.random() < 0.6,
         avec_stagiaires=tirage.random() < 0.4,
         avec_convention=tirage.random() < 0.5,
-        avec_montant_lettres=True,
-        filigrane=filigrane,
-        filigrane_type=type_filigrane,
-        filigrane_taille_pt=taille,
-        filigrane_encre=encre,
+        # Une facture de cabinet est imprimee puis manipulee : elle porte un tampon a
+        # l'encre plutot qu'un filigrane, que seul un logiciel emetteur sait produire.
+        **_marque(tirage, 0.25, ["tampon"]),
     )
 
 
@@ -150,8 +148,6 @@ def _facture_listing(tirage: random.Random) -> Style:
     Beaucoup d'ERP editent encore comme ca. Le rendu est pauvre mais tres regulier, ce
     qui en fait un cas interessant : facile pour l'OCR, trompeur pour le classifieur.
     """
-    filigrane, type_filigrane, taille, encre = _marque(
-        tirage, 0.2, ["tampon", "diagonal"])
     return Style(
         template="facture_03.html",
         police=tirage.choice(POLICES_MONO),
@@ -162,12 +158,9 @@ def _facture_listing(tirage: random.Random) -> Style:
         avec_logo=False,
         avec_rib=tirage.random() < 0.5,
         avec_stagiaires=tirage.random() < 0.5,
+        # Un progiciel de gestion imprime toujours sa reference de dossier.
         avec_convention=True,
-        avec_montant_lettres=False,
-        filigrane=filigrane,
-        filigrane_type=type_filigrane,
-        filigrane_taille_pt=taille,
-        filigrane_encre=encre,
+        **_marque(tirage, 0.2, ["tampon", "diagonal"]),
     )
 
 
@@ -177,8 +170,6 @@ def _facture_dense(tirage: random.Random) -> Style:
     Le cas le plus hostile a l'OCR du lot : corps reduit, police condensee, texte clair
     sur fond teinte, et parfois un filigrane par-dessus le contenu.
     """
-    filigrane, type_filigrane, taille, encre = _marque(
-        tirage, 0.4, ["diagonal", "repete", "tampon"])
     return Style(
         template="facture_04.html",
         police=tirage.choice(POLICES_CONDENSEES + ["Carlito"]),
@@ -190,11 +181,7 @@ def _facture_dense(tirage: random.Random) -> Style:
         avec_rib=tirage.random() < 0.7,
         avec_stagiaires=tirage.random() < 0.5,
         avec_convention=tirage.random() < 0.6,
-        avec_montant_lettres=False,
-        filigrane=filigrane,
-        filigrane_type=type_filigrane,
-        filigrane_taille_pt=taille,
-        filigrane_encre=encre,
+        **_marque(tirage, 0.4, ["diagonal", "repete", "tampon"]),
     )
 
 
@@ -236,9 +223,6 @@ def style_rib(seed: int) -> Style:
         avec_rib=True,
         avec_stagiaires=False,
         avec_convention=False,
-        avec_montant_lettres=False,
-        filigrane="",
-        filigrane_type="",
-        filigrane_taille_pt=0,
-        filigrane_encre="",
+        # Un releve d'identite bancaire n'est ni tamponne ni filigrane.
+        **_marque(tirage, 0, []),
     )

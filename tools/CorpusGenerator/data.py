@@ -9,12 +9,14 @@ Tout est pilote par une seed. Le meme numero de document redonne exactement le m
 contenu, ce qui autorise a ne pas versionner les binaires du corpus : ils se refabriquent.
 """
 
+import random
 import unicodedata
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
 
 from faker import Faker
+from stdnum import iban as iban_stdnum
 
 from cles import cle_rib, iban_francais, numero_tva_intracommunautaire
 
@@ -175,10 +177,8 @@ class Facture:
     # en vigueur par paliers, septembre 2026 puis septembre 2027. La production contient
     # donc un melange des deux formes, le corpus doit le refleter.
     nouvelles_mentions: bool
-    adresse_livraison: Coordonnees | None
     categorie_operation: str
     coordonnees_bancaires: "Rib"
-    acompte_verse: Decimal = Decimal("0.00")
 
     @property
     def total_ht(self) -> Decimal:
@@ -193,8 +193,14 @@ class Facture:
         return self.total_ht + self.total_tva
 
     @property
-    def reste_a_payer(self) -> Decimal:
-        return self.total_ttc - self.acompte_verse
+    def taux_tva(self) -> Decimal:
+        """Taux applique au document, pour que les templates ne l'ecrivent pas en dur.
+
+        Toutes les lignes portent le meme taux : un organisme exonere l'est pour toute
+        la facture. Le jour ou un taux reduit apparaitra, c'est ici qu'il faudra decider
+        quoi afficher, pas dans les quatre templates.
+        """
+        return self.lignes[0].taux_tva
 
 
 @dataclass
@@ -203,6 +209,11 @@ class Rib:
     document a part entiere."""
 
     titulaire: str
+    # Un RIB depose en gestion documentaire appartient le plus souvent a une personne
+    # physique. L'information est portee ici plutot que devinee plus tard sur la forme du
+    # nom : ajouter une civilite ou un motif de raison sociale ferait alors mentir le
+    # manifest, sans que rien ne le signale.
+    titulaire_est_personne: bool
     adresse_titulaire: Coordonnees
     banque: str
     bic: str
@@ -218,7 +229,21 @@ class Rib:
     @property
     def iban_formate(self) -> str:
         """L'IBAN s'imprime par groupes de 4 caracteres, comme sur un vrai releve."""
-        return " ".join(self.iban[i:i + 4] for i in range(0, len(self.iban), 4))
+        return iban_stdnum.format(self.iban)
+
+
+def client_professionnel(seed: int) -> bool:
+    """Le destinataire est-il une entreprise ?
+
+    Le B2B domine largement en gestion documentaire, mais le B2C existe et ses mentions
+    obligatoires ne sont pas les memes.
+
+    Comme la repartition entre jeu de reglage et jeu de mesure, le tirage passe par un
+    flux nomme : plusieurs facettes du document derivent de la meme seed, et un modulo
+    partage les ferait s'aligner. Le jeu de reglage n'aurait alors jamais vu de facture
+    adressee a un particulier.
+    """
+    return random.Random(f"professionnel-{seed}").random() < 0.75
 
 
 def _faker(seed: int) -> Faker:
@@ -259,18 +284,18 @@ def _coordonnees(fake: Faker) -> Coordonnees:
     )
 
 
-def _titulaire_par_defaut(fake: Faker) -> str:
-    """Titulaire d'un RIB isole : le plus souvent une personne physique.
+def _titulaire_par_defaut(fake: Faker) -> tuple[str, bool]:
+    """Titulaire d'un RIB isole, et s'il s'agit d'une personne physique.
 
-    Un RIB depose en GED est majoritairement celui d'un stagiaire ou d'un salarie,
-    plus rarement celui d'une entreprise.
+    Un RIB depose en gestion documentaire est majoritairement celui d'un stagiaire ou
+    d'un salarie, plus rarement celui d'une entreprise.
     """
     if fake.boolean(chance_of_getting_true=70):
         # Le prenom est tire selon la civilite, sinon on produit des "M. Audrey".
         if fake.boolean():
-            return f"M. {fake.first_name_male()} {fake.last_name()}"
-        return f"Mme {fake.first_name_female()} {fake.last_name()}"
-    return fake.random_element(MOTIFS_CLIENT).format(nom=fake.last_name())
+            return f"M. {fake.first_name_male()} {fake.last_name()}", True
+        return f"Mme {fake.first_name_female()} {fake.last_name()}", True
+    return fake.random_element(MOTIFS_CLIENT).format(nom=fake.last_name()), False
 
 
 def generer_rib(seed: int, titulaire: str | None = None,
@@ -285,8 +310,14 @@ def generer_rib(seed: int, titulaire: str | None = None,
     banque, bic = fake.random_element(BANQUES)
     adresse_agence = _coordonnees(fake)
 
+    # Un titulaire impose vient toujours de l'organisme emetteur d'une facture, donc
+    # d'une entreprise.
+    nom_titulaire, est_personne = (
+        (titulaire, False) if titulaire else _titulaire_par_defaut(fake))
+
     return Rib(
-        titulaire=titulaire or _titulaire_par_defaut(fake),
+        titulaire=nom_titulaire,
+        titulaire_est_personne=est_personne,
         adresse_titulaire=adresse or _coordonnees(fake),
         banque=banque,
         bic=bic,
@@ -353,8 +384,7 @@ def generer_client(seed: int, professionnel: bool) -> Client:
     )
 
 
-def generer_facture(seed: int, professionnel: bool = True,
-                    nouvelles_mentions: bool | None = None) -> Facture:
+def generer_facture(seed: int, professionnel: bool = True) -> Facture:
     fake = _faker(seed)
 
     organisme = generer_organisme(seed)
@@ -397,9 +427,6 @@ def generer_facture(seed: int, professionnel: bool = True,
     date_execution = DEBUT_PERIODE + timedelta(days=jours)
     date_emission = date_execution + timedelta(days=fake.random_int(1, 10))
 
-    if nouvelles_mentions is None:
-        nouvelles_mentions = fake.boolean(chance_of_getting_true=50)
-
     return Facture(
         numero=f"FA{date_emission.year}-{fake.numerify('####')}",
         date_emission=date_emission,
@@ -411,9 +438,7 @@ def generer_facture(seed: int, professionnel: bool = True,
         reference_convention=fake.numerify("CONV-####-###"),
         intitule_action=intitule,
         stagiaires=stagiaires,
-        nouvelles_mentions=nouvelles_mentions,
-        adresse_livraison=None,
+        nouvelles_mentions=fake.boolean(chance_of_getting_true=50),
         categorie_operation="Prestations de services",
         coordonnees_bancaires=rib,
-        acompte_verse=Decimal("0.00"),
     )

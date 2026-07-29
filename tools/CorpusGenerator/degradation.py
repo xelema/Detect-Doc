@@ -25,7 +25,10 @@ from pathlib import Path
 # compilation. Desactiver la compilation les fait passer en Python pur, ce qui coute
 # environ 2,8 secondes pour douze effets sur une page A4 a 200 dpi. Negligeable pour un
 # outil qui fabrique quelques centaines de documents une fois.
-os.environ.setdefault("NUMBA_DISABLE_JIT", "1")
+# Affectation directe et non `setdefault` : un shell ou un conteneur qui aurait deja
+# pose la variable imposerait sinon son propre reglage, et le corpus produit differerait
+# sans que rien ne l'explique.
+os.environ["NUMBA_DISABLE_JIT"] = "1"
 
 import cv2  # noqa: E402
 import fitz  # noqa: E402
@@ -122,17 +125,22 @@ POIDS_PROFILS = {
 }
 
 
-def profil_degradation(seed: int, proportion: float = 0.55) -> str | None:
+PROPORTION_DEGRADES = 0.55
+
+
+def profil_degradation(seed: int) -> str | None:
     """Profil a appliquer au document, ou None s'il reste a texte natif.
 
     Les deux regimes doivent rester bien representes : sans documents propres, on perd
     la reference qui permet de chiffrer le cout de l'OCR ; sans documents degrades, on
     ne mesure pas l'OCR du tout.
     """
-    tirage = random.Random(seed * 7919)
-    if tirage.random() >= proportion:
+    tirage = random.Random(f"degradation-{seed}")
+    if tirage.random() >= PROPORTION_DEGRADES:
         return None
-    return tirage.choices(list(POIDS_PROFILS), weights=list(POIDS_PROFILS.values()))[0]
+    # Le tirage parcourt `PROFILS` et non `POIDS_PROFILS` : un profil ajoute a la table
+    # des poids sans fabrique echoue alors franchement, au lieu de n'etre jamais tire.
+    return tirage.choices(list(PROFILS), weights=[POIDS_PROFILS[n] for n in PROFILS])[0]
 
 
 def _rasteriser(source: Path) -> list[np.ndarray]:
