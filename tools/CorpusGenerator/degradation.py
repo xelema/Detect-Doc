@@ -17,6 +17,12 @@ import hashlib
 import os
 import random
 from pathlib import Path
+from configuration import (
+    POIDS_PROFILS,
+    PROBABILITE_JUMEAU as PROPORTION_DEGRADES,
+    QUALITE_JPEG as QUALITE_CONTENEUR,
+    RESOLUTION_DPI,
+)
 
 # Doit etre pose avant l'import d'augraphy, qui charge numba.
 #
@@ -45,13 +51,6 @@ from augraphy import (AugraphyPipeline, DirtyDrum, DirtyRollers,  # noqa: E402
 
 # Resolution des scanners de bureau. En dessous de 150 l'OCR se degrade pour une raison
 # qui n'a rien a voir avec le document lui-meme, ce qui fausserait la comparaison.
-RESOLUTION_DPI = 200
-
-# Qualite du JPEG qui porte l'image dans le PDF. Les artefacts de compression que l'on
-# veut mesurer sont produits par l'effet `Jpeg` de la chaine, pas par ce conteneur.
-QUALITE_CONTENEUR = 88
-
-
 def _scan_propre() -> dict:
     """Numerisation correcte sur un materiel entretenu : le cas favorable."""
     return {
@@ -108,24 +107,16 @@ def _fax() -> dict:
 PROFILS = {
     "scan-propre": _scan_propre,
     "scan-degrade": _scan_degrade,
-    "photocopie": _photocopie,
     "photo-smartphone": _photo_smartphone,
     "fax": _fax,
+    "photocopie": _photocopie,
 }
 
 # Repartition volontairement inegale : en production, un scan correct est bien plus
 # frequent qu'un fax. Un corpus qui donnerait autant de poids a chaque profil
 # surestimerait la difficulte moyenne.
-POIDS_PROFILS = {
-    "scan-propre": 45,
-    "scan-degrade": 30,
-    "photocopie": 5,
-    "photo-smartphone": 15,
-    "fax": 5,
-}
-
-
-PROPORTION_DEGRADES = 0.55
+if set(POIDS_PROFILS) != set(PROFILS):
+    raise ValueError("les poids doivent déclarer exactement les cinq profils")
 
 
 def profil_degradation(seed: int) -> str | None:

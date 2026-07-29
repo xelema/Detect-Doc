@@ -1,0 +1,21 @@
+[corpus]
+output_dir = "../../corpus"
+
+[documents]
+facture = 12
+rib = 4
+
+[split]
+dev_probability = 0.25
+
+[degradation]
+twin_probability = 0.55
+dpi = 200
+container_jpeg_quality = 88
+
+[degradation.weights]
+"scan-propre" = 45
+"scan-degrade" = 30
+"photo-smartphone" = 15
+fax = 5
+photocopie = 5

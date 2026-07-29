@@ -1,17 +1,13 @@
-"""Point d'entree du generateur de corpus.
+"""Point d'entrée du générateur de corpus.
 
 Usage :
-    .venv/bin/python generer.py facture 8
-    .venv/bin/python generer.py rib 8
+    .venv/bin/python generer.py
 
-Ecrit les documents dans `corpus/raw/` et met a jour `corpus/manifest.jsonl`.
-Le numero d'ordre sert de seed : relancer la commande reecrit exactement les memes
-fichiers, avec les memes hash.
+Les types et quantités viennent du fichier TOML global.
 """
 
-import sys
-
 import manifest
+from configuration import DOCUMENTS, FICHIER, SHA256
 from data import client_professionnel, generer_facture, generer_rib
 from degradation import degrader, profil_degradation
 from rendu import logo_svg, rendre_pdf
@@ -113,28 +109,36 @@ assert set(PRODUCTEURS) == manifest.TYPES_CONNUS, (
     f"{sorted(manifest.TYPES_CONNUS)} ne concordent pas")
 
 
-def main() -> None:
-    if len(sys.argv) != 3 or sys.argv[1] not in PRODUCTEURS:
-        types = ", ".join(PRODUCTEURS)
-        print(f"Usage : python generer.py <{types}> <nombre>")
-        sys.exit(1)
-
-    producteur = PRODUCTEURS[sys.argv[1]]
-
+def _produire(type_document: str, nombre: int) -> list[dict]:
+    producteur = PRODUCTEURS[type_document]
     entrees = []
-    for numero in range(1, int(sys.argv[2]) + 1):
+    for numero in range(1, nombre + 1):
         propre = producteur(numero)
         entrees.append(propre)
         jumeau = _jumeau_scanne(propre, numero)
         if jumeau is not None:
             entrees.append(jumeau)
+    return entrees
+
+
+def main() -> None:
+    types_inconnus = set(DOCUMENTS) - set(PRODUCTEURS)
+    if types_inconnus:
+        raise ValueError(
+            f"type(s) inconnu(s) dans [documents] : {', '.join(sorted(types_inconnus))}")
+
+    entrees = []
+    for type_document, nombre in sorted(DOCUMENTS.items()):
+        entrees.extend(_produire(type_document, nombre))
 
     manifest.enregistrer(entrees)
 
     for entree in entrees:
         print(f"  {entree['id']:<12} {entree['split']:<4} {entree['regime']:<12} "
               f"{', '.join(entree['tags'])}")
-    print(f"\n{len(entrees)} document(s) ecrits, manifest mis a jour.")
+    print(f"\nConfiguration : {FICHIER}")
+    print(f"Empreinte     : {SHA256}")
+    print(f"{len(entrees)} document(s) écrits, manifest mis à jour.")
 
 
 if __name__ == "__main__":

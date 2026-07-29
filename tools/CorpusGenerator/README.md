@@ -19,24 +19,37 @@ sudo apt-get install python3-venv libpango-1.0-0 libpangoft2-1.0-0 \
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 
-# Produire des documents
-.venv/bin/python generer.py facture 24
-.venv/bin/python generer.py rib 4
+# Produire tous les documents déclarés dans le TOML
+.venv/bin/python generer.py
 
 # Contrôler
-.venv/bin/python verifier.py     # clés de contrôle et montants en lettres
-.venv/bin/python manifest.py     # existence des fichiers, empreintes, champs
+.venv/bin/python manifest.py
+.venv/bin/python verifier.py
 ```
 
-Les documents sont écrits dans `../../corpus/raw/`, le manifest dans `../../corpus/manifest.jsonl`.
+## Configuration globale
 
-Le numéro passé en argument sert de seed. **Relancer la même commande réécrit des fichiers strictement identiques, octet pour octet.** C'est ce qui permet de ne pas versionner les documents : le manifest et le code suffisent à les refabriquer.
+`corpus-generator.toml` porte les paramètres qui décrivent le corpus :
+
+| Table | Paramètres |
+|---|---|
+| `corpus` | dossier de sortie |
+| `documents` | nombre de documents propres par type |
+| `split` | proportion stable du jeu `dev` |
+| `degradation` | proportion de jumeaux, résolution, qualité JPEG |
+| `degradation.weights` | poids relatifs des cinq profils |
+
+Les chemins relatifs sont résolus depuis le fichier TOML. Les paramètres détaillés de chaque effet Augraphy restent dans `degradation.py`, car ils définissent l'implémentation des profils.
+
+Chaque ligne du manifest porte `configuration_sha256`, l'empreinte du TOML utilisé. La reproductibilité dépend de la seed, du code, de la configuration et des versions des dépendances. À ces éléments identiques, une nouvelle exécution réécrit les mêmes fichiers octet pour octet.
 
 ## Qui utilise quoi
 
 ```mermaid
 graph TD
     generer[generer.py<br/>point d'entrée]
+    configuration[configuration.py<br/>lecture TOML]
+    toml[corpus-generator.toml]
     data[data.py<br/>données du document]
     styles[styles.py<br/>présentation]
     rendu[rendu.py<br/>HTML vers PDF]
@@ -46,6 +59,7 @@ graph TD
     verifier[verifier.py<br/>contrôles]
     tpl[templates/*.html]
 
+    generer --> configuration
     generer --> data
     generer --> styles
     generer --> rendu
@@ -56,6 +70,7 @@ graph TD
     verifier --> data
     verifier --> cles
     verifier --> rendu
+    toml --> configuration
 
     faker([Faker]) -.-> data
     jinja([Jinja2]) -.-> rendu
@@ -65,7 +80,7 @@ graph TD
     stdnum([python-stdnum]) -.-> verifier
 ```
 
-Les dépendances vont toutes dans le même sens, sans cycle. `cles.py` ne dépend de rien, `generer.py` ne dépend de personne d'autre que des quatre modules du milieu.
+Les dépendances vont toutes dans le même sens, sans cycle. `cles.py` ne dépend de rien et `configuration.py` ne dépend que de la bibliothèque standard.
 
 Deux modules n'ont volontairement aucune connaissance l'un de l'autre : **`data.py` ignore tout de la présentation, et `styles.py` ignore tout du contenu.** C'est ce qui permet de rendre la même facture dans quatre mises en page sans y toucher, et inversement de changer une règle métier sans regarder un seul template.
 

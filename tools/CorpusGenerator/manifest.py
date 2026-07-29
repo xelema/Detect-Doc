@@ -16,8 +16,12 @@ import random
 from collections import Counter
 from pathlib import Path
 
-RACINE_POC = Path(__file__).resolve().parents[2]
-DOSSIER_CORPUS = RACINE_POC / "corpus"
+from configuration import (
+    DOSSIER_CORPUS,
+    PROBABILITE_DEV,
+    SHA256 as CONFIGURATION_SHA256,
+)
+
 FICHIER_MANIFEST = DOSSIER_CORPUS / "manifest.jsonl"
 DOSSIER_DOCUMENTS = DOSSIER_CORPUS / "raw"
 
@@ -30,7 +34,8 @@ SENSIBILITES = {"public", "interne_assaini", "production_valide"}
 CHAMPS_OBLIGATOIRES = [
     "id", "fichier", "sha256", "type_attendu", "source", "licence", "sensibilite",
     "langue", "pages", "regime", "seed", "variante", "degradations", "derive_de",
-    "tags", "pii_injectees", "split", "valide_par", "date_validation",
+    "tags", "pii_injectees", "split", "configuration_sha256", "valide_par",
+    "date_validation",
 ]
 
 REGIMES = {"texte-natif", "scanne"}
@@ -54,7 +59,7 @@ def _split(seed: int) -> str:
     Le flux depend du seul numero du document : ajouter des documents ne redistribue
     jamais ceux qui existent deja.
     """
-    return "dev" if random.Random(f"split-{seed}").random() < 0.25 else "test"
+    return "dev" if random.Random(f"split-{seed}").random() < PROBABILITE_DEV else "test"
 
 
 def _chemin_relatif(chemin: Path) -> str:
@@ -87,6 +92,7 @@ def construire_entree(identifiant: str, chemin: Path, type_attendu: str, seed: i
         # d'evaluer un masquage automatique sans annoter le corpus a la main.
         "pii_injectees": pii,
         "split": _split(seed),
+        "configuration_sha256": CONFIGURATION_SHA256,
         # Renseignes le jour ou le perimetre du corpus est valide par un responsable.
         # Tant qu'ils sont nuls, aucune validation n'a eu lieu : ne jamais les
         # pre-remplir, ils font foi.
@@ -128,15 +134,8 @@ def lire() -> dict[str, dict]:
 
 
 def enregistrer(nouvelles: list[dict]) -> None:
-    """Fusionne les entrees fournies avec le manifest existant, puis reecrit tout.
-
-    Regenerer un seul type ne doit pas effacer les autres, et regenerer deux fois le
-    meme document doit produire exactement le meme fichier.
-    """
-    entrees = lire()
-    for entree in nouvelles:
-        entrees[entree["id"]] = entree
-
+    """Réécrit le manifest avec le corpus décrit par la configuration globale."""
+    entrees = {entree["id"]: entree for entree in nouvelles}
     FICHIER_MANIFEST.parent.mkdir(parents=True, exist_ok=True)
     contenu = "\n".join(
         json.dumps(entrees[identifiant], ensure_ascii=False, sort_keys=True)
@@ -170,6 +169,11 @@ def valider() -> list[str]:
             anomalies.append(f"{identifiant} : split invalide '{entree.get('split')}'")
         if entree.get("regime") not in REGIMES:
             anomalies.append(f"{identifiant} : regime inconnu '{entree.get('regime')}'")
+        empreinte_configuration = entree.get("configuration_sha256")
+        if (not isinstance(empreinte_configuration, str)
+                or len(empreinte_configuration) != 64
+                or any(c not in "0123456789abcdef" for c in empreinte_configuration)):
+            anomalies.append(f"{identifiant} : empreinte de configuration invalide")
 
         origine = entree.get("derive_de")
         if origine is not None:
