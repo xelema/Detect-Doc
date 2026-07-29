@@ -117,9 +117,9 @@ PROFILS = {
 # frequent qu'un fax. Un corpus qui donnerait autant de poids a chaque profil
 # surestimerait la difficulte moyenne.
 POIDS_PROFILS = {
-    "scan-propre": 30,
+    "scan-propre": 45,
     "scan-degrade": 30,
-    "photocopie": 20,
+    "photocopie": 5,
     "photo-smartphone": 15,
     "fax": 5,
 }
