@@ -89,14 +89,31 @@ def _reprise_physique(propre: dict, seed: int) -> dict:
 
 
 def _produire(type_document: str, nombre: int) -> list[dict]:
+    """Produit exactement `nombre` entrées de manifest pour ce type.
+
+    La configuration compte les documents écrits, pas les unités générées : la facture,
+    le devis et les trois types bancaires donnent une ou deux entrées par unité, une unité
+    sur N se dédoublant en un jumeau scanné. La boucle produit donc autant d'unités qu'il
+    en faut pour tomber sur le compte demandé, plutôt qu'un nombre d'unités fixé d'avance
+    qui laisserait l'effectif réel dépendre de la règle de dédoublement.
+
+    Le jumeau n'est fabriqué que s'il reste de la place : le produire pour le jeter
+    laisserait sur le disque un fichier absent du manifest, que le validateur ne verrait
+    pas et que la prochaine exécution ne nettoierait pas.
+
+    Les identifiants restant attachés au numéro d'unité, augmenter un effectif prolonge
+    le corpus sans jamais redistribuer ce qui existe déjà.
+    """
     document = TYPES[type_document]
-    entrees = []
-    for numero in range(1, nombre + 1):
+    entrees: list[dict] = []
+    numero = 0
+    while len(entrees) < nombre:
+        numero += 1
         propre = document.produire(numero)
 
         if document.autonome:
             # produire() a déjà tranché lui-même le régime final : ni reprise forcée,
-            # ni jumeau probabiliste. Voir documents/base.py.
+            # ni jumeau dégradé. Voir documents/base.py.
             entrees.append(propre)
             continue
 
@@ -105,6 +122,8 @@ def _produire(type_document: str, nombre: int) -> list[dict]:
             continue
 
         entrees.append(propre)
+        if len(entrees) == nombre:
+            break
         jumeau = _jumeau_scanne(propre, numero)
         if jumeau is not None:
             entrees.append(jumeau)

@@ -2,31 +2,37 @@
 output_dir = "../../corpus"
 
 [documents]
-# Facture et devis a parite : c'est la paire confondable du corpus, et une matrice de
-# confusion ne se lit que sur des effectifs comparables.
-facture = 12
-devis = 12
-# Les trois voisins bancaires se dédoublent à parité, comme la facture et le devis : une
-# matrice de confusion ne se lit que sur des effectifs comparables.
-rib = 4
-sepa = 4
-rib_sepa = 4
-# La carte de visite ne produit qu'un fichier par entree : elle est reprise d'un carton
-# physique, et sa numerisation remplace l'original au lieu de s'y ajouter. Compter donc
-# une entree par unite ici, contre deux environ pour les autres types.
+# Nombre de documents écrits au manifest pour chaque type, jumeaux scannés compris. La
+# facture, le devis et les trois types bancaires donnent une ou deux entrées par unité
+# générée, selon la règle de dédoublement plus bas : le générateur produit autant d'unités
+# qu'il en faut pour tomber sur le compte demandé.
+#
+# Facture et devis à parité, et les trois voisins bancaires à parité entre eux : ce sont
+# les groupes confondables du corpus, et une matrice de confusion ne se lit que sur des
+# effectifs comparables.
+facture = 20
+devis = 20
+rib = 7
+sepa = 7
+rib_sepa = 7
+# Les trois types suivants produisent une seule entrée par unité, leur effectif se lit
+# donc aussi comme un nombre de mises en page couvertes. Dix cartes de visite et dix
+# feuilles couvrent deux fois chacune de leurs cinq structures, quinze offres couvrent
+# trois fois chacun des cinq templates de site.
 carte_visite = 10
-# Une feuille produit une seule entrée, dans son régime d'acquisition final.
-# Dix unités couvrent deux fois chacune des cinq structures.
 feuille_emar = 10
-# Une offre produit une seule entrée : texte natif ou capture nette selon le tirage,
-# jamais les deux. Quinze unités couvrent trois fois chacun des cinq templates de site.
 offre_emploi = 15
 
 [split]
 dev_probability = 0.25
 
 [degradation]
-twin_probability = 0.55
+# Une unité sur N se dédouble en un jumeau scanné du même contenu. Le rang décide, pas un
+# tirage : chaque type porte ainsi la même proportion de documents scannés, et le nombre
+# de paires disponibles pour chiffrer le coût de l'OCR est connu avant la génération.
+# La part de documents scannés qui en découle vaut 1 / (1 + N) : 50 % à 1, où chaque
+# document a son jumeau, 33 % à 2, 25 % à 3.
+twin_every = 2
 dpi = 200
 container_jpeg_quality = 88
 

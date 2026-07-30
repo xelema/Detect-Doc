@@ -21,7 +21,7 @@ class DocumentType(ABC):
 
     `autonome` signale un type dont `produire` a déjà tranché lui-même son régime final,
     texte natif ou capture nette, sans détour par la reprise d'un objet. `generer.py`
-    n'y ajoute alors ni reprise forcée ni jumeau dégradé probabiliste : contrairement à
+    n'y ajoute alors ni reprise forcée ni jumeau dégradé : contrairement à
     la carte de visite, ce n'est pas la reprise d'un objet physique, et contrairement à
     la facture, il n'existe jamais deux versions du même document. Une offre d'emploi
     imprimée depuis un navigateur est soit un fichier natif, soit une capture d'écran,

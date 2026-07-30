@@ -18,7 +18,7 @@ DOCUMENTS = TOML["documents"]
 PROBABILITE_DEV = float(TOML["split"]["dev_probability"])
 
 DEGRADATION = TOML["degradation"]
-PROBABILITE_JUMEAU = float(DEGRADATION["twin_probability"])
+UNITE_SUR_N_DEDOUBLEE = int(DEGRADATION["twin_every"])
 RESOLUTION_DPI = DEGRADATION["dpi"]
 QUALITE_JPEG = DEGRADATION["container_jpeg_quality"]
 POIDS_PROFILS = DEGRADATION["weights"]

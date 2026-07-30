@@ -19,7 +19,7 @@ import random
 from pathlib import Path
 from configuration import (
     POIDS_PROFILS,
-    PROBABILITE_JUMEAU as PROPORTION_DEGRADES,
+    UNITE_SUR_N_DEDOUBLEE,
     QUALITE_JPEG as QUALITE_CONTENEUR,
     RESOLUTION_DPI,
 )
@@ -146,13 +146,23 @@ def profil_degradation(seed: int) -> str | None:
     Les deux régimes doivent rester bien représentés : sans documents propres, on perd
     la référence qui permet de chiffrer le coût de l'OCR ; sans documents dégradés, on
     ne mesure pas l'OCR du tout.
+
+    Le dédoublement est arithmétique et non tiré au sort : sur quatre unités, un tirage
+    à 55 % en donne aussi bien deux que quatre, et chaque type se retrouverait avec sa
+    propre proportion de documents scannés. Un type plus mal classé qu'un autre serait
+    alors impossible à départager de sa part de scans, et la matrice de confusion
+    mesurerait un écart que personne n'a voulu. Le nombre de paires devient du même coup
+    connu avant la génération, ce qui compte puisque c'est lui qui fixe la précision de
+    la comparaison entre document propre et document scanné.
     """
-    tirage = random.Random(f"degradation-{seed}")
-    if tirage.random() >= PROPORTION_DEGRADES:
+    if seed % UNITE_SUR_N_DEDOUBLEE:
         return None
     # Le tirage parcourt PROFILS et non POIDS_PROFILS : un profil ajouté à la table
     # des poids sans fabrique échoue alors franchement, au lieu de n'être jamais tiré.
-    return tirage.choices(list(PROFILS), weights=[POIDS_PROFILS[n] for n in PROFILS])[0]
+    # L'aléa reste ici à sa place : il produit de la variété de défauts, il ne décide
+    # pas de la structure du corpus.
+    return random.Random(f"degradation-{seed}").choices(
+        list(PROFILS), weights=[POIDS_PROFILS[n] for n in PROFILS])[0]
 
 
 def _rasteriser(source: Path) -> list[np.ndarray]:
