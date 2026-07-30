@@ -17,17 +17,30 @@ from stdnum.fr import siret as siret_stdnum
 from stdnum.fr import tva as tva_stdnum
 
 from cles import cle_rib
-from data import (ACCROCHES, ANNOTATIONS_EMARGEMENT, CERTIFICATIONS, FONCTIONS,
-                  FONCTIONS_STAGIAIRES, MOTIFS_CLIENT, MOTIFS_ORGANISME,
-                  NATURES_PRESENCE, VILLES, client_professionnel,
-                  generer_carte_visite, generer_devis, generer_facture,
-                  generer_feuille_emargement)
+from documents.carte_visite import (ACCROCHES, CERTIFICATIONS, FONCTIONS,
+                                    POLICES_CARTE, POLICES_CARTE_RONDES,
+                                    POLICES_CARTE_SERIF, generer_carte_visite)
+from documents.commun import (MOTIFS_CLIENT, MOTIFS_ORGANISME, VILLES,
+                              POLICES_CONDENSEES, POLICES_MANUSCRITES, POLICES_MONO,
+                              POLICES_SANS, POLICES_SERIF, client_professionnel)
+from documents.devis import generer_devis, style_devis
+from documents.facture import generer_facture, style_facture
+from documents.feuille_emargement import (ANNOTATIONS_EMARGEMENT, FAMILLES_EMARGEMENT,
+                                          FONCTIONS_STAGIAIRES, NATURES_PRESENCE,
+                                          generer_feuille_emargement,
+                                          style_feuille_emargement)
 from manifest import hash_fichier
 from rendu import logo_svg, montant_en_lettres, rendre_pdf
-from styles import (FAMILLES_EMARGEMENT, POLICES_MANUSCRITES, POLICES_UTILISEES,
-                    style_devis, style_facture, style_feuille_emargement)
 
 NB_ECHANTILLONS = 50
+
+# Toutes les familles que le générateur peut demander, quel que soit le type de document.
+# Assemblée ici plutôt que dans documents/, qui n'a pas besoin d'un registre agrégé :
+# seul ce vérificateur contrôle qu'elles sont installées et couvrent le français.
+POLICES_UTILISEES = sorted(set(
+    POLICES_SANS + POLICES_SERIF + POLICES_MONO + POLICES_CONDENSEES
+    + POLICES_CARTE + POLICES_CARTE_RONDES + POLICES_CARTE_SERIF + POLICES_MANUSCRITES
+))
 
 # Valeurs choisies pour couvrir les pièges du français : la plage 17 à 19 qui n'a pas de
 # nom de dizaine, la conjonction du "et un", les vingtaines au-delà de soixante, et le

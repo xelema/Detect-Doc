@@ -12,7 +12,8 @@ ENV HOME=/tmp
 # titre que les templates. Trois groupes : les familles bureautiques des pieces
 # comptables, les familles d'imprimeur des cartes de visite, et les manuscrites qui
 # servent aux cartes completees a la main. Toute police retiree d'ici change le rendu du
-# corpus sans qu'aucun test ne le signale : la liste suit celle de `styles.py`.
+# corpus sans qu'aucun test ne le signale : la liste suit celle de `documents/commun.py`
+# et `documents/carte_visite.py`.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         fonts-crosextra-caladea \

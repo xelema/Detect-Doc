@@ -3,17 +3,35 @@
 Usage :
     .venv/bin/python generer.py
 
-Les types et quantités viennent du fichier TOML global.
+Les types et quantités viennent du fichier TOML global. Ce module ne fait qu'orchestrer :
+la génération de données, le style et la production du manifest de chaque type vivent
+dans son propre fichier sous `documents/`. Ajouter un type demande d'y créer une classe
+sur le même modèle, de l'enregistrer ci-dessous dans TYPES, et d'ajouter son nom à
+`manifest.TYPES_CONNUS`.
 """
 
 import manifest
+from documents.carte_visite import DOCUMENT as carte_visite
+from documents.devis import DOCUMENT as devis
+from documents.facture import DOCUMENT as facture
+from documents.feuille_emargement import DOCUMENT as feuille_emargement
+from documents.rib import DOCUMENT as rib
 from configuration import DOCUMENTS, FICHIER, SHA256
-from data import (client_professionnel, generer_carte_visite, generer_devis,
-                  generer_facture, generer_feuille_emargement, generer_rib)
 from degradation import degrader, profil_acquisition, profil_degradation
-from rendu import logo_svg, portrait_svg, qr_svg, rendre_pdf
-from styles import (style_carte_visite, style_devis, style_facture,
-                    style_feuille_emargement, style_rib)
+
+TYPES = {
+    document.type_attendu: document
+    for document in [facture, devis, rib, carte_visite, feuille_emargement]
+}
+
+# Les types produits et les types que le manifest accepte sont déclarés dans deux
+# modules, manifest ne pouvant pas importer documents/ sans tirer les bibliothèques de
+# rendu (WeasyPrint, Augraphy) dans son propre outil de validation, plus léger. Le
+# contrôle échoue bruyamment plutôt que de laisser le validateur signaler chaque nouveau
+# document comme un type inconnu.
+assert set(TYPES) == manifest.TYPES_CONNUS, (
+    f"types produits {sorted(TYPES)} et types connus du manifest "
+    f"{sorted(manifest.TYPES_CONNUS)} ne concordent pas")
 
 
 def _jumeau_scanne(propre: dict, seed: int) -> dict | None:
@@ -29,265 +47,6 @@ def _jumeau_scanne(propre: dict, seed: int) -> dict | None:
     return manifest.entree_derivee(
         propre, identifiant, chemin,
         regime="scanne", degradations=effets, tags=propre["tags"] + [profil])
-
-
-def _pii_piece(piece) -> dict:
-    """Vérité terrain des données personnelles d'une facture ou d'un devis.
-
-    Les deux types portent exactement les mêmes identifiants aux mêmes endroits : c'est
-    d'ailleurs ce qui les rend confondables. Un seul extracteur pour les deux évite que
-    l'un des deux se mette à déclarer moins que l'autre sans raison.
-    """
-    return {
-        "raison_sociale_emetteur": piece.organisme.raison_sociale,
-        "siret_emetteur": piece.organisme.siret,
-        "email_emetteur": piece.organisme.email,
-        "telephone_emetteur": piece.organisme.telephone,
-        "designation_client": piece.client.designation,
-        "contact_client": piece.client.contact,
-        "iban": piece.coordonnees_bancaires.iban,
-        "noms": piece.stagiaires,
-    }
-
-
-def _tags_piece(piece, style) -> list[str]:
-    tags = ["b2b" if piece.client.est_professionnel else "b2c"]
-    if piece.organisme.exonere_tva:
-        tags.append("tva-exoneree")
-    if style.filigrane:
-        tags.append("filigrane")
-    return tags
-
-
-def produire_facture(numero: int) -> dict:
-    facture = generer_facture(numero, professionnel=client_professionnel(numero))
-    style = style_facture(numero)
-    identifiant = f"fac-{numero:04d}"
-    chemin = manifest.DOSSIER_DOCUMENTS / f"{identifiant}.pdf"
-
-    pages = rendre_pdf(
-        style.template, chemin,
-        p=facture,
-        s=style,
-        logo=logo_svg(facture.organisme.raison_sociale, style.couleur),
-        # Date portée par le tampon à l'encre, quand le style en pose un.
-        date_marque=facture.date_echeance,
-    )
-
-    tags = _tags_piece(facture, style)
-    if facture.nouvelles_mentions:
-        tags.append("mentions-reforme")
-
-    return manifest.construire_entree(
-        identifiant, chemin, "facture", numero, pages,
-        variante=style.as_dict(),
-        pii=_pii_piece(facture),
-        tags=tags,
-    )
-
-
-def produire_devis(numero: int) -> dict:
-    devis = generer_devis(numero, professionnel=client_professionnel(numero))
-    style = style_devis(numero)
-    identifiant = f"dev-{numero:04d}"
-    chemin = manifest.DOSSIER_DOCUMENTS / f"{identifiant}.pdf"
-
-    pages = rendre_pdf(
-        style.template, chemin,
-        p=devis,
-        s=style,
-        logo=logo_svg(devis.organisme.raison_sociale, style.couleur),
-        # Un devis se tamponne le jour où il est accepté, donc au plus tard à l'échéance
-        # de sa validité.
-        date_marque=devis.date_validite,
-    )
-
-    # L'intitulé et le cartouche sont les deux marqueurs qui séparent le devis de la
-    # facture. Les écrire dans le manifest permettra de mesurer leur poids réel : un
-    # classifieur qui ne tiendrait que grâce au mot « devis » s'effondrera sur les
-    # « proposition commerciale », et le rapport doit pouvoir le montrer.
-    tags = _tags_piece(devis, style)
-    tags.append(devis.libelle.split()[0].lower())
-    if style.avec_acceptation:
-        tags.append("cartouche-accord")
-    if devis.acompte_pourcentage:
-        tags.append("acompte")
-
-    return manifest.construire_entree(
-        identifiant, chemin, "devis", numero, pages,
-        variante=style.as_dict(),
-        pii=_pii_piece(devis),
-        tags=tags,
-    )
-
-
-def produire_rib(numero: int) -> dict:
-    rib = generer_rib(numero)
-    style = style_rib(numero)
-    identifiant = f"rib-{numero:04d}"
-    chemin = manifest.DOSSIER_DOCUMENTS / f"{identifiant}.pdf"
-
-    pages = rendre_pdf(
-        style.template, chemin,
-        r=rib,
-        s=style,
-        logo=logo_svg(rib.banque, style.couleur),
-    )
-
-    return manifest.construire_entree(
-        identifiant, chemin, "rib", numero, pages,
-        variante=style.as_dict(),
-        pii={
-            "titulaire": rib.titulaire,
-            "iban": rib.iban,
-            "bic": rib.bic,
-            "adresse_titulaire": f"{rib.adresse_titulaire.ligne1}, "
-                                 f"{rib.adresse_titulaire.code_postal} "
-                                 f"{rib.adresse_titulaire.ville}",
-        },
-        tags=["titulaire-personne" if rib.titulaire_est_personne
-              else "titulaire-entreprise"],
-    )
-
-
-def produire_carte_visite(numero: int) -> dict:
-    carte = generer_carte_visite(numero)
-    style = style_carte_visite(numero)
-    identifiant = f"cvi-{numero:04d}"
-    chemin = manifest.DOSSIER_DOCUMENTS / f"{identifiant}.pdf"
-
-    pages = rendre_pdf(
-        style.template, chemin,
-        c=carte,
-        s=style,
-        logo=logo_svg(carte.organisme, style.couleur),
-        qr=qr_svg(numero),
-        portrait=portrait_svg(style.couleur),
-    )
-
-    tags = [style.acquisition, style.orientation]
-    if style.angle_deg in (90, 270):
-        tags.append("quart-de-tour")
-    if style.manuscrite:
-        tags.append("manuscrite")
-    if style.verso != "aucun":
-        tags.append(f"verso-{style.verso}")
-    if not style.avec_logo:
-        tags.append("sans-logo")
-
-    # Seules les coordonnées réellement imprimées sont déclarées. Le manifest sert de
-    # vérité terrain au masquage : y annoncer une donnée absente du document la ferait
-    # compter plus tard comme une détection manquée, et le rappel mesuré serait faux.
-    pii = {
-        "nom_complet": carte.nom_complet,
-        "email": carte.email,
-        "telephone_mobile": carte.mobile,
-        "organisme": carte.organisme,
-    }
-    if style.avec_fixe:
-        pii["telephone_fixe"] = carte.fixe
-    if style.avec_adresse:
-        pii["adresse"] = carte.adresse_complete
-    if style.avec_reseau:
-        pii["reseau_social"] = carte.reseau
-
-    return manifest.construire_entree(
-        identifiant, chemin, "carte_visite", numero, pages,
-        variante=style.as_dict(),
-        pii=pii,
-        tags=tags,
-    )
-
-
-def produire_feuille_emargement(numero: int) -> dict:
-    style = style_feuille_emargement(numero)
-    nombre_participants = style.lignes_par_page * style.nombre_pages
-    feuille = generer_feuille_emargement(
-        numero,
-        nombre_participants=nombre_participants,
-        nombre_creneaux=style.nombre_creneaux,
-        mensuel=style.mensuel,
-    )
-    groupes = [
-        feuille.participants[index:index + style.lignes_par_page]
-        for index in range(0, len(feuille.participants), style.lignes_par_page)
-    ]
-
-    identifiant = f"fem-{numero:04d}"
-    chemin = manifest.DOSSIER_DOCUMENTS / f"{identifiant}.pdf"
-    pages = rendre_pdf(
-        style.template, chemin,
-        f=feuille,
-        s=style,
-        groupes=groupes,
-        logo=logo_svg(feuille.organisme.raison_sociale, style.couleur),
-    )
-    if pages != style.nombre_pages:
-        raise RuntimeError(
-            f"{identifiant} : {pages} page(s) rendue(s) au lieu de "
-            f"{style.nombre_pages}")
-
-    tags = [style.famille, style.acquisition]
-    tags.append("sans-titre" if style.titre is None else "avec-titre")
-    if style.rotation_page_deg in (90, 270):
-        tags.append("quart-de-tour")
-    if pages > 1:
-        tags.append("multipage")
-    if not style.avec_bloc_formateur:
-        tags.append("sans-bloc-formateur")
-    if feuille.taux_remplissage <= 0.35:
-        tags.append("grille-peu-remplie")
-    if style.residu_publipostage:
-        tags.append("publipostage-inacheve")
-
-    pii = {
-        "noms_participants": [participant.nom_complet
-                              for participant in feuille.participants],
-        "nom_formateur": feuille.formateur.nom_complet,
-    }
-    if style.avec_identifiant_metier:
-        pii["rpps"] = [participant.rpps for participant in feuille.participants]
-        pii["adeli"] = [participant.adeli for participant in feuille.participants]
-
-    variante = {
-        **style.as_dict(),
-        "taux_remplissage": feuille.taux_remplissage,
-    }
-    return manifest.construire_entree(
-        identifiant, chemin, "feuille_emar", numero, pages,
-        variante=variante,
-        pii=pii,
-        tags=tags,
-    )
-
-
-PRODUCTEURS = {
-    "facture": produire_facture,
-    "devis": produire_devis,
-    "rib": produire_rib,
-    "carte_visite": produire_carte_visite,
-    "feuille_emar": produire_feuille_emargement,
-}
-
-# Types dont le document déposé est la reprise d'un objet physique. Une carte de visite
-# arrive presque toujours photographiée ou scannée, pas sous forme de fichier : en
-# produire autant d'exemplaires propres que de reprises en ferait le type le plus facile
-# du corpus, alors que c'est le plus pauvre en signal, et fausserait du même coup la
-# comparaison entre texte natif et scan sur tout le corpus.
-#
-# « Presque toujours » et non « toujours » : le style tire une minorité de documents en
-# mode `fichier`, l'export d'un outil de mise en page déposé tel quel. Ceux-là restent à
-# texte natif. Le cas est rare mais il existe, et un corpus qui n'en contiendrait aucun
-# ne dirait rien de la façon dont le service le traite.
-TYPES_PHYSIQUES = {"carte_visite", "feuille_emar"}
-
-# Les types produits et les types que le manifest accepte sont déclarés dans deux
-# modules, manifest ne pouvant pas importer generer sans cycle. Le contrôle échoue
-# bruyamment plutôt que de laisser le validateur signaler chaque nouveau document comme
-# un type inconnu.
-assert set(PRODUCTEURS) == manifest.TYPES_CONNUS, (
-    f"types produits {sorted(PRODUCTEURS)} et types connus du manifest "
-    f"{sorted(manifest.TYPES_CONNUS)} ne concordent pas")
 
 
 def _reprise_physique(propre: dict, seed: int) -> dict:
@@ -326,12 +85,12 @@ def _reprise_physique(propre: dict, seed: int) -> dict:
 
 
 def _produire(type_document: str, nombre: int) -> list[dict]:
-    producteur = PRODUCTEURS[type_document]
+    document = TYPES[type_document]
     entrees = []
     for numero in range(1, nombre + 1):
-        propre = producteur(numero)
+        propre = document.produire(numero)
 
-        if type_document in TYPES_PHYSIQUES:
+        if document.physique:
             entrees.append(_reprise_physique(propre, numero))
             continue
 
@@ -343,7 +102,7 @@ def _produire(type_document: str, nombre: int) -> list[dict]:
 
 
 def main() -> None:
-    types_inconnus = set(DOCUMENTS) - set(PRODUCTEURS)
+    types_inconnus = set(DOCUMENTS) - set(TYPES)
     if types_inconnus:
         raise ValueError(
             f"type(s) inconnu(s) dans [documents] : {', '.join(sorted(types_inconnus))}")

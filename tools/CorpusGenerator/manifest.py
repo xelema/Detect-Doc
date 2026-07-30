@@ -25,6 +25,11 @@ from configuration import (
 FICHIER_MANIFEST = DOSSIER_CORPUS / "manifest.jsonl"
 DOSSIER_DOCUMENTS = DOSSIER_CORPUS / "raw"
 
+# Un mot par type produit sous documents/, où chacun vit dans son propre fichier
+# (documents/base.py explique le patron). Cette liste reste indépendante de ce dossier :
+# manifest.py doit pouvoir valider un corpus déjà produit sans importer les
+# bibliothèques de rendu (WeasyPrint, Augraphy) que documents/ entraîne avec lui.
+# generer.py vérifie au démarrage que les deux listes concordent.
 TYPES_CONNUS = {"facture", "devis", "rib", "carte_visite", "feuille_emar"}
 SENSIBILITES = {"public", "interne_assaini", "production_valide"}
 

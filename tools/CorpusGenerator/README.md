@@ -14,7 +14,7 @@ docker compose run --rm generator
 
 # Contrôler
 docker compose run --rm --entrypoint python generator manifest.py
-    docker compose run --rm --entrypoint python generator verifier.py
+docker compose run --rm --entrypoint python generator verifier.py
 ```
 
 Le corpus est écrit directement dans `Detect-Doc/corpus` grâce au volume défini dans `compose.yaml`. Le fichier TOML local est monté en lecture seule dans le conteneur.
@@ -27,7 +27,8 @@ Sans Docker, l'outil tourne sous WSL, pas directement sous Windows : WeasyPrint 
 
 ```bash
 # Prérequis système, une fois. La liste des polices doit rester alignée sur celle du
-# Dockerfile et sur les listes de styles.py : `verifier.py` échoue si l'une manque.
+# Dockerfile et sur les listes de documents/commun.py et documents/carte_visite.py :
+# `verifier.py` échoue si l'une manque.
 sudo apt-get install python3-venv libpango-1.0-0 libpangoft2-1.0-0 \
                      poppler-utils fonts-liberation fonts-dejavu-core \
                      fonts-crosextra-carlito fonts-crosextra-caladea \
@@ -69,11 +70,10 @@ Chaque ligne du manifest porte `configuration_sha256`, l'empreinte du TOML utili
 
 ```mermaid
 graph TD
-    generer[generer.py<br/>point d'entrée]
+    generer[generer.py<br/>point d'entrée, registre des types]
     configuration[configuration.py<br/>lecture TOML]
     toml[corpus-generator.toml]
-    data[data.py<br/>données du document]
-    styles[styles.py<br/>présentation]
+    documents[documents/*.py<br/>un fichier par type, cf. documents/base.py]
     rendu[rendu.py<br/>HTML vers PDF]
     degradation[degradation.py<br/>scan et photo]
     manifest[manifest.py<br/>traçabilité]
@@ -82,19 +82,19 @@ graph TD
     tpl[templates/*.html]
 
     generer --> configuration
-    generer --> data
-    generer --> styles
-    generer --> rendu
+    generer --> documents
     generer --> degradation
     generer --> manifest
-    data --> cles
+    documents --> cles
+    documents --> manifest
+    documents --> rendu
     rendu --> tpl
-    verifier --> data
+    verifier --> documents
     verifier --> cles
     verifier --> rendu
     toml --> configuration
 
-    faker([Faker]) -.-> data
+    faker([Faker]) -.-> documents
     jinja([Jinja2]) -.-> rendu
     weasy([WeasyPrint]) -.-> rendu
     augraphy([Augraphy]) -.-> degradation
@@ -102,9 +102,9 @@ graph TD
     stdnum([python-stdnum]) -.-> verifier
 ```
 
-Les dépendances vont toutes dans le même sens, sans cycle. `cles.py` ne dépend de rien et `configuration.py` ne dépend que de la bibliothèque standard.
+Les dépendances vont toutes dans le même sens, sans cycle. `cles.py` ne dépend de rien et `configuration.py` ne dépend que de la bibliothèque standard. `manifest.py` non plus ne dépend jamais de `documents/` : il doit rester utilisable seul, pour valider un corpus déjà produit sans importer WeasyPrint ni Augraphy.
 
-Deux modules n'ont volontairement aucune connaissance l'un de l'autre : **`data.py` ignore tout de la présentation, et `styles.py` ignore tout du contenu.** C'est ce qui permet de rendre la même pièce dans quatre mises en page sans y toucher, et inversement de changer une règle métier sans regarder un seul template.
+Chaque type de document vit dans son propre fichier sous `documents/`, avec son modèle de données, sa présentation et sa production du manifest : cf. `documents/base.py` pour le patron commun, et la section [Faire évoluer](#faire-évoluer) pour l'ajout d'un type. `documents/commun.py` porte ce que plusieurs types partagent (identité de l'organisme et du client, vocabulaire du secteur, présentation d'une pièce comptable) ; `documents/piece.py` porte le tronc commun propre à la facture et au devis. Rien n'empêche un type de ne dépendre d'aucun des deux.
 
 ## La paire facture et devis
 
@@ -292,22 +292,20 @@ Le devis n'est pas tiré sur la même seed que la facture de même numéro. Sans
 ```mermaid
 sequenceDiagram
     participant G as generer.py
-    participant D as data.py
-    participant S as styles.py
+    participant T as documents/facture.py<br/>(ou tout autre type)
     participant R as rendu.py
     participant X as degradation.py
     participant M as manifest.py
 
-    G->>D: generer_facture(seed) ou generer_devis(seed)
-    D->>D: Faker seedé, clés de contrôle calculées
-    D-->>G: Piece
-    G->>S: style_facture(seed) ou style_devis(seed)
-    S-->>G: Style (template, police, corps, marque)
-    G->>R: rendre_pdf(template, chemin, p, s, logo)
+    G->>T: TYPES["facture"].produire(numero)
+    T->>T: generer_facture(seed), Faker seedé, clés de contrôle calculées
+    T->>T: style_facture(seed) : template, police, corps, marque
+    T->>R: rendre_pdf(template, chemin, p, s, logo)
     R->>R: Jinja2 puis WeasyPrint
-    R-->>G: nombre de pages
-    G->>M: construire_entree(...)
-    M-->>G: entrée du document propre
+    R-->>T: nombre de pages
+    T->>M: construire_entree(...)
+    M-->>T: entrée du document propre
+    T-->>G: entrée du document propre
 
     G->>X: profil_degradation(seed)
     X-->>G: profil, ou None
@@ -343,7 +341,7 @@ Un document et son jumeau tombent toujours dans le même jeu, puisqu'ils partage
 
 ### Les types repris d'un objet physique
 
-Certains types ne se déposent presque jamais sous leur forme bureautique initiale. Une carte de visite reprend un carton, une feuille d'émargement reprend une feuille signée à la main. On les photographie ou on les scanne. Ces types sont déclarés dans `TYPES_PHYSIQUES`, et leur rendu propre n'est qu'une étape de fabrication, écrasée par sa numérisation. Ils n'ont donc **ni jumeau ni `derive_de`** : une seule entrée au manifest par unité déclarée au TOML, là où les autres types en produisent deux environ.
+Certains types ne se déposent presque jamais sous leur forme bureautique initiale. Une carte de visite reprend un carton, une feuille d'émargement reprend une feuille signée à la main. On les photographie ou on les scanne. Ces types portent `physique = True` sur leur classe dans `documents/`, et leur rendu propre n'est qu'une étape de fabrication, écrasée par sa numérisation. Ils n'ont donc **ni jumeau ni `derive_de`** : une seule entrée au manifest par unité déclarée au TOML, là où les autres types en produisent deux environ.
 
 Le style tire l'un de **trois modes d'acquisition**, et le reste de la chaîne le suit.
 
@@ -359,17 +357,24 @@ Le profil de dégradation n'est pas tiré au hasard mais déduit du mode, par `p
 
 ## Les polices
 
-Les polices décident de ce que l'OCR voit : elles font partie du corpus au même titre que les templates. `styles.py` en déclare trois groupes, les familles bureautiques des pièces comptables, les familles d'imprimeur des cartes de visite, et les manuscrites.
+Les polices décident de ce que l'OCR voit : elles font partie du corpus au même titre que les templates. `documents/commun.py` déclare les familles bureautiques des pièces comptables et les manuscrites, partagées par plusieurs types ; `documents/carte_visite.py` ajoute les familles d'imprimeur propres à ce seul type.
 
 Deux pannes silencieuses guettent, et `verifier.py` les contrôle. Une police absente du système est remplacée sans un mot par la police de secours, et le corpus sort avec bien moins de variété que le manifest n'en annonce. Un caractère non dessiné est emprunté ailleurs, si bien qu'un nom peut sortir avec un `É` d'un autre corps au milieu d'un mot. Les capitales accentuées sont le vrai piège : la plupart des polices manuscrites libres ne les dessinent pas.
 
-Toute police ajoutée à `styles.py` doit donc l'être aussi au `Dockerfile` et à la commande d'installation plus haut.
+Toute police ajoutée dans `documents/` doit donc l'être aussi au `Dockerfile` et à la commande d'installation plus haut.
 
 ## Faire évoluer
 
-**Ajouter une mise en page à la facture et au devis.** Écrire le template dans `templates/`, ajouter une fabrique dans `styles.py` et l'inscrire dans `FABRIQUES_PIECE`. Le template est choisi en tournant sur la seed plutôt qu'au hasard, pour qu'aucune mise en page ne reste sous-représentée sur un corpus de taille modeste.
+**Ajouter une mise en page à la facture et au devis.** Écrire le template dans `templates/`, ajouter une fabrique dans `documents/piece.py` et l'inscrire dans `FABRIQUES_PIECE`. Le template est choisi en tournant sur la seed plutôt qu'au hasard, pour qu'aucune mise en page ne reste sous-représentée sur un corpus de taille modeste.
 
-**Ajouter un type de document.** Une classe dans `data.py` avec sa fonction de génération, un template, une fabrique de style, une fonction `produire_*` dans `generer.py` inscrite dans `PRODUCTEURS`, le type ajouté à `TYPES_CONNUS` dans `manifest.py`, et son quota dans le TOML. Si le nouveau type a un voisin confondable déjà présent, lui faire partager ses templates plutôt que d'en écrire de nouveaux. S'il circule surtout comme reprise d'un objet physique, l'inscrire dans `TYPES_PHYSIQUES`.
+**Ajouter un type de document.** Créer `documents/mon_type.py` sur le patron des fichiers existants (`documents/base.py` documente l'interface) : le modèle de données, sa génération par Faker à seed fixée, un ou plusieurs styles, une classe `MonTypeDocument(DocumentType)` dont `produire(numero)` rend le PDF et construit l'entrée de manifest, et l'instance `DOCUMENT` en bas du fichier. Puis :
+
+1. écrire le ou les templates dans `templates/` ;
+2. enregistrer `DOCUMENT` dans `TYPES` au début de `generer.py` ;
+3. ajouter le type à `manifest.TYPES_CONNUS` ;
+4. ajouter son quota au TOML.
+
+Si le nouveau type a un voisin confondable déjà présent, comme la facture et le devis, lui faire partager ses templates plutôt que d'en écrire de nouveaux, et voir si un module partagé sur le modèle de `documents/piece.py` a du sens. S'il circule surtout comme reprise d'un objet physique, poser `physique = True` sur sa classe. Ce qui est utile à au moins deux types va dans `documents/commun.py`, jamais un axe propre à un seul type même s'il y ressemble.
 
 **Ajouter un type dont la page n'est pas le document.** La carte de visite occupe un coin d'une feuille par ailleurs vide. Son template `_carte_page.html` décrit le support, feuille de scanner ou plan de travail, et les trois `carte_0X.html` en héritent pour ne décrire que la face imprimée. Reprendre ce découpage pour tout type dont le support compte autant que le contenu.
 
