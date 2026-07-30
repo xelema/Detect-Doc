@@ -207,8 +207,12 @@ def _ecrire_pdf(pages: list[np.ndarray], destination: Path, seed: int) -> None:
         document.close()
 
 
-def degrader(source: Path, destination: Path, seed: int, profil: str) -> list[str]:
+def degrader(source: Path, destination: Path, seed: int, profil: str,
+             rotation_page_deg: int = 0) -> list[str]:
     """Produit le jumeau dégradé d'un document. Retourne les effets réellement appliqués."""
+    if rotation_page_deg not in {0, 90, 180, 270}:
+        raise ValueError(f"rotation de page invalide : {rotation_page_deg}")
+
     phases = PROFILS[profil]()
 
     # Le random_seed de la chaîne ne suffit pas : plusieurs effets tirent directement
@@ -224,7 +228,14 @@ def degrader(source: Path, destination: Path, seed: int, profil: str) -> list[st
         random_seed=seed,
     )
 
-    pages = [chaine(page) for page in _rasteriser(source)]
+    pages = []
+    for page in _rasteriser(source):
+        if rotation_page_deg:
+            page = np.rot90(page, k=-(rotation_page_deg // 90)).copy()
+        pages.append(chaine(page))
     _ecrire_pdf(pages, destination, seed)
 
-    return [type(effet).__name__ for phase in phases.values() for effet in phase]
+    effets = [type(effet).__name__ for phase in phases.values() for effet in phase]
+    if rotation_page_deg:
+        effets.insert(0, f"RotationPage{rotation_page_deg}")
+    return effets

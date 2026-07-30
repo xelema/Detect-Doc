@@ -10,18 +10,22 @@ import tempfile
 from decimal import Decimal
 from pathlib import Path
 
+import fitz
 from stdnum import iban as iban_stdnum
 from stdnum.fr import siren as siren_stdnum
 from stdnum.fr import siret as siret_stdnum
 from stdnum.fr import tva as tva_stdnum
 
 from cles import cle_rib
-from data import (ACCROCHES, CERTIFICATIONS, FONCTIONS, MOTIFS_CLIENT,
-                  MOTIFS_ORGANISME, VILLES, client_professionnel,
-                  generer_carte_visite, generer_devis, generer_facture)
+from data import (ACCROCHES, ANNOTATIONS_EMARGEMENT, CERTIFICATIONS, FONCTIONS,
+                  FONCTIONS_STAGIAIRES, MOTIFS_CLIENT, MOTIFS_ORGANISME,
+                  NATURES_PRESENCE, VILLES, client_professionnel,
+                  generer_carte_visite, generer_devis, generer_facture,
+                  generer_feuille_emargement)
 from manifest import hash_fichier
 from rendu import logo_svg, montant_en_lettres, rendre_pdf
-from styles import POLICES_MANUSCRITES, POLICES_UTILISEES, style_devis, style_facture
+from styles import (FAMILLES_EMARGEMENT, POLICES_MANUSCRITES, POLICES_UTILISEES,
+                    style_devis, style_facture, style_feuille_emargement)
 
 NB_ECHANTILLONS = 50
 
@@ -107,6 +111,67 @@ def verifier_devis(seed: int) -> list[str]:
     return anomalies + verifier_piece(devis)
 
 
+def _feuille_et_style(seed: int):
+    style = style_feuille_emargement(seed)
+    feuille = generer_feuille_emargement(
+        seed,
+        nombre_participants=style.lignes_par_page * style.nombre_pages,
+        nombre_creneaux=style.nombre_creneaux,
+        mensuel=style.mensuel,
+    )
+    return feuille, style
+
+
+def verifier_feuille_emargement(seed: int) -> list[str]:
+    """Contrôle la cohérence entre session, grille et participants."""
+    feuille, style = _feuille_et_style(seed)
+    anomalies = []
+
+    if feuille.date_fin < feuille.date_debut:
+        anomalies.append("la session se termine avant son début")
+    if len(feuille.creneaux) != style.nombre_creneaux:
+        anomalies.append(
+            f"{len(feuille.creneaux)} créneaux au lieu de {style.nombre_creneaux}")
+    if len(feuille.participants) != style.lignes_par_page * style.nombre_pages:
+        anomalies.append("le nombre de participants ne remplit pas les pages prévues")
+    if len(feuille.formateur.cases) != len(feuille.creneaux):
+        anomalies.append("le bloc formateur ne couvre pas tous les créneaux")
+    if not 0 <= feuille.taux_remplissage <= 1:
+        anomalies.append(f"taux de remplissage invalide : {feuille.taux_remplissage}")
+
+    if style.famille == "officiel-sectoriel" and not style.avec_bloc_formateur:
+        anomalies.append("le formulaire sectoriel a perdu son intervenant")
+
+    natures_connues = {
+        "signature", "vide", "barre",
+        *(annotation.lower() for annotation in ANNOTATIONS_EMARGEMENT),
+    }
+    for participant in feuille.participants:
+        if len(participant.cases) != len(feuille.creneaux):
+            anomalies.append(
+                f"{participant.nom_complet} : nombre de cases incohérent")
+        for case in participant.cases:
+            if case.nature not in natures_connues:
+                anomalies.append(
+                    f"{participant.nom_complet} : nature inconnue {case.nature}")
+
+        # Une feuille d'émargement sert à facturer : le total d'heures doit correspondre
+        # aux seuls créneaux réellement suivis. Compter une case barrée ou un ABSENT
+        # produirait une feuille qu'aucun financeur n'accepterait, et une vérité terrain
+        # fausse pour la comparaison des extractions.
+        presences = sum(case.nature in NATURES_PRESENCE
+                        for case in participant.cases)
+        if participant.heures_suivies != presences * 3.5:
+            anomalies.append(
+                f"{participant.nom_complet} : {participant.heures_suivies} h suivies "
+                f"pour {presences} créneau(x) de présence")
+        if participant.heures_suivies > participant.heures_souscrites:
+            anomalies.append(
+                f"{participant.nom_complet} : plus d'heures suivies que souscrites")
+
+    return anomalies
+
+
 def verifier_montants_en_lettres() -> list[str]:
     """Contrôle la conversion des montants en toutes lettres.
 
@@ -136,25 +201,37 @@ def _caracteres_produits() -> set[str]:
     fonction ou une accroche rare passerait sinon entre les mailles. Les valeurs tirées,
     noms et adresses en tête, sont elles échantillonnées, faute de pouvoir les énumérer.
     """
-    fixes = "".join(FONCTIONS + ACCROCHES + CERTIFICATIONS + MOTIFS_ORGANISME
+    fixes = "".join(FONCTIONS + FONCTIONS_STAGIAIRES + ANNOTATIONS_EMARGEMENT
+                    + ACCROCHES + CERTIFICATIONS + MOTIFS_ORGANISME
                     + MOTIFS_CLIENT + [ville for _, ville in VILLES])
 
     cartes = [generer_carte_visite(seed) for seed in range(1, NB_ECHANTILLONS + 1)]
-    tires = "".join(
+    tires_cartes = "".join(
         f"{c.civilite}{c.nom_complet}{c.organisme}{c.email}{c.mobile}{c.fixe}"
         f"{c.site}{c.reseau}{c.adresse_complete}"
         for c in cartes)
+    feuilles = [_feuille_et_style(seed)[0]
+                for seed in range(1, NB_ECHANTILLONS + 1)]
+    tires_feuilles = "".join(
+        f"{f.organisme.raison_sociale}{f.intitule_action}{f.lieu}"
+        f"{f.formateur.nom_complet}"
+        + "".join(
+            f"{p.nom_complet}{p.entreprise}{p.fonction}"
+            for p in f.participants
+        )
+        for f in feuilles
+    )
 
     # Séparateurs et symboles posés par les templates eux-mêmes, absents des données.
     templates = "·%()[]«»"
 
-    return set(fixes + tires + templates)
+    return set(fixes + tires_cartes + tires_feuilles + templates)
 
 
 # Le symbole monétaire n'apparaît que sur les pièces comptables. Les polices manuscrites
-# ne servent qu'à l'identité portée au stylo sur une carte de visite, où aucun montant ne
-# figure : le leur réclamer écarterait de bonnes polices pour un caractère qu'elles ne
-# seront jamais appelées à dessiner.
+# ne servent qu'à l'identité portée au stylo sur une carte de visite et aux annotations
+# d'une feuille d'émargement, où aucun montant ne figure : le leur réclamer écarterait de
+# bonnes polices pour un caractère qu'elles ne seront jamais appelées à dessiner.
 SYMBOLE_MONETAIRE = "€"
 
 
@@ -211,6 +288,50 @@ def verifier_polices() -> list[str]:
     return anomalies
 
 
+def verifier_signatures_non_extractibles() -> list[str]:
+    """Contrôle qu'aucun paraphe n'est resté du texte dans le PDF rendu.
+
+    C'est le seul contrôle capable de voir la régression : une signature écrite dans une
+    police manuscrite ressemble à un tracé sur la page, et rien ne la distingue à l'œil du
+    dessin attendu. Sur un PDF à texte natif, elle livrerait pourtant le nom du signataire
+    au premier copier-coller, alors qu'une feuille signée à la main ne le livre jamais.
+
+    Les paraphes de la forme « P. Dupont » et « Paul D. » servent de sonde : ces chaînes
+    n'apparaissent nulle part ailleurs dans la feuille, où les identités sont imprimées en
+    entier. Les trouver dans le texte extrait ne peut vouloir dire qu'une chose.
+    """
+    anomalies = []
+
+    for seed in range(1, len(FAMILLES_EMARGEMENT) + 1):
+        feuille, style = _feuille_et_style(seed)
+        groupes = [
+            feuille.participants[index:index + style.lignes_par_page]
+            for index in range(0, len(feuille.participants), style.lignes_par_page)
+        ]
+        with tempfile.TemporaryDirectory() as dossier:
+            chemin = Path(dossier) / "emargement.pdf"
+            rendre_pdf(
+                style.template, chemin,
+                f=feuille,
+                s=style,
+                groupes=groupes,
+                logo=logo_svg(feuille.organisme.raison_sociale, style.couleur),
+            )
+            with fitz.open(chemin) as document:
+                texte = "".join(page.get_text() for page in document)
+
+        signataires = [*feuille.participants, feuille.formateur]
+        sondes = {f"{p.prenom[0]}. {p.nom}" for p in signataires}
+        sondes |= {f"{p.prenom} {p.nom[0]}." for p in signataires}
+        for sonde in sorted(sondes):
+            if sonde in texte:
+                anomalies.append(
+                    f"émargement {style.famille} : le paraphe « {sonde} » est "
+                    "extractible comme texte")
+
+    return anomalies
+
+
 def verifier_reproductibilite() -> list[str]:
     """Rend deux fois le même document et compare les fichiers obtenus.
 
@@ -224,12 +345,12 @@ def verifier_reproductibilite() -> list[str]:
     s'y affichent, et le cartouche d'acceptation n'apparaît que sur le devis.
     """
     anomalies = []
-    pieces = (
+    documents = [
         ("facture", generer_facture(1, professionnel=True), style_facture(1)),
         ("devis", generer_devis(1, professionnel=True), style_devis(1)),
-    )
+    ]
 
-    for intitule, piece, style in pieces:
+    for intitule, piece, style in documents:
         date_marque = piece.date_validite if piece.est_devis else piece.date_echeance
         empreintes = []
         with tempfile.TemporaryDirectory() as dossier:
@@ -244,6 +365,34 @@ def verifier_reproductibilite() -> list[str]:
             anomalies.append(f"deux rendus du même {intitule} produisent des fichiers "
                              f"différents")
 
+    for seed in range(1, 6):
+        feuille, style = _feuille_et_style(seed)
+        groupes = [
+            feuille.participants[index:index + style.lignes_par_page]
+            for index in range(0, len(feuille.participants), style.lignes_par_page)
+        ]
+        empreintes = []
+        nombres_pages = []
+        with tempfile.TemporaryDirectory() as dossier:
+            for essai in range(2):
+                chemin = Path(dossier) / f"emargement-{essai}.pdf"
+                nombres_pages.append(rendre_pdf(
+                    style.template, chemin,
+                    f=feuille,
+                    s=style,
+                    groupes=groupes,
+                    logo=logo_svg(feuille.organisme.raison_sociale, style.couleur),
+                ))
+                empreintes.append(hash_fichier(chemin))
+        if empreintes[0] != empreintes[1]:
+            anomalies.append(
+                f"deux rendus du même émargement {style.famille} "
+                "produisent des fichiers différents")
+        if any(pages != style.nombre_pages for pages in nombres_pages):
+            anomalies.append(
+                f"émargement {style.famille} : nombre de pages différent de "
+                f"{style.nombre_pages}")
+
     return anomalies
 
 
@@ -253,6 +402,7 @@ def main() -> None:
         ("facture", lambda seed: verifier_piece(
             generer_facture(seed, professionnel=client_professionnel(seed)))),
         ("devis", verifier_devis),
+        ("feuille émargement", verifier_feuille_emargement),
     )
 
     for intitule, controle in controles_par_seed:
@@ -264,13 +414,15 @@ def main() -> None:
 
     for intitule, controle in (("montant en lettres", verifier_montants_en_lettres),
                                ("polices", verifier_polices),
+                               ("signatures", verifier_signatures_non_extractibles),
                                ("reproductibilite", verifier_reproductibilite)):
         anomalies = controle()
         total += len(anomalies)
         for anomalie in anomalies:
             print(f"  {intitule}, {anomalie}")
 
-    print(f"\n{NB_ECHANTILLONS} factures et {NB_ECHANTILLONS} devis vérifiés, "
+    print(f"\n{NB_ECHANTILLONS} factures, {NB_ECHANTILLONS} devis et "
+          f"{NB_ECHANTILLONS} feuilles d'émargement vérifiés, "
           f"{total} anomalie(s).")
 
     facture = generer_facture(1)

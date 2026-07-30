@@ -11,6 +11,9 @@ rib = 4
 # physique, et sa numerisation remplace l'original au lieu de s'y ajouter. Compter donc
 # une entree par unite ici, contre deux environ pour les autres types.
 carte_visite = 10
+# Une feuille produit une seule entrée, dans son régime d'acquisition final.
+# Dix unités couvrent deux fois chacune des cinq structures.
+feuille_emar = 10
 
 [split]
 dev_probability = 0.25

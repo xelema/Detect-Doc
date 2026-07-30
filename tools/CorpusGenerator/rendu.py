@@ -121,6 +121,76 @@ def montant_en_lettres(montant: Decimal) -> str:
     return texte
 
 
+ENCRE_MANUSCRITE = "#243a8c"
+
+
+def paraphe_svg(texte: str) -> Markup:
+    """Signature manuscrite, dessinée en courbes et non écrite dans une police cursive.
+
+    Un paraphe posé avec une police manuscrite reste du texte : sur un PDF à texte natif,
+    un simple copier-coller rendrait le nom du signataire, ce qu'aucune feuille signée à la
+    main ne fait. Le document mentirait alors sur ce qu'il est, et le service de détection
+    apprendrait une régularité qui n'existe pas en production. Le tracé est donc une
+    courbe, sans aucun caractère derrière.
+
+    Le nom ne sert qu'à amorcer le tirage : un même signataire pose toujours le même
+    paraphe, deux personnes différentes ne signent pas pareil, et le corpus reste
+    reproductible d'une exécution à l'autre.
+    """
+    tirage = random.Random(f"paraphe-{texte}")
+    largeur, hauteur = 100, 30
+    ligne_base = tirage.uniform(19.0, 23.0)
+
+    # Boucle d'attaque, l'initiale de la signature : plus haute et plus large que le corps
+    # du nom, comme la majuscule qu'elle représente.
+    fin_initiale = tirage.uniform(18, 30)
+    commandes = [
+        f"M{tirage.uniform(2, 6):.1f} {ligne_base + tirage.uniform(1, 5):.1f}",
+        f"C{tirage.uniform(0, 6):.1f} {tirage.uniform(1, 6):.1f} "
+        f"{fin_initiale + tirage.uniform(-4, 4):.1f} {tirage.uniform(0, 5):.1f} "
+        f"{fin_initiale:.1f} {ligne_base:.1f}",
+    ]
+
+    # Corps du nom. L'amplitude est tirée boucle par boucle : une ondulation régulière se
+    # verrait immédiatement comme un motif, là où une main fatigue et accélère.
+    boucles = tirage.randint(3, 6)
+    fin_corps = tirage.uniform(72, 90)
+    pas = (fin_corps - fin_initiale) / boucles
+    x = fin_initiale
+    for _ in range(boucles):
+        hauteur_boucle = tirage.uniform(5, 17)
+        commandes.append(
+            f"C{x + pas * 0.3:.1f} {ligne_base - hauteur_boucle:.1f} "
+            f"{x + pas * 0.7:.1f} {ligne_base + tirage.uniform(1, 6):.1f} "
+            f"{x + pas:.1f} {ligne_base + tirage.uniform(-3, 2):.1f}")
+        x += pas
+
+    # Trait de fin, jeté vers la droite au-dessus du reste du paraphe.
+    commandes.append(
+        f"C{x + 4:.1f} {tirage.uniform(6, 16):.1f} "
+        f"{largeur - 14:.1f} {tirage.uniform(3, 12):.1f} "
+        f"{largeur - tirage.uniform(1, 10):.1f} {tirage.uniform(8, 20):.1f}")
+
+    traits = [f'<path d="{" ".join(commandes)}"/>']
+    if tirage.random() < 0.35:
+        souligne_y = ligne_base + tirage.uniform(4, 7)
+        traits.append(
+            f'<path d="M{tirage.uniform(4, 14):.1f} {souligne_y:.1f} '
+            f'Q{largeur / 2:.1f} {souligne_y + tirage.uniform(-3, 3):.1f} '
+            f'{largeur - tirage.uniform(6, 24):.1f} {souligne_y:.1f}"/>')
+
+    # La largeur est posée sur l'élément lui-même : deux personnes ne signent pas sur la
+    # même longueur, et une case dont tous les paraphes tiennent exactement la même place
+    # ne ressemble à aucune feuille réelle.
+    return Markup(
+        f'<svg viewBox="0 0 {largeur} {hauteur}" xmlns="http://www.w3.org/2000/svg" '
+        f'style="width: {tirage.uniform(58, 100):.0f}%" '
+        f'fill="none" stroke="{ENCRE_MANUSCRITE}" '
+        f'stroke-width="{tirage.uniform(1.3, 2.2):.1f}" stroke-linecap="round">'
+        + "".join(traits) + "</svg>"
+    )
+
+
 def logo_svg(raison_sociale: str, couleur: str) -> Markup:
     """Logo inventé, construit à partir des initiales de la raison sociale.
 
@@ -210,6 +280,7 @@ def _environnement() -> Environment:
     env.filters["date_fr"] = date_fr
     env.filters["nombre"] = nombre
     env.filters["lettres"] = montant_en_lettres
+    env.filters["paraphe"] = paraphe_svg
     return env
 
 

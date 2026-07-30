@@ -14,7 +14,7 @@ docker compose run --rm generator
 
 # Contrôler
 docker compose run --rm --entrypoint python generator manifest.py
-docker compose run --rm --entrypoint python generator verifier.py
+    docker compose run --rm --entrypoint python generator verifier.py
 ```
 
 Le corpus est écrit directement dans `Detect-Doc/corpus` grâce au volume défini dans `compose.yaml`. Le fichier TOML local est monté en lecture seule dans le conteneur.
@@ -126,6 +126,24 @@ Tout le reste est commun : émetteur, destinataire, tableau des lignes, totaux H
 
 Les cas volontairement difficiles sont ceux où ces marqueurs s'effacent : un devis intitulé `Offre de prix`, sans cartouche d'acceptation et portant un RIB, ne se distingue plus d'une facture que par ses dates et sa durée de validité. Les tags du manifest (`devis`, `proposition`, `offre`, `cartouche-accord`, `acompte`) permettront de mesurer le poids réel de chacun.
 
+## La feuille d'émargement
+
+`FEUILLE_EMAR` est produit dans cinq structures qui correspondent aux familles observées dans les exemples métier :
+
+| Famille | Structure de la grille |
+|---|---|
+| séance unique | participants en lignes, signatures matin et après-midi |
+| multi-jours | participants en lignes, une colonne par demi-journée |
+| récapitulatif mensuel | stagiaires en colonnes, dates en lignes, suivi des heures |
+| feuille collective | journées en colonnes et total d'heures par participant |
+| officiel sectoriel | tables séparées pour l'intervenant et les participants, créneau soirée, identifiants RPPS et ADELI |
+
+Le titre est tiré séparément de la structure et peut être absent. Les colonnes métier, la clause d'attestation, le cachet, la référence d'OPCO et la consigne Qualiopi varient indépendamment. Le bloc formateur aussi, sauf sur le formulaire sectoriel qui consacre une table entière à son intervenant. Les cases portent une signature, une annotation manuscrite, une barre ou restent vides, et le taux de remplissage effectif est écrit dans le manifest. Seuls les créneaux signés ou pris en retard comptent dans les heures suivies : une case barrée, un `ABSENT` ou une case vide ne se facturent pas.
+
+Les signatures sont des tracés vectoriels produits par `paraphe_svg`, jamais un nom écrit dans une police manuscrite. Une signature en police cursive resterait du texte : sur un PDF à texte natif, un copier-coller livrerait le nom du signataire, ce qu'aucune feuille signée à la main ne fait, et le service apprendrait une régularité qui n'existe pas en production. `verifier.py` rend une feuille de chaque famille et échoue si un paraphe se retrouve dans le texte extrait. Les annotations, elles, restent du texte : un `ABSENT` porté au stylo est précisément ce que l'OCR doit savoir lire.
+
+Le document final suit l'un des trois régimes observés : PDF à texte natif, scan à plat ou photo au smartphone. Une partie des scans est conservée tournée de 90 ou 270 degrés et plusieurs documents comptent deux ou trois pages. Comme pour une carte de visite, le rendu propre n'est qu'une étape de fabrication lorsque la feuille est numérisée : une seule entrée autonome représente le document réellement déposé.
+
 ## Le modèle de données
 
 ```mermaid
@@ -200,6 +218,39 @@ classDiagram
         +str code_postal
         +str ville
     }
+    class FeuilleEmargement {
+        +str numero_session
+        +str intitule_action
+        +date date_debut
+        +date date_fin
+        +str lieu
+        +float taux_remplissage
+    }
+    class ParticipantEmargement {
+        +str prenom
+        +str nom
+        +str entreprise
+        +str fonction
+        +str matricule
+        +str rpps
+        +str adeli
+        +list~CaseEmargement~ cases
+    }
+    class FormateurEmargement {
+        +str prenom
+        +str nom
+        +str matricule
+        +list~CaseEmargement~ cases
+    }
+    class CreneauEmargement {
+        +str libelle
+        +date date_session
+        +str horaire
+    }
+    class CaseEmargement {
+        +str nature
+        +str texte
+    }
     class Style {
         +str template
         +str police
@@ -224,6 +275,12 @@ classDiagram
     Organisme --> Coordonnees : adresse
     Client --> Coordonnees : adresse
     Rib --> Coordonnees : titulaire et agence
+    FeuilleEmargement "1" --> "1" Organisme : organisme
+    FeuilleEmargement "1" --> "*" ParticipantEmargement : participants
+    FeuilleEmargement "1" --> "1" FormateurEmargement : formateur
+    FeuilleEmargement "1" --> "*" CreneauEmargement : créneaux
+    ParticipantEmargement "1" --> "*" CaseEmargement : cases
+    FormateurEmargement "1" --> "*" CaseEmargement : cases
 ```
 
 `Style` n'est rattaché à aucun document : il est choisi séparément à partir de la même seed, puis passé au template à côté du document. Un `Rib` mène une double vie, comme document à part entière et comme pavé de coordonnées bancaires au bas d'une pièce.
@@ -286,19 +343,19 @@ Un document et son jumeau tombent toujours dans le même jeu, puisqu'ils partage
 
 ### Les types repris d'un objet physique
 
-Certains types ne se déposent presque jamais sous forme de fichier. Une carte de visite est la reprise d'un carton : on la photographie ou on la scanne. Ces types sont déclarés dans `TYPES_PHYSIQUES`, et leur rendu propre n'est qu'une étape de fabrication, écrasée par sa numérisation. Ils n'ont donc **ni jumeau ni `derive_de`** : une seule entrée au manifest par unité déclarée au TOML, là où les autres types en produisent deux environ.
+Certains types ne se déposent presque jamais sous leur forme bureautique initiale. Une carte de visite reprend un carton, une feuille d'émargement reprend une feuille signée à la main. On les photographie ou on les scanne. Ces types sont déclarés dans `TYPES_PHYSIQUES`, et leur rendu propre n'est qu'une étape de fabrication, écrasée par sa numérisation. Ils n'ont donc **ni jumeau ni `derive_de`** : une seule entrée au manifest par unité déclarée au TOML, là où les autres types en produisent deux environ.
 
 Le style tire l'un de **trois modes d'acquisition**, et le reste de la chaîne le suit.
 
 | Mode | Ce que le document est | Régime |
 |---|---|---|
-| `photo` | carton posé sur un plan de travail, photographié de travers, horodatage incrusté | `scanne` |
-| `scan` | carton dans un coin d'une feuille A4 vide, bande de couvercle | `scanne` |
-| `fichier` | export d'un outil de mise en page, page à la taille du carton, droit | `texte-natif` |
+| `photo` | original photographié à la main, éclairage inégal et cadrage de travers | `scanne` |
+| `scan` | original passé au scanner, avec bruit et rotation éventuels | `scanne` |
+| `fichier` | export bureautique ou graphique, éléments manuscrits incrustés en tracés | `texte-natif` |
 
-`fichier` est minoritaire, environ un document sur sept, et il est indispensable. Le cas est rare en production mais il existe, et un corpus qui n'en contiendrait aucun ne dirait rien de la façon dont le service le traite. C'est aussi la seule carte de visite sur laquelle l'OCR n'a rien à faire.
+`fichier` est minoritaire et indispensable. Le cas existe en production, et un corpus qui n'en contiendrait aucun ne dirait rien de la façon dont le service le traite. C'est le régime sur lequel l'OCR n'a rien à faire.
 
-Le profil de dégradation n'est pas tiré au hasard mais déduit du mode, par `profil_acquisition`. Une carte composée sur un bureau reçoit les défauts d'une photo, une carte composée sur une feuille A4 ceux d'un scanner. Le tirage libre produirait des documents que leur propre manifest décrirait de travers.
+Le profil de dégradation n'est pas tiré au hasard mais déduit du mode, par `profil_acquisition`. Un document photographié reçoit les défauts d'une photo, un document passé à plat ceux d'un scanner. Le tirage libre produirait des documents que leur propre manifest décrirait de travers.
 
 ## Les polices
 

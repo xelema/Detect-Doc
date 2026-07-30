@@ -466,6 +466,156 @@ def style_carte_visite(seed: int) -> StyleCarte:
     return FABRIQUES_CARTE[seed % len(FABRIQUES_CARTE)](random.Random(f"carte-{seed}"))
 
 
+@dataclass
+class StyleEmargement:
+    """Structure et présentation d'une feuille d'émargement."""
+
+    template: str
+    famille: str
+    police: str
+    police_manuscrite: str
+    corps_pt: float
+    couleur: str
+    orientation: str
+    acquisition: str
+    rotation_page_deg: int
+    nombre_pages: int
+    lignes_par_page: int
+    nombre_creneaux: int
+    mensuel: bool
+    titre: str | None
+    avec_bloc_formateur: bool
+    avec_entreprise: bool
+    avec_fonction: bool
+    avec_matricule: bool
+    avec_identifiant_metier: bool
+    avec_document_pedagogique: bool
+    avec_suivi_heures: bool
+    avec_clause_attestation: bool
+    avec_cachet: bool
+    avec_opco: bool
+    avec_consignes_qualiopi: bool
+    residu_publipostage: bool
+
+    def as_dict(self) -> dict:
+        return asdict(self)
+
+
+TITRES_EMARGEMENT = [
+    "Feuille d'émargement",
+    "Feuille de présence",
+    "Feuille collective d'émargement",
+    "Émargements par demi-journée ou soirée",
+]
+
+# La liste tourne sur dix documents. Deux feuilles de la même famille ne reçoivent pas
+# automatiquement le même mode d'acquisition, ce qui évite de confondre structure et
+# régime dans les mesures.
+ACQUISITIONS_EMARGEMENT = [
+    "scan", "photo", "scan", "fichier", "scan",
+    "fichier", "scan", "photo", "scan", "scan",
+]
+
+ROTATIONS_EMARGEMENT = [0, 0, 90, 0, 0, 0, 0, 270, 90, 0]
+
+# Les cinq entrées décrivent cinq structures de grille, pas cinq habillages d'un même
+# tableau. Le choix tourne sur la seed pour que chacune reste représentée.
+FAMILLES_EMARGEMENT = [
+    {
+        "template": "emargement_01.html",
+        "famille": "seance-unique",
+        "orientation": "portrait",
+        "lignes_par_page": 8,
+        "nombre_creneaux": 2,
+        "mensuel": False,
+    },
+    {
+        "template": "emargement_02.html",
+        "famille": "multi-jours",
+        "orientation": "paysage",
+        "lignes_par_page": 7,
+        "nombre_creneaux": 6,
+        "mensuel": False,
+    },
+    {
+        "template": "emargement_03.html",
+        "famille": "recapitulatif-mensuel",
+        "orientation": "paysage",
+        "lignes_par_page": 4,
+        "nombre_creneaux": 10,
+        "mensuel": True,
+    },
+    {
+        "template": "emargement_04.html",
+        "famille": "feuille-collective",
+        "orientation": "paysage",
+        "lignes_par_page": 8,
+        "nombre_creneaux": 4,
+        "mensuel": False,
+    },
+    {
+        "template": "emargement_05.html",
+        "famille": "officiel-sectoriel",
+        "orientation": "portrait",
+        "lignes_par_page": 6,
+        "nombre_creneaux": 3,
+        "mensuel": False,
+    },
+]
+
+
+def style_feuille_emargement(seed: int) -> StyleEmargement:
+    """Style d'une feuille d'émargement, sur les axes observés dans les exemples."""
+    tirage = random.Random(f"feuille-emargement-{seed}")
+    famille = FAMILLES_EMARGEMENT[(seed - 1) % len(FAMILLES_EMARGEMENT)]
+    acquisition_index = (seed - 1) % len(ACQUISITIONS_EMARGEMENT)
+    acquisition = ACQUISITIONS_EMARGEMENT[acquisition_index]
+
+    if seed % 9 == 0:
+        nombre_pages = 3
+    elif seed % 4 == 0:
+        nombre_pages = 2
+    else:
+        nombre_pages = 1
+
+    titre = None if seed % 7 == 0 else tirage.choice(TITRES_EMARGEMENT)
+    officiel = famille["famille"] == "officiel-sectoriel"
+    mensuel = famille["mensuel"]
+
+    return StyleEmargement(
+        **famille,
+        police=tirage.choice(POLICES_SANS + POLICES_CONDENSEES),
+        police_manuscrite=tirage.choice(POLICES_MANUSCRITES),
+        corps_pt=tirage.choice([7.0, 7.5, 8.0, 8.5]),
+        couleur=tirage.choice(COULEURS),
+        acquisition=acquisition,
+        rotation_page_deg=(
+            0 if acquisition == "fichier"
+            else ROTATIONS_EMARGEMENT[acquisition_index]
+        ),
+        nombre_pages=nombre_pages,
+        titre=titre,
+        # Le formulaire sectoriel consacre une table entière à l'intervenant : sa
+        # structure ne tient plus sans elle, et un tel formulaire ne circule jamais sans
+        # le nom de celui qui a animé la session. Les autres familles se passent du bloc
+        # de temps en temps, comme les feuilles où le formateur signe à part. Le pas est
+        # premier avec celui des familles, sans quoi l'absence retomberait toujours sur la
+        # même structure et l'axe ne serait jamais exercé.
+        avec_bloc_formateur=officiel or seed % 6 != 0,
+        avec_entreprise=officiel or tirage.random() < 0.55,
+        avec_fonction=tirage.random() < 0.45,
+        avec_matricule=mensuel or tirage.random() < 0.35,
+        avec_identifiant_metier=officiel,
+        avec_document_pedagogique=officiel or tirage.random() < 0.2,
+        avec_suivi_heures=mensuel or tirage.random() < 0.2,
+        avec_clause_attestation=officiel or tirage.random() < 0.25,
+        avec_cachet=tirage.random() < 0.35,
+        avec_opco=tirage.random() < 0.45,
+        avec_consignes_qualiopi=tirage.random() < 0.6,
+        residu_publipostage=seed % 13 == 0,
+    )
+
+
 def style_rib(seed: int) -> Style:
     """Style d'un RIB.
 

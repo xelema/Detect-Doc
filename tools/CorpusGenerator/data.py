@@ -152,6 +152,33 @@ BANQUES = [
     ("Banque Atlantique du Ponant", "BAPOFRPP"),
 ]
 
+# Fonctions assez courtes pour tenir dans une grille d'émargement, tout en couvrant
+# les secteurs où les exemples métier ont été produits.
+FONCTIONS_STAGIAIRES = [
+    "Assistante administrative",
+    "Chargé de clientèle",
+    "Cheffe de projet",
+    "Conducteur de travaux",
+    "Gestionnaire de ressources",
+    "Ingénieure qualité",
+    "Opérateur de production",
+    "Responsable commercial",
+    "Technicien de maintenance",
+]
+
+REFERENCES_OPCO = [
+    "AKTO", "Atlas", "Constructys", "L'Opcommerce", "OPCO 2i", "OPCO EP",
+]
+
+ANNOTATIONS_EMARGEMENT = ["ABSENT", "RETARD", "excusé"]
+TAUX_REMPLISSAGE_EMARGEMENT = [0.15, 0.35, 0.6, 0.85, 1.0]
+
+# Natures de case qui valent présence, et donc heures facturables. Une case barrée est la
+# marque d'un créneau non suivi, une case vide n'atteste rien, ABSENT et « excusé »
+# constatent l'absence : aucune ne compte. Un retard, lui, laisse le stagiaire présent
+# sur le créneau, l'organisme le compte.
+NATURES_PRESENCE = {"signature", "retard"}
+
 
 @dataclass
 class Coordonnees:
@@ -385,6 +412,83 @@ class CarteVisite:
                 f"{self.adresse.ville}")
 
 
+@dataclass
+class CreneauEmargement:
+    """Colonne temporelle d'une grille de signatures."""
+
+    libelle: str
+    date_session: date
+    horaire: str
+
+
+@dataclass
+class CaseEmargement:
+    """Contenu manuscrit d'une case de la grille."""
+
+    nature: str
+    texte: str
+
+
+@dataclass
+class ParticipantEmargement:
+    """Participant et vérité terrain de ses émargements."""
+
+    prenom: str
+    nom: str
+    entreprise: str
+    fonction: str
+    matricule: str
+    rpps: str
+    adeli: str
+    document_pedagogique_recu: bool
+    cases: list[CaseEmargement]
+    heures_suivies: float
+    heures_souscrites: float
+    report_heures: float
+
+    @property
+    def nom_complet(self) -> str:
+        return f"{self.prenom} {self.nom}"
+
+
+@dataclass
+class FormateurEmargement:
+    """Formateur, séparé des participants dans presque toutes les mises en page."""
+
+    prenom: str
+    nom: str
+    matricule: str
+    cases: list[CaseEmargement]
+
+    @property
+    def nom_complet(self) -> str:
+        return f"{self.prenom} {self.nom}"
+
+
+@dataclass
+class FeuilleEmargement:
+    """Présence de plusieurs participants, matérialisée créneau par créneau."""
+
+    organisme: Organisme
+    numero_session: str
+    intitule_action: str
+    date_debut: date
+    date_fin: date
+    lieu: str
+    creneaux: list[CreneauEmargement]
+    participants: list[ParticipantEmargement]
+    formateur: FormateurEmargement
+    reference_opco: str
+
+    @property
+    def taux_remplissage(self) -> float:
+        cases = [case for participant in self.participants for case in participant.cases]
+        if not cases:
+            return 0.0
+        remplies = sum(case.nature != "vide" for case in cases)
+        return round(remplies / len(cases), 2)
+
+
 def client_professionnel(seed: int) -> bool:
     """Le destinataire est-il une entreprise ?
 
@@ -525,6 +629,133 @@ def generer_carte_visite(seed: int) -> CarteVisite:
         date_prise=DEBUT_PERIODE + timedelta(
             days=fake.random_int(0, (FIN_PERIODE - DEBUT_PERIODE).days)),
         heure_prise=f"{fake.random_int(7, 19):02d}:{fake.random_int(0, 59):02d}",
+    )
+
+
+def _creneaux_emargement(date_debut: date, nombre: int,
+                          mensuel: bool) -> list[CreneauEmargement]:
+    """Créneaux d'une session, sans dépendre du fuseau horaire du système."""
+    if nombre == 3 and not mensuel:
+        return [
+            CreneauEmargement("Matin", date_debut, "09:00 - 12:00"),
+            CreneauEmargement("Après-midi", date_debut, "14:00 - 17:00"),
+            CreneauEmargement("Soirée", date_debut, "18:00 - 20:00"),
+        ]
+
+    creneaux = []
+    for index in range(nombre):
+        if mensuel:
+            jour = date_debut + timedelta(days=index * 2)
+            libelle = jour.strftime("%d/%m")
+            horaire = "09:00 - 12:30" if index % 2 == 0 else "13:30 - 17:00"
+        else:
+            jour = date_debut + timedelta(days=index // 2)
+            libelle = "Matin" if index % 2 == 0 else "Après-midi"
+            horaire = "09:00 - 12:30" if index % 2 == 0 else "13:30 - 17:00"
+        creneaux.append(CreneauEmargement(libelle, jour, horaire))
+    return creneaux
+
+
+def _case_emargement(tirage: random.Random, prenom: str, nom: str,
+                     taux_cible: float) -> CaseEmargement:
+    if tirage.random() >= taux_cible:
+        if tirage.random() < 0.2:
+            return CaseEmargement("barre", "")
+        return CaseEmargement("vide", "")
+
+    if tirage.random() < 0.15:
+        annotation = tirage.choice(ANNOTATIONS_EMARGEMENT)
+        return CaseEmargement(annotation.lower(), annotation)
+
+    signatures = [
+        f"{prenom[0]}. {nom}",
+        f"{prenom} {nom[0]}.",
+        nom,
+    ]
+    return CaseEmargement("signature", tirage.choice(signatures))
+
+
+def generer_feuille_emargement(seed: int, nombre_participants: int,
+                               nombre_creneaux: int,
+                               mensuel: bool) -> FeuilleEmargement:
+    """Feuille d'émargement synthétique pour une structure décidée par le style."""
+    graine = seed + 1000
+    fake = _faker(graine)
+    tirage = random.Random(f"emargement-{seed}")
+    organisme = generer_organisme(graine)
+    taux_cible = random.Random(f"remplissage-{seed}").choice(
+        TAUX_REMPLISSAGE_EMARGEMENT)
+
+    intitule, _ = fake.random_element(CATALOGUE_FORMATIONS)
+    marge_fin = 2 * max(nombre_creneaux, 2)
+    jours = fake.random_int(0, (FIN_PERIODE - DEBUT_PERIODE).days - marge_fin)
+    date_debut = DEBUT_PERIODE + timedelta(days=jours)
+    creneaux = _creneaux_emargement(date_debut, nombre_creneaux, mensuel)
+
+    participants = []
+    for index in range(nombre_participants):
+        prenom = fake.first_name()
+        nom = fake.last_name()
+        cases = [
+            _case_emargement(tirage, prenom, nom, taux_cible)
+            for _ in creneaux
+        ]
+        heures_suivies = sum(case.nature in NATURES_PRESENCE
+                             for case in cases) * 3.5
+        heures_souscrites = len(creneaux) * 3.5
+        participants.append(
+            ParticipantEmargement(
+                prenom=prenom,
+                nom=nom,
+                entreprise=fake.random_element(MOTIFS_CLIENT).format(
+                    nom=fake.last_name()),
+                fonction=fake.random_element(FONCTIONS_STAGIAIRES),
+                matricule=fake.bothify("STG-####"),
+                rpps=fake.numerify("###########"),
+                adeli=fake.numerify("#########"),
+                document_pedagogique_recu=fake.boolean(
+                    chance_of_getting_true=75),
+                cases=cases,
+                heures_suivies=heures_suivies,
+                heures_souscrites=heures_souscrites,
+                report_heures=float(fake.random_element([0, 0, 3.5, 7])),
+            )
+        )
+
+    if fake.boolean():
+        prenom_formateur = fake.first_name_male()
+    else:
+        prenom_formateur = fake.first_name_female()
+    nom_formateur = fake.last_name()
+    cases_formateur = [
+        CaseEmargement(
+            "signature",
+            tirage.choice([
+                f"{prenom_formateur[0]}. {nom_formateur}",
+                nom_formateur,
+            ]),
+        )
+        for _ in creneaux
+    ]
+
+    return FeuilleEmargement(
+        organisme=organisme,
+        numero_session=fake.bothify("FEM-####-??").upper(),
+        intitule_action=intitule,
+        date_debut=date_debut,
+        date_fin=max(creneau.date_session for creneau in creneaux),
+        lieu=(f"{organisme.adresse.ligne1}, {organisme.adresse.code_postal} "
+              f"{organisme.adresse.ville}"),
+        creneaux=creneaux,
+        participants=participants,
+        formateur=FormateurEmargement(
+            prenom=prenom_formateur,
+            nom=nom_formateur,
+            matricule=fake.bothify("FOR-####"),
+            cases=cases_formateur,
+        ),
+        reference_opco=f"{fake.random_element(REFERENCES_OPCO)} "
+                       f"{fake.numerify('########')}",
     )
 
 

@@ -9,10 +9,11 @@ Les types et quantités viennent du fichier TOML global.
 import manifest
 from configuration import DOCUMENTS, FICHIER, SHA256
 from data import (client_professionnel, generer_carte_visite, generer_devis,
-                  generer_facture, generer_rib)
+                  generer_facture, generer_feuille_emargement, generer_rib)
 from degradation import degrader, profil_acquisition, profil_degradation
 from rendu import logo_svg, portrait_svg, qr_svg, rendre_pdf
-from styles import style_carte_visite, style_devis, style_facture, style_rib
+from styles import (style_carte_visite, style_devis, style_facture,
+                    style_feuille_emargement, style_rib)
 
 
 def _jumeau_scanne(propre: dict, seed: int) -> dict | None:
@@ -198,11 +199,74 @@ def produire_carte_visite(numero: int) -> dict:
     )
 
 
+def produire_feuille_emargement(numero: int) -> dict:
+    style = style_feuille_emargement(numero)
+    nombre_participants = style.lignes_par_page * style.nombre_pages
+    feuille = generer_feuille_emargement(
+        numero,
+        nombre_participants=nombre_participants,
+        nombre_creneaux=style.nombre_creneaux,
+        mensuel=style.mensuel,
+    )
+    groupes = [
+        feuille.participants[index:index + style.lignes_par_page]
+        for index in range(0, len(feuille.participants), style.lignes_par_page)
+    ]
+
+    identifiant = f"fem-{numero:04d}"
+    chemin = manifest.DOSSIER_DOCUMENTS / f"{identifiant}.pdf"
+    pages = rendre_pdf(
+        style.template, chemin,
+        f=feuille,
+        s=style,
+        groupes=groupes,
+        logo=logo_svg(feuille.organisme.raison_sociale, style.couleur),
+    )
+    if pages != style.nombre_pages:
+        raise RuntimeError(
+            f"{identifiant} : {pages} page(s) rendue(s) au lieu de "
+            f"{style.nombre_pages}")
+
+    tags = [style.famille, style.acquisition]
+    tags.append("sans-titre" if style.titre is None else "avec-titre")
+    if style.rotation_page_deg in (90, 270):
+        tags.append("quart-de-tour")
+    if pages > 1:
+        tags.append("multipage")
+    if not style.avec_bloc_formateur:
+        tags.append("sans-bloc-formateur")
+    if feuille.taux_remplissage <= 0.35:
+        tags.append("grille-peu-remplie")
+    if style.residu_publipostage:
+        tags.append("publipostage-inacheve")
+
+    pii = {
+        "noms_participants": [participant.nom_complet
+                              for participant in feuille.participants],
+        "nom_formateur": feuille.formateur.nom_complet,
+    }
+    if style.avec_identifiant_metier:
+        pii["rpps"] = [participant.rpps for participant in feuille.participants]
+        pii["adeli"] = [participant.adeli for participant in feuille.participants]
+
+    variante = {
+        **style.as_dict(),
+        "taux_remplissage": feuille.taux_remplissage,
+    }
+    return manifest.construire_entree(
+        identifiant, chemin, "feuille_emar", numero, pages,
+        variante=variante,
+        pii=pii,
+        tags=tags,
+    )
+
+
 PRODUCTEURS = {
     "facture": produire_facture,
     "devis": produire_devis,
     "rib": produire_rib,
     "carte_visite": produire_carte_visite,
+    "feuille_emar": produire_feuille_emargement,
 }
 
 # Types dont le document déposé est la reprise d'un objet physique. Une carte de visite
@@ -215,7 +279,7 @@ PRODUCTEURS = {
 # mode `fichier`, l'export d'un outil de mise en page déposé tel quel. Ceux-là restent à
 # texte natif. Le cas est rare mais il existe, et un corpus qui n'en contiendrait aucun
 # ne dirait rien de la façon dont le service le traite.
-TYPES_PHYSIQUES = {"carte_visite"}
+TYPES_PHYSIQUES = {"carte_visite", "feuille_emar"}
 
 # Les types produits et les types que le manifest accepte sont déclarés dans deux
 # modules, manifest ne pouvant pas importer generer sans cycle. Le contrôle échoue
@@ -246,7 +310,11 @@ def _reprise_physique(propre: dict, seed: int) -> dict:
 
     fichier = manifest.DOSSIER_CORPUS / propre["fichier"]
     profil = profil_acquisition(seed, acquisition)
-    effets = degrader(fichier, fichier, seed, profil)
+    rotation_page_deg = propre["variante"].get("rotation_page_deg", 0)
+    effets = degrader(
+        fichier, fichier, seed, profil,
+        rotation_page_deg=rotation_page_deg,
+    )
 
     return {
         **propre,

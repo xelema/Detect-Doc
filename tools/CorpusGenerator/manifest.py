@@ -25,7 +25,7 @@ from configuration import (
 FICHIER_MANIFEST = DOSSIER_CORPUS / "manifest.jsonl"
 DOSSIER_DOCUMENTS = DOSSIER_CORPUS / "raw"
 
-TYPES_CONNUS = {"facture", "devis", "rib", "carte_visite"}
+TYPES_CONNUS = {"facture", "devis", "rib", "carte_visite", "feuille_emar"}
 SENSIBILITES = {"public", "interne_assaini", "production_valide"}
 
 # Toutes les clés écrites par construire_entree. La liste doit rester alignée avec
