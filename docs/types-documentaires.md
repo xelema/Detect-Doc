@@ -10,7 +10,7 @@ Les fiches se recopient dans le pré-prompt du classifieur : elles sont écrites
 | `EVAL_FORM` | Évaluation de la formation | à écrire |
 | `FEUILLE_EMAR` | Feuille d'émargement | [écrite](#feuille_emar-feuille-démargement) |
 | `SEPA` | Mandat SEPA | à écrire |
-| `OFF_STAG_EMP` | Offre de stage, alternance, emploi | à écrire |
+| `OFF_STAG_EMP` | Offre de stage, alternance, emploi | [écrite](#off_stag_emp-offre-de-stage-alternance-emploi) |
 | `RIB` | Relevé d'identité bancaire | à écrire |
 | `RIB_SEPA` | Relevé d'identité bancaire et mandat SEPA | à écrire |
 | `CONV_PROF` | Alternance, convention de formation en contrat de professionnalisation | à écrire |
@@ -168,3 +168,73 @@ Ce que le générateur doit produire pour que le type soit représentatif. Chaqu
 10. **Résidu de publipostage occasionnel**, un champ de fusion non résolu laissé visible, pour couvrir ce cas réel de génération bureautique.
 
 Le manifest enregistre pour chaque document la famille de mise en page, le titre employé ou son absence, le régime d'acquisition, l'angle, le nombre de pages, les blocs présents et le taux de remplissage de la grille, afin que le rapport puisse dire sur quel axe le classifieur décroche.
+
+## `OFF_STAG_EMP`, offre de stage, alternance, emploi
+
+### Définition
+
+Annonce de recrutement pour un stage, une alternance ou un emploi, publiée sur un site d'offres tiers puis imprimée en PDF depuis le navigateur. Le document porte un intitulé de poste rattaché à une entreprise, les conditions du poste (contrat, lieu, dates, rémunération), une description des missions et du profil recherché, le tout encadré par la navigation et les mentions du site qui l'a servie. Ce n'est jamais un document émis par l'entreprise elle-même : c'est la capture d'une page web tierce.
+
+### Marqueurs
+
+Le signal ne vient pas d'un habillage unique, chacun des dix sites source a le sien, mais de la **combinaison d'un habillage de capture web et du vocabulaire du recrutement**.
+
+| Marqueur | Force |
+|---|---|
+| horodatage et titre de page en en-tête, URL de la page répétée en pied de chaque page | fort, et c'est le marqueur le plus universel : c'est la signature d'une impression navigateur, présente sur les vingt-quatre exemples |
+| bouton d'appel à candidature, « Postuler », « Envoyer ma candidature », « Apply » | fort |
+| bloc de métadonnées du poste : type de contrat, lieu, dates, rémunération, télétravail | fort |
+| vocabulaire de recrutement : missions, profil recherché, compétences, tuteur, mention H/F ou F/H | fort |
+| bloc entreprise : nom, secteur, taille en nombre de salariés, logo | moyen |
+| bloc « offres similaires », « recherches similaires » ou « plus d'offres d'emploi » en fin de document | moyen, quasi systématique mais de poids variable |
+| navigation du site, fil d'ariane, bandeau de consentement aux cookies | moyen, absent sur les captures en image pure |
+| mentions RGPD, diversité, situation de handicap | faible |
+
+### Désambiguïsation
+
+Aucun autre type du périmètre ne partage cette structure de capture web ; le risque n'est donc pas la confusion avec un voisin métier mais avec **n'importe quelle autre page web imprimée en PDF**, ou avec le **contrat signé** que l'offre précède.
+
+| Confusion | Ce qui tranche |
+|---|---|
+| une page web quelconque imprimée en PDF, hors périmètre | la coexistence du vocabulaire de recrutement, missions et profil recherché, avec le bloc métadonnées de contrat. Une page web sans ces deux éléments n'est pas une offre |
+| `CONT_APP_PRO`, `CONVENTION` et leurs spécialisations, priorité 2 | l'offre est un appel à candidature avant embauche : aucune signature, aucune partie nommée engagée, souvent un simple bouton « Postuler ». Le contrat ou la convention sont rédigés en articles et signés par des personnes identifiées |
+| une fiche métier ou une fiche ROME générique, sans offre précise | l'offre porte toujours une entreprise, un lieu et une date de début identifiés. Une fiche métier générique n'engage personne |
+
+**Règle opérationnelle :** en présence d'un horodatage et d'une URL de capture web, d'un intitulé de poste rattaché à une entreprise, et du vocabulaire missions / profil recherché / candidature, répondre offre de stage, alternance ou emploi, **quel que soit le type de contrat affiché** : stage, alternance, apprentissage, contrat de professionnalisation, CDD et intérim figurent tous dans les exemples réels.
+
+### Ce que montrent les 27 exemples réels
+
+Fournis par le métier, non versionnés, dans `tmp/samples/Offres`. **Trois fichiers sont des doublons octet pour octet** de trois autres, chacun présent une fois sous son nom et une fois sous « - Copie » (`Alternance_Airbus_IT`, `Alternance_Réceptionniste d'hôtel`, `Stage_Airbus_Operateur`), soit **24 offres distinctes**.
+
+**Dix plateformes sources, aucune dominante.** France Travail et JobTeaser en fournissent quatre chacune, Welcome to the Jungle trois, 1jeune1solution.gouv.fr, LinkedIn, Indeed, HelloWork et le portail Workday d'Airbus deux chacun, une plateforme de fiches ROME non identifiée deux, Jobs that makesense une.
+
+**Deux régimes d'acquisition, très inégaux.** Vingt des vingt-quatre offres sont du **texte natif réel**, la couche PDF standard d'une impression de navigateur. **Quatre, toutes issues de JobTeaser, sont une image intégrale sans la moindre couche texte** : `pdftotext` y extrait zéro mot alors que le texte y est parfaitement net à l'œil, sans bruit ni rotation. Ce régime n'est ni du texte natif ni un scan dégradé, c'est une **capture d'interface numérique propre**, opaque à l'extraction basique mais lisible sans effort par l'OCR, à la différence du régime scanné des autres types du corpus qui simule une usure physique.
+
+**Multipage systématique, de deux à neuf pages, et la majorité du contenu n'est pas l'offre elle-même.** Sur les captures les plus longues, jobs.makesense et Welcome to the Jungle, plus de la moitié du texte est du bruit de site : bandeau de cookies répété jusqu'à sept fois sur un même document, articles de blog suggérés, postes « similaires » sans rapport avec l'offre. Le contenu utile, titre, entreprise, contrat, missions, profil, tient le plus souvent sur une à deux pages.
+
+**Le type de contrat affiché ne suffit pas à repérer l'alternance ou le stage.** Sur les quatre offres de France Travail, trois sont administrativement typées « CDD » ou « Intérim » dans le bloc métadonnées alors que le corps du texte révèle un contrat d'apprentissage ou de professionnalisation : Centrakor, CDD 24 mois affiché pour un contrat d'apprentissage ; CPAM, CDD 12 mois affiché pour un contrat d'apprentissage ; Synergie, Intérim 10 mois affiché pour un contrat de professionnalisation CQPM. Une règle qui ne lirait que le champ contrat manquerait ces trois cas.
+
+**Le bloc « offres similaires » introduit librement d'autres types de contrat et d'autres métiers.** Sur les quatre offres France Travail, cette liste de fin de document mélange CDI, CDD et intérim sur des métiers sans rapport avec l'offre consultée : c'est la principale source de vocabulaire parasite du type.
+
+**Un contact nominatif apparaît sur plusieurs plateformes**, ce qui confirme ce que [[Etape 1 - Corpus et protocole]] laissait ouvert : un nom complet de gestionnaire RH sur l'offre CPAM et sur l'offre Kempchen, un nom complet accompagné d'une photo réelle sur l'offre LinkedIn Panzani, et sur Welcome to the Jungle des prénoms de collaborateurs accompagnés de leur photo, présentés en « Rencontrez Jean-Louis », « Rencontrez Anne », « Rencontrez Lucia ». L'assainissement du type doit donc couvrir ce cas, pas seulement le contenu de l'offre.
+
+**Un cas de stage non rémunéré.** L'offre Matchbox affiche explicitement « Rémunération : Aucune », un cas réel conforme à la réglementation en dessous du seuil de gratification.
+
+**Neuf habillages de site visuellement distincts sur les vingt-quatre offres, aucun tronc commun de mise en page :** bloc de fiche technique à droite (France Travail), formulaire de candidature intégré au document (HelloWork), deux colonnes avec compteur de vues et bandeau Premium (LinkedIn), fiche ROME avec compétences acquises et simulateur d'aides financières (1jeune1solution et la plateforme non identifiée), portail RH bilingue (Workday, Airbus), bandeau de cookies répété et suggestions éditoriales (Jobs that makesense), index d'égalité professionnelle et portraits de collaborateurs (Welcome to the Jungle).
+
+### Spécification de génération
+
+Ce que le générateur doit produire pour que le type soit représentatif. Chaque axe est tiré des observations ci-dessus.
+
+1. **Plusieurs habillages de site distincts**, au moins quatre à cinq gabarits HTML et CSS couvrant les familles observées : sobre institutionnel, jobboard commercial avec formulaire intégré, réseau professionnel à deux colonnes, portail RH bilingue, site jeune et éditorialisé. Pas de tronc commun entre eux, c'est la variété qui porte le signal, comme pour la carte de visite.
+2. **En-tête et pied de page d'impression navigateur obligatoires** : date et heure, titre de la page, URL complète répétée en pied de chaque page produite.
+3. **Bloc offre** : intitulé de poste, entreprise avec secteur et taille, type de contrat, lieu, dates, rémunération ou son absence, bouton d'appel à candidature.
+4. **Corps rédigé** : missions en liste à puces, profil recherché, présentation de l'entreprise en paragraphe.
+5. **Type de contrat tiré librement** parmi stage, alternance, apprentissage, contrat de professionnalisation, CDD, intérim, y compris un désaccord entre le champ contrat affiché et la nature réelle du poste, pour reproduire le cas France Travail observé.
+6. **Bruit de fin de document obligatoire et volumineux** : bloc « offres similaires » ou équivalent, mêlant librement d'autres types de contrat et d'autres métiers, sur une fraction significative des pages produites.
+7. **Multipage de deux à neuf pages**, la majorité du volume portée par le bruit de site plutôt que par l'offre.
+8. **Une minorité, environ un document sur six**, rendue comme capture d'interface intégrale sans couche texte, nette et sans dégradation physique, à la différence du régime scanné des autres types du corpus.
+9. **Contact nominatif occasionnel**, recruteur ou collaborateur cité avec prénom ou nom complet, parfois accompagné d'une photo, pour couvrir le risque PII observé sur plusieurs plateformes.
+10. **Bandeau de consentement aux cookies répété plusieurs fois** sur un même document pour au moins un des gabarits, et cas d'un stage sans rémunération affichée.
+
+Le manifest enregistre pour chaque document le gabarit de site imité, le régime d'acquisition, le nombre de pages, le type de contrat affiché face au type de contrat réel, et la présence d'un contact nominatif.
