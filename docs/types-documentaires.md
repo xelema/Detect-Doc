@@ -226,7 +226,7 @@ Fournis par le métier, non versionnés, dans `tmp/samples/Offres`. **Trois fich
 
 Ce que le générateur doit produire pour que le type soit représentatif. Chaque axe est tiré des observations ci-dessus.
 
-1. **Plusieurs habillages de site distincts**, au moins quatre à cinq gabarits HTML et CSS couvrant les familles observées : sobre institutionnel, jobboard commercial avec formulaire intégré, réseau professionnel à deux colonnes, portail RH bilingue, site jeune et éditorialisé. Pas de tronc commun entre eux, c'est la variété qui porte le signal, comme pour la carte de visite.
+1. **Plusieurs habillages de site distincts**, au moins quatre à cinq templates HTML et CSS couvrant les familles observées : sobre institutionnel, jobboard commercial avec formulaire intégré, réseau professionnel à deux colonnes, portail RH bilingue, site jeune et éditorialisé. Pas de tronc commun entre eux, c'est la variété qui porte le signal, comme pour la carte de visite.
 2. **En-tête et pied de page d'impression navigateur obligatoires** : date et heure, titre de la page, URL complète répétée en pied de chaque page produite.
 3. **Bloc offre** : intitulé de poste, entreprise avec secteur et taille, type de contrat, lieu, dates, rémunération ou son absence, bouton d'appel à candidature.
 4. **Corps rédigé** : missions en liste à puces, profil recherché, présentation de l'entreprise en paragraphe.
@@ -235,6 +235,6 @@ Ce que le générateur doit produire pour que le type soit représentatif. Chaqu
 7. **Multipage de deux à neuf pages**, la majorité du volume portée par le bruit de site plutôt que par l'offre.
 8. **Une minorité, environ un document sur six**, rendue comme capture d'interface intégrale sans couche texte, nette et sans dégradation physique, à la différence du régime scanné des autres types du corpus.
 9. **Contact nominatif occasionnel**, recruteur ou collaborateur cité avec prénom ou nom complet, parfois accompagné d'une photo, pour couvrir le risque PII observé sur plusieurs plateformes.
-10. **Bandeau de consentement aux cookies répété plusieurs fois** sur un même document pour au moins un des gabarits, et cas d'un stage sans rémunération affichée.
+10. **Bandeau de consentement aux cookies répété plusieurs fois** sur un même document pour au moins un des templates, et cas d'un stage sans rémunération affichée.
 
-Le manifest enregistre pour chaque document le gabarit de site imité, le régime d'acquisition, le nombre de pages, le type de contrat affiché face au type de contrat réel, et la présence d'un contact nominatif.
+Le manifest enregistre pour chaque document le template de site imité, le régime d'acquisition, le nombre de pages, le type de contrat affiché face au type de contrat réel, et la présence d'un contact nominatif.
