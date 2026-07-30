@@ -40,8 +40,7 @@ SENSIBILITES = {"public", "interne_assaini", "production_valide"}
 CHAMPS_OBLIGATOIRES = [
     "id", "fichier", "sha256", "type_attendu", "source", "licence", "sensibilite",
     "langue", "pages", "regime", "seed", "variante", "degradations", "derive_de",
-    "tags", "pii_injectees", "split", "configuration_sha256", "valide_par",
-    "date_validation",
+    "tags", "pii_injectees", "split", "configuration_sha256",
 ]
 
 REGIMES = {"texte-natif", "scanne"}
@@ -99,11 +98,6 @@ def construire_entree(identifiant: str, chemin: Path, type_attendu: str, seed: i
         "pii_injectees": pii,
         "split": _split(seed),
         "configuration_sha256": CONFIGURATION_SHA256,
-        # Renseignés le jour où le périmètre du corpus est validé par un responsable.
-        # Tant qu'ils sont nuls, aucune validation n'a eu lieu : ne jamais les
-        # pré-remplir, ils font foi.
-        "valide_par": None,
-        "date_validation": None,
     }
 
 
@@ -144,7 +138,7 @@ def enregistrer(nouvelles: list[dict]) -> None:
     entrees = {entree["id"]: entree for entree in nouvelles}
     FICHIER_MANIFEST.parent.mkdir(parents=True, exist_ok=True)
     contenu = "\n".join(
-        json.dumps(entrees[identifiant], ensure_ascii=False, sort_keys=True)
+        json.dumps(entrees[identifiant], ensure_ascii=False)
         for identifiant in sorted(entrees)
     )
     FICHIER_MANIFEST.write_text(contenu + "\n", encoding="utf-8")
