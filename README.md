@@ -18,16 +18,22 @@ Detect-Doc/
 │   ├── manifest.jsonl      livrable versionné : une ligne JSON par document, sa vérité terrain
 │   └── raw/                documents produits par le générateur, non versionnés
 ├── docs/
-│   └── types-documentaires.md   une fiche par type documentaire ciblé
+│   ├── types-documentaires.md     une fiche par type documentaire ciblé
+│   ├── corpus.md                  source, licence, traçabilité, sensibilité du corpus
+│   ├── protocole-evaluation.md    métriques et conditions d'exécution de l'évaluation
+│   └── modele-rapport.md          template du rapport final, avec des chiffres fictifs
 └── tools/
     └── CorpusGenerator/    l'outil qui fabrique le corpus à partir du manifest et d'une seed
 ```
 
 `corpus/raw/` n'est pas versionné : le manifest et la seed de génération suffisent à refabriquer les mêmes documents, octet pour octet. Seul `corpus/manifest.jsonl` est le livrable.
 
-## `docs/types-documentaires.md`
+## `docs/`
 
-Une fiche par type documentaire du périmètre : définition, marqueurs qui permettent de le reconnaître, règles de désambiguïsation face aux types voisins qui lui ressemblent, observations tirées des exemples réels dépouillés quand il en existe, et spécification de génération. C'est ce document qui pilote l'écriture de chaque type dans `tools/CorpusGenerator/documents/`.
+- **`types-documentaires.md`** : une fiche par type documentaire du périmètre, définition, marqueurs, règles de désambiguïsation face aux types voisins, observations tirées des exemples réels dépouillés quand il en existe, et spécification de génération. Pilote l'écriture de chaque type dans `tools/CorpusGenerator/documents/`.
+- **`corpus.md`** : source, licence, traçabilité et sensibilité du corpus, avec sa composition actuelle.
+- **`protocole-evaluation.md`** : métriques retenues, taille d'échantillon, conditions d'exécution à figer pour comparer deux mesures.
+- **`modele-rapport.md`** : template du rapport final, avec des chiffres fictifs qui illustrent le format.
 
 ## `tools/CorpusGenerator`
 

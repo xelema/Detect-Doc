@@ -57,10 +57,12 @@ python3 -m venv .venv
 | Table | Paramètres |
 |---|---|
 | `corpus` | dossier de sortie |
-| `documents` | nombre de documents propres par type |
+| `documents` | nombre de documents par type, jumeaux scannés compris |
 | `split` | proportion stable du jeu `dev` |
-| `degradation` | proportion de jumeaux, résolution, qualité JPEG |
+| `degradation` | règle de dédoublement, résolution, qualité JPEG |
 | `degradation.weights` | poids relatifs des cinq profils |
+
+Les effectifs de `documents` comptent les documents écrits au manifest. Un type dont les unités se dédoublent en un jumeau scanné voit son nombre d'unités ajusté pour tomber exactement sur le compte demandé, jamais l'inverse.
 
 Les chemins relatifs sont résolus depuis le fichier TOML. Les paramètres détaillés de chaque effet Augraphy restent dans `degradation.py`, car ils définissent l'implémentation des profils.
 
@@ -361,7 +363,7 @@ Chaque facette tire dans un **flux nommé** distinct, `random.Random(f"split-{se
 
 ## Les deux régimes
 
-Un document sur deux environ reçoit un **jumeau scanné**, produit en rastérisant le PDF propre puis en lui appliquant les défauts d'une chaîne d'impression et de numérisation réelle. Les deux versions coexistent dans le corpus, reliées par le champ `derive_de`.
+Une unité sur `twin_every` reçoit un **jumeau scanné**, produit en rastérisant le PDF propre puis en lui appliquant les défauts d'une chaîne d'impression et de numérisation réelle. Les deux versions coexistent dans le corpus, reliées par le champ `derive_de`. La règle porte sur le rang de l'unité et non sur un tirage : chaque type reçoit ainsi la même part de documents scannés, `1 / (1 + twin_every)`, et le nombre de paires est connu avant la génération.
 
 | Profil | Ce qu'il simule |
 |---|---|
@@ -377,7 +379,7 @@ Un document et son jumeau tombent toujours dans le même jeu, puisqu'ils partage
 
 ### Les types repris d'un objet physique
 
-Certains types ne se déposent presque jamais sous leur forme bureautique initiale. Une carte de visite reprend un carton, une feuille d'émargement reprend une feuille signée à la main. On les photographie ou on les scanne. Ces types portent `physique = True` sur leur classe dans `documents/`, et leur rendu propre n'est qu'une étape de fabrication, écrasée par sa numérisation. Ils n'ont donc **ni jumeau ni `derive_de`** : une seule entrée au manifest par unité déclarée au TOML, là où les autres types en produisent deux environ.
+Certains types ne se déposent presque jamais sous leur forme bureautique initiale. Une carte de visite reprend un carton, une feuille d'émargement reprend une feuille signée à la main. On les photographie ou on les scanne. Ces types portent `physique = True` sur leur classe dans `documents/`, et leur rendu propre n'est qu'une étape de fabrication, écrasée par sa numérisation. Ils n'ont donc **ni jumeau ni `derive_de`** : une seule entrée au manifest par unité, là où les autres types en produisent une ou deux selon la règle de dédoublement.
 
 Le style tire l'un de **trois modes d'acquisition**, et le reste de la chaîne le suit.
 
@@ -393,7 +395,7 @@ Le profil de dégradation n'est pas tiré au hasard mais déduit du mode, par `p
 
 ### Les types autonomes
 
-Un type peut aussi trancher lui-même son régime final sans être la reprise d'un objet physique. C'est le cas de l'offre d'emploi : chaque instance est, dès sa génération, un fichier à texte natif ou une capture d'écran nette, jamais les deux, et jamais un objet qu'on aurait scanné. Ces types portent `autonome = True` sur leur classe, et `generer.py` n'y ajoute ni reprise forcée ni jumeau dégradé probabiliste : `produire` renvoie l'entrée de manifest définitive.
+Un type peut aussi trancher lui-même son régime final sans être la reprise d'un objet physique. C'est le cas de l'offre d'emploi : chaque instance est, dès sa génération, un fichier à texte natif ou une capture d'écran nette, jamais les deux, et jamais un objet qu'on aurait scanné. Ces types portent `autonome = True` sur leur classe, et `generer.py` n'y ajoute ni reprise forcée ni jumeau dégradé : `produire` renvoie l'entrée de manifest définitive.
 
 ## Les polices
 
