@@ -129,6 +129,16 @@ def lignes_formation(fake: Faker, intitule: str, duree: int, nb_stagiaires: int,
     return lignes
 
 
+def stagiaires_piece(fake: Faker, professionnel: bool) -> list[str]:
+    """Stagiaires portés par une facture ou un devis.
+
+    Un client professionnel envoie un groupe, un particulier suit seul : c'est la même
+    règle des deux côtés, cf. le docstring du module.
+    """
+    nb_stagiaires = fake.random_int(1, 8) if professionnel else 1
+    return [f"{fake.first_name()} {fake.last_name()}" for _ in range(nb_stagiaires)]
+
+
 def _piece_moderne(tirage: random.Random, devis: bool) -> Style:
     """Mise en page des logiciels de facturation récents : logo, couleur, tableau dense."""
     return Style(
@@ -242,23 +252,31 @@ def style_piece(seed: int, tirage: random.Random, devis: bool) -> Style:
     return FABRIQUES_PIECE[seed % len(FABRIQUES_PIECE)](tirage, devis)
 
 
-def pii(piece: Piece) -> dict:
+def pii(piece: Piece, style: Style) -> dict:
     """Vérité terrain des données personnelles d'une facture ou d'un devis.
 
     Les deux types portent exactement les mêmes identifiants aux mêmes endroits : c'est
     d'ailleurs ce qui les rend confondables. Un seul extracteur pour les deux évite que
     l'un des deux se mette à déclarer moins que l'autre sans raison.
+
+    L'IBAN et les noms des stagiaires ne sont ajoutés que si le style dessine
+    effectivement le pavé RIB ou le bloc stagiaires : ces deux blocs sont tirés au sort
+    (`avec_rib`, `avec_stagiaires`), et un manifest qui les déclarerait sur un document où
+    ils ne s'impriment pas fausserait la mesure du masquage.
     """
-    return {
+    resultat = {
         "raison_sociale_emetteur": piece.organisme.raison_sociale,
         "siret_emetteur": piece.organisme.siret,
         "email_emetteur": piece.organisme.email,
         "telephone_emetteur": piece.organisme.telephone,
         "designation_client": piece.client.designation,
         "contact_client": piece.client.contact,
-        "iban": piece.coordonnees_bancaires.iban,
-        "noms": piece.stagiaires,
     }
+    if style.avec_rib:
+        resultat["iban"] = piece.coordonnees_bancaires.iban
+    if style.avec_stagiaires:
+        resultat["noms"] = piece.stagiaires
+    return resultat
 
 
 def tags(piece: Piece, style: Style) -> list[str]:

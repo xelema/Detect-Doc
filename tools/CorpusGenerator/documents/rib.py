@@ -154,9 +154,7 @@ class RibDocument(DocumentType):
                 "titulaire": rib.titulaire,
                 "iban": rib.iban,
                 "bic": rib.bic,
-                "adresse_titulaire": f"{rib.adresse_titulaire.ligne1}, "
-                                     f"{rib.adresse_titulaire.code_postal} "
-                                     f"{rib.adresse_titulaire.ville}",
+                "adresse_titulaire": rib.adresse_titulaire.formatee,
             },
             tags=["titulaire-personne" if rib.titulaire_est_personne
                   else "titulaire-entreprise"],

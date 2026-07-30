@@ -271,13 +271,16 @@ def generer_feuille_emargement(seed: int, nombre_participants: int,
                                nombre_creneaux: int,
                                mensuel: bool) -> FeuilleEmargement:
     """Feuille d'émargement synthétique pour une structure décidée par le style."""
-    graine = seed + 1000
-    fake = faker(graine)
+    seed_organisme = seed + 1000
     tirage = random.Random(f"emargement-{seed}")
-    organisme = generer_organisme(graine)
+    organisme = generer_organisme(seed_organisme)
     taux_cible = random.Random(f"remplissage-{seed}").choice(
         TAUX_REMPLISSAGE_EMARGEMENT)
 
+    # Construit après l'appel ci-dessus : `faker()` reseede une instance partagée, la
+    # prendre plus tôt la ferait dériver au passage de `generer_organisme` au lieu de
+    # démarrer sur cette seed, cf. le docstring de `documents.commun.faker`.
+    fake = faker(seed_organisme)
     intitule, _ = fake.random_element(CATALOGUE_FORMATIONS)
     marge_fin = 2 * max(nombre_creneaux, 2)
     jours = fake.random_int(0, (FIN_PERIODE - DEBUT_PERIODE).days - marge_fin)

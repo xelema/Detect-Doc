@@ -71,11 +71,14 @@ class StyleMandat:
 
 
 def generer_mandat_sepa(seed: int, rib: Rib) -> MandatSepa:
-    fake = faker(seed + DECALAGE_SEED_CREANCIER)
     tirage = random.Random(f"mandat-{seed}")
 
     creancier = generer_organisme(seed + DECALAGE_SEED_CREANCIER)
 
+    # Construit après l'appel ci-dessus : `faker()` reseede une instance partagée, la
+    # prendre plus tôt la ferait dériver au passage de `generer_organisme` au lieu de
+    # démarrer sur cette seed, cf. le docstring de `documents.commun.faker`.
+    fake = faker(seed + DECALAGE_SEED_CREANCIER)
     identifiant_national = fake.numerify("######")
     ics = identifiant_creancier_sepa(CODE_ACTIVITE_ICS, identifiant_national)
 
@@ -138,9 +141,7 @@ def produire_mandat(numero: int, type_attendu: str, prefixe: str,
             "titulaire": rib.titulaire,
             "iban": rib.iban,
             "bic": rib.bic,
-            "adresse_titulaire": f"{rib.adresse_titulaire.ligne1}, "
-                                 f"{rib.adresse_titulaire.code_postal} "
-                                 f"{rib.adresse_titulaire.ville}",
+            "adresse_titulaire": rib.adresse_titulaire.formatee,
             "rum": mandat.rum,
         },
         tags=["titulaire-personne" if rib.titulaire_est_personne

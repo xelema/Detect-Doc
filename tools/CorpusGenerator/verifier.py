@@ -37,7 +37,7 @@ from documents.offre import (ARTICLES_SUGGERES, DUREES_CONTRAT, LIBELLES_TROMPEU
 from documents.mandat import DECALAGE_SEED_DEBITEUR, generer_mandat_sepa
 from documents.rib import generer_rib
 from manifest import hash_fichier
-from rendu import logo_svg, montant_en_lettres, rendre_pdf
+from rendu import logo_svg, montant_en_lettres, portrait_svg, rendre_pdf
 
 NB_ECHANTILLONS = 50
 

@@ -30,6 +30,7 @@ Sans Docker, l'outil tourne sous WSL, pas directement sous Windows : WeasyPrint 
 # Dockerfile et sur les listes de documents/commun.py et documents/carte_visite.py :
 # `verifier.py` échoue si l'une manque.
 sudo apt-get install python3-venv libpango-1.0-0 libpangoft2-1.0-0 \
+                     libgl1 libxcb1 \
                      poppler-utils fonts-liberation fonts-dejavu-core \
                      fonts-crosextra-carlito fonts-crosextra-caladea \
                      fonts-croscore fonts-urw-base35 fonts-noto-core \

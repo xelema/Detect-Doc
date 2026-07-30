@@ -16,8 +16,8 @@ rib = 8
 sepa = 8
 rib_sepa = 8
 # Les trois types suivants produisent une seule entrée par unité, leur effectif se lit
-# donc aussi comme un nombre de mises en page couvertes. Dix cartes de visite et dix
-# feuilles couvrent deux fois chacune de leurs cinq structures, quinze offres couvrent
+# donc aussi comme un nombre de mises en page couvertes. Douzes cartes de visite et douzes
+# feuilles couvrent deux fois chacune de leurs cinq structures et plus, quinze offres couvrent
 # trois fois chacun des cinq templates de site.
 carte_visite = 12
 feuille_emar = 12

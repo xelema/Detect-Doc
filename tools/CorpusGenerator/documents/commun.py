@@ -134,6 +134,11 @@ class Coordonnees:
     code_postal: str
     ville: str
 
+    @property
+    def formatee(self) -> str:
+        """Adresse sur une ligne, telle qu'elle s'écrit dans un pavé PII du manifest."""
+        return f"{self.ligne1}, {self.code_postal} {self.ville}"
+
 
 @dataclass
 class Style:
@@ -261,10 +266,27 @@ def client_professionnel(seed: int) -> bool:
     return random.Random(f"professionnel-{seed}").random() < 0.75
 
 
+_FAKER = Faker("fr_FR")
+
+
 def faker(seed: int) -> Faker:
-    fake = Faker("fr_FR")
-    fake.seed_instance(seed)
-    return fake
+    """Faker seedé pour un document donné.
+
+    Reseede l'instance partagée plutôt que de reconstruire un `Faker("fr_FR")` à chaque
+    appel : la construction recharge les fournisseurs de données de la locale et coûte
+    plusieurs ordres de grandeur de plus que `seed_instance` sur une instance existante,
+    ce qu'un corpus entier, avec plusieurs appels par document, finit par payer plein
+    tarif.
+
+    Attention à l'ordre d'appel : l'instance étant partagée, un appelant qui la récupère
+    puis appelle une fonction imbriquée qui reseede à nouveau via `faker()` (par exemple
+    `generer_organisme`, `generer_client` ou `generer_rib` sur une seed différente) verra
+    son propre flux aléatoire décalé sur celui du dernier appel imbriqué. Toujours
+    demander l'instance juste avant de la consommer, une fois les sous-générateurs
+    exécutés, jamais avant.
+    """
+    _FAKER.seed_instance(seed)
+    return _FAKER
 
 
 def sans_accent(texte: str) -> str:

@@ -15,7 +15,8 @@ from documents.base import DocumentType
 from documents.commun import (CATALOGUE_FORMATIONS, DEBUT_PERIODE, FIN_PERIODE,
                               client_professionnel, faker, generer_client,
                               generer_organisme)
-from documents.piece import Piece, Style, lignes_formation, pii, style_piece, tags
+from documents.piece import (Piece, Style, lignes_formation, pii, stagiaires_piece,
+                             style_piece, tags)
 from documents.rib import generer_rib
 from rendu import logo_svg, rendre_pdf
 
@@ -34,19 +35,20 @@ class Facture(Piece):
 
 
 def generer_facture(seed: int, professionnel: bool = True) -> Facture:
-    fake = faker(seed)
-
     organisme = generer_organisme(seed)
     client = generer_client(seed + 1, professionnel)
     rib = generer_rib(seed + 2, organisme.raison_sociale, organisme.adresse)
 
+    # Construit après les appels ci-dessus : `faker()` reseede une instance partagée, la
+    # prendre plus tôt la ferait dériver au passage des générateurs imbriqués au lieu de
+    # démarrer sur `seed`, cf. le docstring de `documents.commun.faker`.
+    fake = faker(seed)
     intitule, duree = fake.random_element(CATALOGUE_FORMATIONS)
-    nb_stagiaires = fake.random_int(1, 8) if professionnel else 1
-    stagiaires = [f"{fake.first_name()} {fake.last_name()}" for _ in range(nb_stagiaires)]
+    stagiaires = stagiaires_piece(fake, professionnel)
 
     # Un organisme exonéré facture sans TVA, sinon le taux normal s'applique.
     taux = Decimal("0") if organisme.exonere_tva else Decimal("20")
-    lignes = lignes_formation(fake, intitule, duree, nb_stagiaires, taux)
+    lignes = lignes_formation(fake, intitule, duree, len(stagiaires), taux)
 
     jours = fake.random_int(0, (FIN_PERIODE - DEBUT_PERIODE).days)
     date_execution = DEBUT_PERIODE + timedelta(days=jours)
@@ -98,7 +100,7 @@ class FactureDocument(DocumentType):
         return manifest.construire_entree(
             identifiant, chemin, self.type_attendu, numero, pages,
             variante=style.as_dict(),
-            pii=pii(facture),
+            pii=pii(facture, style),
             tags=etiquettes,
         )
 

@@ -17,7 +17,8 @@ from documents.base import DocumentType
 from documents.commun import (CATALOGUE_FORMATIONS, DEBUT_PERIODE, FIN_PERIODE,
                               client_professionnel, faker, generer_client,
                               generer_organisme)
-from documents.piece import Piece, Style, lignes_formation, pii, style_piece, tags
+from documents.piece import (Piece, Style, lignes_formation, pii, stagiaires_piece,
+                             style_piece, tags)
 from documents.rib import generer_rib
 from rendu import logo_svg, rendre_pdf
 
@@ -69,19 +70,21 @@ class Devis(Piece):
 
 
 def generer_devis(seed: int, professionnel: bool = True) -> Devis:
-    graine = seed + DECALAGE_SEED_DEVIS
-    fake = faker(graine)
+    seed_devis = seed + DECALAGE_SEED_DEVIS
 
-    organisme = generer_organisme(graine)
-    client = generer_client(graine + 1, professionnel)
-    rib = generer_rib(graine + 2, organisme.raison_sociale, organisme.adresse)
+    organisme = generer_organisme(seed_devis)
+    client = generer_client(seed_devis + 1, professionnel)
+    rib = generer_rib(seed_devis + 2, organisme.raison_sociale, organisme.adresse)
 
+    # Construit après les appels ci-dessus : `faker()` reseede une instance partagée, et
+    # la prendre plus tôt la ferait dériver au passage des générateurs imbriqués au lieu
+    # de démarrer sur `seed_devis`, cf. le docstring de `documents.commun.faker`.
+    fake = faker(seed_devis)
     intitule, duree = fake.random_element(CATALOGUE_FORMATIONS)
-    nb_stagiaires = fake.random_int(1, 8) if professionnel else 1
-    stagiaires = [f"{fake.first_name()} {fake.last_name()}" for _ in range(nb_stagiaires)]
+    stagiaires = stagiaires_piece(fake, professionnel)
 
     taux = Decimal("0") if organisme.exonere_tva else Decimal("20")
-    lignes = lignes_formation(fake, intitule, duree, nb_stagiaires, taux)
+    lignes = lignes_formation(fake, intitule, duree, len(stagiaires), taux)
 
     # Un devis précède la prestation : sa date d'émission est antérieure au début prévu,
     # là où la facture suit une exécution déjà passée. C'est l'inversion la plus
@@ -92,10 +95,13 @@ def generer_devis(seed: int, professionnel: bool = True) -> Devis:
     duree_validite = fake.random_element(DUREES_VALIDITE_JOURS)
     date_debut_prevue = date_emission + timedelta(days=fake.random_int(15, 90))
 
-    # Une journée de formation compte sept heures, décompte usuel du secteur.
+    # Une journée de formation compte sept heures, décompte usuel du secteur. Le calcul
+    # ne s'affiche que quand la durée tombe juste : sinon "4 journées de 7 heures"
+    # afficherait 28 h pour une formation facturée 30 h, une incohérence que le devis ne
+    # doit jamais porter.
     nb_journees = duree // 7
     delai = (f"{nb_journees} journée{'s' if nb_journees > 1 else ''} de 7 heures"
-             if nb_journees else f"{duree} heures")
+             if nb_journees and duree % 7 == 0 else f"{duree} heures")
 
     return Devis(
         numero=f"{fake.random_element(PREFIXES_DEVIS)}{date_emission.year}"
@@ -160,7 +166,7 @@ class DevisDocument(DocumentType):
         return manifest.construire_entree(
             identifiant, chemin, self.type_attendu, numero, pages,
             variante=style.as_dict(),
-            pii=pii(devis),
+            pii=pii(devis, style),
             tags=etiquettes,
         )
 
