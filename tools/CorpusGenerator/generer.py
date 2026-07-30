@@ -141,13 +141,15 @@ def main() -> None:
         entrees.extend(_produire(type_document, nombre))
 
     manifest.enregistrer(entrees)
+    manifest.ecrire_composition()
 
     for entree in entrees:
         print(f"  {entree['id']:<12} {entree['split']:<4} {entree['regime']:<12} "
               f"{', '.join(entree['tags'])}")
     print(f"\nConfiguration : {FICHIER}")
     print(f"Empreinte     : {SHA256}")
-    print(f"{len(entrees)} document(s) écrits, manifest mis à jour.")
+    print(f"Documentation : {manifest.FICHIER_DOC_CORPUS}")
+    print(f"{len(entrees)} document(s) écrits, manifest et composition mis à jour.")
 
 
 if __name__ == "__main__":

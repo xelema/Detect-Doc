@@ -18,12 +18,24 @@ from pathlib import Path
 
 from configuration import (
     DOSSIER_CORPUS,
-    PROBABILITE_DEV,
+    UNITE_SUR_N_EN_DEV,
     SHA256 as CONFIGURATION_SHA256,
 )
 
 FICHIER_MANIFEST = DOSSIER_CORPUS / "manifest.jsonl"
 DOSSIER_DOCUMENTS = DOSSIER_CORPUS / "raw"
+
+# Section de la documentation du corpus réécrite depuis le manifest. Le chemin se déduit
+# du dossier de sortie plutôt que d'une clé de configuration : il tombe juste aussi bien
+# depuis le dépôt, où `corpus/` et `docs/` sont voisins, que dans le conteneur, où
+# `/corpus` et `/docs` le sont également.
+FICHIER_DOC_CORPUS = DOSSIER_CORPUS.parent / "docs" / "corpus.md"
+BALISE_DEBUT = "<!-- composition:debut -->"
+BALISE_FIN = "<!-- composition:fin -->"
+
+# Types produits sans appartenir à la liste métier : ils mesurent le comportement du
+# service quand aucun type de la liste ne convient.
+TYPES_DISTRACTEURS = {"facture", "devis"}
 
 # Un mot par type produit sous documents/, où chacun vit dans son propre fichier
 # (documents/base.py explique le patron). Cette liste reste indépendante de ce dossier :
@@ -50,21 +62,31 @@ def hash_fichier(chemin: Path) -> str:
     return hashlib.sha256(chemin.read_bytes()).hexdigest()
 
 
-def _split(seed: int) -> str:
+def _split(type_attendu: str, seed: int) -> str:
     """Répartition dev / test, scellée dès le premier document.
 
-    Un quart du corpus va dans dev, qui sert au réglage du prompt et de l'OCR ; le jeu
-    	est ne s'ouvre qu'aux jalons de mesure.
+    Le jeu dev sert au réglage du prompt et de l'OCR, et c'est le seul qu'on s'autorise à
+    ouvrir document par document ; le jeu test ne s'ouvre qu'aux jalons de mesure. Un
+    type absent de dev est donc un type dont on devra régler les règles sans jamais en
+    avoir lu un exemplaire.
 
-    Le tirage passe par un flux nommé plutôt que par un seed % 4 : d'autres facettes du
-    document, comme le choix du template, tournent elles aussi sur la seed, et un modulo
-    partagé les ferait toutes s'aligner. Le jeu de réglage se retrouverait alors réduit à
-    une seule mise en page, ce qui viderait de son sens tout réglage fait dessus.
+    La répartition est stratifiée par type et par bloc d'unités consécutives : dans
+    chaque bloc, une unité et une seule part en dev. Chaque type reçoit ainsi sa part
+    exacte, garantie dès le premier bloc complet, là où un tirage indépendant laissait
+    les types à faible effectif sans aucun document de réglage.
 
-    Le flux dépend du seul numéro du document : ajouter des documents ne redistribue
-    jamais ceux qui existent déjà.
+    La position dans le bloc reste tirée, et le flux inclut le type. Deux raisons : une
+    règle purement modulaire s'alignerait sur les facettes qui tournent déjà sur le même
+    modulo, les quatre fabriques de carte de visite en tête, et le jeu de réglage se
+    retrouverait réduit à une seule mise en page ; et un flux commun à tous les types
+    leur imposerait les mêmes rangs, ce qui est précisément ce qu'on cherche à éviter.
+
+    Le bloc ne dépend que du rang de l'unité : allonger un type ne redistribue jamais les
+    blocs déjà constitués.
     """
-    return "dev" if random.Random(f"split-{seed}").random() < PROBABILITE_DEV else "test"
+    bloc, rang = divmod(seed - 1, UNITE_SUR_N_EN_DEV)
+    position = random.Random(f"split-{type_attendu}-{bloc}").randrange(UNITE_SUR_N_EN_DEV)
+    return "dev" if rang == position else "test"
 
 
 def _chemin_relatif(chemin: Path) -> str:
@@ -96,7 +118,7 @@ def construire_entree(identifiant: str, chemin: Path, type_attendu: str, seed: i
         # générateur connaît les valeurs qu'il a injectées, ce qui permettra plus tard
         # d'évaluer un masquage automatique sans annoter le corpus à la main.
         "pii_injectees": pii,
-        "split": _split(seed),
+        "split": _split(type_attendu, seed),
         "configuration_sha256": CONFIGURATION_SHA256,
     }
 
@@ -192,6 +214,59 @@ def valider() -> list[str]:
             anomalies.append(f"{identifiant} : hash differente du manifest")
 
     return anomalies
+
+
+def _compte(entrees: list[dict], champ: str, valeur: str) -> int:
+    return sum(1 for entree in entrees if entree[champ] == valeur)
+
+
+def composition() -> str:
+    """Tableau de composition du corpus, entièrement dérivé du manifest."""
+    documents = list(lire().values())
+    jumeaux = sum(1 for entree in documents if entree["derive_de"])
+    types = sorted({entree["type_attendu"] for entree in documents})
+
+    lignes = [
+        "| Type | Documents | `dev` | `test` | Texte natif | Numérisés | Rôle |",
+        "|---|---|---|---|---|---|---|",
+    ]
+    for type_attendu in types:
+        du_type = [e for e in documents if e["type_attendu"] == type_attendu]
+        role = "distracteur" if type_attendu in TYPES_DISTRACTEURS else "liste métier"
+        lignes.append(
+            f"| `{type_attendu}` | {len(du_type)} "
+            f"| {_compte(du_type, 'split', 'dev')} "
+            f"| {_compte(du_type, 'split', 'test')} "
+            f"| {_compte(du_type, 'regime', 'texte-natif')} "
+            f"| {_compte(du_type, 'regime', 'scanne')} "
+            f"| {role} |")
+
+    lignes += ["", (
+        f"**{len(documents)} documents** en {len(types)} types, pour "
+        f"{len(documents) - jumeaux} contenus distincts : {jumeaux} documents sont le "
+        f"jumeau scanné d'un autre, même contenu et même jeu, reliés par `derive_de`.")]
+    return "\n".join(lignes)
+
+
+def ecrire_composition() -> None:
+    """Réécrit la composition dans la documentation du corpus.
+
+    Le corpus change dès qu'on touche aux effectifs de la configuration : une composition
+    recopiée à la main y est fausse à la régénération suivante, et une documentation
+    fausse est pire qu'une documentation absente. Seul le bloc délimité par les balises
+    est remplacé ; tout le reste du fichier est de la prose qui ne se déduit d'aucun
+    compteur, et qui reste écrite à la main.
+    """
+    texte = FICHIER_DOC_CORPUS.read_text(encoding="utf-8")
+    debut, fin = texte.find(BALISE_DEBUT), texte.find(BALISE_FIN)
+    if debut == -1 or fin == -1:
+        raise ValueError(
+            f"{FICHIER_DOC_CORPUS} ne porte pas les balises {BALISE_DEBUT} et "
+            f"{BALISE_FIN} qui délimitent la composition à réécrire")
+
+    remplacement = f"{BALISE_DEBUT}\n\n{composition()}\n\n"
+    FICHIER_DOC_CORPUS.write_text(
+        texte[:debut] + remplacement + texte[fin:], encoding="utf-8")
 
 
 def resume() -> str:

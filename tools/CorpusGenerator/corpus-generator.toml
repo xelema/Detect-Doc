@@ -10,21 +10,24 @@ output_dir = "../../corpus"
 # Facture et devis à parité, et les trois voisins bancaires à parité entre eux : ce sont
 # les groupes confondables du corpus, et une matrice de confusion ne se lit que sur des
 # effectifs comparables.
-facture = 20
-devis = 20
-rib = 7
-sepa = 7
-rib_sepa = 7
+facture = 16
+devis = 16
+rib = 8
+sepa = 8
+rib_sepa = 8
 # Les trois types suivants produisent une seule entrée par unité, leur effectif se lit
 # donc aussi comme un nombre de mises en page couvertes. Dix cartes de visite et dix
 # feuilles couvrent deux fois chacune de leurs cinq structures, quinze offres couvrent
 # trois fois chacun des cinq templates de site.
-carte_visite = 10
-feuille_emar = 10
+carte_visite = 12
+feuille_emar = 12
 offre_emploi = 15
 
 [split]
-dev_probability = 0.25
+# Une unité sur N part dans le jeu de réglage, dans chaque type pris séparément. Le jeu
+# dev est le seul qu'on s'autorise à ouvrir document par document : chaque type doit y
+# être présent, sans quoi ses règles se règlent sans en avoir lu un seul exemplaire.
+dev_every = 4
 
 [degradation]
 # Une unité sur N se dédouble en un jumeau scanné du même contenu. Le rang décide, pas un

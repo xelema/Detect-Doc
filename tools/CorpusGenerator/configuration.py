@@ -15,7 +15,7 @@ DOSSIER_CORPUS = (
 ).resolve()
 
 DOCUMENTS = TOML["documents"]
-PROBABILITE_DEV = float(TOML["split"]["dev_probability"])
+UNITE_SUR_N_EN_DEV = int(TOML["split"]["dev_every"])
 
 DEGRADATION = TOML["degradation"]
 UNITE_SUR_N_DEDOUBLEE = int(DEGRADATION["twin_every"])

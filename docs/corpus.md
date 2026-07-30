@@ -32,26 +32,32 @@ Le validateur, `tools/CorpusGenerator/manifest.py`, vérifie pour chaque entrée
 
 `pii_injectees` enregistre les valeurs personnelles injectées dans le document, nom, IBAN, e-mail. C'est la vérité terrain qui permettra de mesurer le rappel du masquage PII sans détecteur dédié, une fois ce chantier ouvert.
 
-Le split `dev` / `test` suit une règle arithmétique sur la seed, pas un tirage aléatoire : un document ne change jamais de camp d'une exécution à l'autre. Tout le réglage de prompt et d'OCR se fait sur `dev`, `test` ne s'ouvre qu'aux mesures.
+Le split `dev` / `test` est stratifié par type : dans chaque bloc de quatre documents d'un même type, un part au réglage. Chaque type est donc présent dans `dev`, y compris les types à faible effectif, et un document ne change jamais de camp d'une exécution à l'autre. Tout le réglage de prompt et d'OCR se fait sur `dev`, seul jeu qu'on s'autorise à ouvrir document par document ; `test` ne s'ouvre qu'aux mesures.
 
 ## Composition actuelle
 
-96 documents au 30/07/2026, huit types, 10 en `dev` et 86 en `test` :
+Le tableau qui suit est réécrit par le générateur à chaque exécution, à partir du manifest lui-même. Le modifier à la main n'a pas de sens : il sera remplacé à la prochaine génération.
 
-| Type | Documents | Dans la liste métier |
-|---|---|---|
-| `carte_visite` | 10 | oui, priorité 1 |
-| `feuille_emar` | 10 | oui, priorité 1 |
-| `offre_emploi` | 15 | oui, priorité 1 |
-| `rib` | 7 | oui, priorité 1 |
-| `sepa` | 7 | oui, priorité 1 |
-| `rib_sepa` | 7 | oui, priorité 1 |
-| `facture` | 20 | non, document distracteur |
-| `devis` | 20 | non, document distracteur |
+<!-- composition:debut -->
+
+| Type | Documents | `dev` | `test` | Texte natif | Numérisés | Rôle |
+|---|---|---|---|---|---|---|
+| `carte_visite` | 12 | 3 | 9 | 1 | 11 | liste métier |
+| `devis` | 16 | 4 | 12 | 11 | 5 | distracteur |
+| `facture` | 16 | 4 | 12 | 11 | 5 | distracteur |
+| `feuille_emar` | 12 | 3 | 9 | 2 | 10 | liste métier |
+| `offre_emploi` | 15 | 3 | 12 | 11 | 4 | liste métier |
+| `rib` | 8 | 3 | 5 | 6 | 2 | liste métier |
+| `rib_sepa` | 8 | 1 | 7 | 6 | 2 | liste métier |
+| `sepa` | 8 | 3 | 5 | 6 | 2 | liste métier |
+
+**95 documents** en 8 types, pour 79 contenus distincts : 16 documents sont le jumeau scanné d'un autre, même contenu et même jeu, reliés par `derive_de`.
+
+<!-- composition:fin -->
 
 Huit types de la liste métier, la priorité 2 et `EVAL_FORM` de la priorité 1, ne sont pas encore produits.
 
-Régime de fichier : 50 documents à texte natif, 46 numérisés, scan, photocopie, fax ou photo au smartphone. Les deux régimes coexistent volontairement : c'est l'écart entre les deux qui mesure ce que coûte l'OCR.
+Les documents numérisés le sont en scan, photocopie, fax ou photo au smartphone. Les deux régimes coexistent volontairement : c'est l'écart entre eux qui mesure ce que coûte l'OCR, et les jumeaux le mesurent à contenu strictement identique.
 
 ## Reproduire le corpus
 

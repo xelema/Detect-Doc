@@ -17,7 +17,7 @@ docker compose run --rm --entrypoint python generator manifest.py
 docker compose run --rm --entrypoint python generator verifier.py
 ```
 
-Le corpus est écrit directement dans `Detect-Doc/corpus` grâce au volume défini dans `compose.yaml`. Le fichier TOML local est monté en lecture seule dans le conteneur.
+Le corpus est écrit directement dans `Detect-Doc/corpus` grâce au volume défini dans `compose.yaml`. `Detect-Doc/docs` est monté pour la même raison : la génération y réécrit la composition du corpus. Le fichier TOML local est monté en lecture seule dans le conteneur.
 
 Le conteneur tourne sous l'uid 1000 et non sous `root`, sans quoi il laisserait dans `corpus/raw/` des fichiers qu'une exécution suivante hors Docker ne pourrait plus remplacer. Les deux modes s'alternent donc librement sur le même corpus.
 
@@ -58,11 +58,13 @@ python3 -m venv .venv
 |---|---|
 | `corpus` | dossier de sortie |
 | `documents` | nombre de documents par type, jumeaux scannés compris |
-| `split` | proportion stable du jeu `dev` |
+| `split` | règle de répartition entre jeu de réglage et jeu de mesure |
 | `degradation` | règle de dédoublement, résolution, qualité JPEG |
 | `degradation.weights` | poids relatifs des cinq profils |
 
 Les effectifs de `documents` comptent les documents écrits au manifest. Un type dont les unités se dédoublent en un jumeau scanné voit son nombre d'unités ajusté pour tomber exactement sur le compte demandé, jamais l'inverse.
+
+Changer ces effectifs suffit : la génération réécrit le manifest, puis la composition du corpus dans `Detect-Doc/docs/corpus.md`, entre les balises `composition:debut` et `composition:fin`. Le reste de ce fichier est de la prose, écrite à la main, qui n'est jamais touchée.
 
 Les chemins relatifs sont résolus depuis le fichier TOML. Les paramètres détaillés de chaque effet Augraphy restent dans `degradation.py`, car ils définissent l'implémentation des profils.
 
@@ -359,7 +361,17 @@ sequenceDiagram
 
 La seed pilote tout : le contenu, la présentation, la dégradation et la répartition entre le jeu de réglage et le jeu de mesure. Rien n'est tiré au hasard sans elle.
 
-Chaque facette tire dans un **flux nommé** distinct, `random.Random(f"split-{seed}")` par exemple. C'est indispensable : plusieurs facettes dérivées d'un même `seed % 4` finiraient par s'aligner, et le jeu de réglage se retrouverait réduit à une seule mise en page.
+Chaque facette tire dans un **flux nommé** distinct, `random.Random(f"mandat-{seed}")` par exemple. C'est indispensable : plusieurs facettes dérivées d'un même `seed % 4` finiraient par s'aligner, et le jeu de réglage se retrouverait réduit à une seule mise en page.
+
+## Les deux jeux
+
+Le jeu **dev** sert au réglage du prompt et de l'OCR, et c'est le seul qu'on s'autorise à ouvrir document par document. Le jeu **test** ne s'ouvre qu'aux jalons de mesure : régler sur les documents qui servent à noter donnerait un chiffre optimiste, qui s'effondrerait en production.
+
+La répartition est **stratifiée par type et par bloc de `dev_every` unités consécutives** : dans chaque bloc, une unité et une seule part en dev. Chaque type reçoit ainsi sa part exacte, garantie dès le premier bloc complet. Une répartition tirée globalement laissait les types à faible effectif sans aucun document de réglage, précisément ceux du groupe bancaire dont les règles de désambiguïsation sont les plus difficiles à écrire.
+
+La position de l'unité dans son bloc reste tirée, dans un flux qui inclut le type : une règle purement modulaire s'alignerait sur les facettes qui tournent déjà sur le même modulo, et un flux commun à tous les types leur imposerait les mêmes rangs. Le bloc ne dépendant que du rang, allonger un type ne redistribue jamais les blocs déjà constitués.
+
+Un document et son jumeau scanné tombent toujours dans le même jeu, l'entrée dérivée recopiant celle de son original. Les séparer ferait fuiter le contenu du jeu de réglage dans le jeu de mesure, et le validateur du manifest le refuse.
 
 ## Les deux régimes
 
@@ -374,8 +386,6 @@ Une unité sur `twin_every` reçoit un **jumeau scanné**, produit en rastérisa
 | `fax` | binarisation brutale et lignes manquantes |
 
 Comparer un résultat sur un document propre et sur son jumeau isole exactement ce que la reconnaissance de caractères coûte en qualité, sur un contenu strictement identique. Les deux régimes doivent donc rester bien représentés : sans documents propres il n'y a plus de référence, sans documents dégradés on ne mesure pas l'OCR du tout.
-
-Un document et son jumeau tombent toujours dans le même jeu, puisqu'ils partagent la seed. Les séparer ferait fuiter le contenu du jeu de réglage dans le jeu de mesure, et le validateur du manifest le refuse.
 
 ### Les types repris d'un objet physique
 

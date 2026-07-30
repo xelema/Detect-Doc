@@ -11,4 +11,9 @@ services:
     user: "1000:1000"
     volumes:
       - ../../corpus:/corpus
+      # Le generateur reecrit la composition dans docs/corpus.md a partir du manifest
+      # qu'il vient d'ecrire. Sans ce montage, la generation sous Docker echouerait la ou
+      # elle passe sous WSL, et la documentation ne serait a jour que dans un des deux
+      # environnements.
+      - ../../docs:/docs
       - ./corpus-generator.toml:/app/corpus-generator.toml:ro
