@@ -9,10 +9,10 @@ Les fiches se recopient dans le pré-prompt du classifieur : elles sont écrites
 | `CARTE_VISITE` | Carte de visite | [écrite](#carte_visite-carte-de-visite) |
 | `EVAL_FORM` | Évaluation de la formation | à écrire |
 | `FEUILLE_EMAR` | Feuille d'émargement | [écrite](#feuille_emar-feuille-démargement) |
-| `SEPA` | Mandat SEPA | à écrire |
+| `SEPA` | Mandat SEPA | [écrite](#sepa-mandat-sepa) |
 | `OFF_STAG_EMP` | Offre de stage, alternance, emploi | [écrite](#off_stag_emp-offre-de-stage-alternance-emploi) |
-| `RIB` | Relevé d'identité bancaire | à écrire |
-| `RIB_SEPA` | Relevé d'identité bancaire et mandat SEPA | à écrire |
+| `RIB` | Relevé d'identité bancaire | [écrite](#rib-relevé-didentité-bancaire) |
+| `RIB_SEPA` | Relevé d'identité bancaire et mandat SEPA | [écrite](#rib_sepa-relevé-didentité-bancaire-et-mandat-sepa) |
 | `CONV_PROF` | Alternance, convention de formation en contrat de professionnalisation | à écrire |
 | `APP_CONV_SFP` | Apprentissage, convention stagiaire de la formation professionnelle | à écrire |
 | `CERTIF_FORM` | Certificat de formation | à écrire |
@@ -238,3 +238,135 @@ Ce que le générateur doit produire pour que le type soit représentatif. Chaqu
 10. **Bandeau de consentement aux cookies répété plusieurs fois** sur un même document pour au moins un des templates, et cas d'un stage sans rémunération affichée.
 
 Le manifest enregistre pour chaque document le template de site imité, le régime d'acquisition, le nombre de pages, le type de contrat affiché face au type de contrat réel, et la présence d'un contact nominatif.
+
+## `RIB`, relevé d'identité bancaire
+
+### Définition
+
+Document émis par un établissement bancaire qui identifie un compte : coordonnées de l'établissement, codes nationaux ou IBAN et BIC, et le plus souvent le titulaire. Il ne porte ni cartouche à signer, ni autorisation de prélèvement, ni montant : c'est une pièce d'identification, à la différence du mandat SEPA qui l'accompagne parfois.
+
+### Marqueurs
+
+Le signal tient à la coexistence d'un petit nombre de blocs très normés, quelle que soit la mise en page qui les porte.
+
+| Marqueur | Force |
+|---|---|
+| IBAN, toujours présent, souvent imprimé par groupes de quatre caractères | fort, et c'est le seul marqueur commun aux deux exemples réels |
+| BIC, toujours présent, à côté de l'IBAN | fort |
+| pavé des quatre codes nationaux, établissement, guichet, compte, clé, en table | fort quand il est présent, mais absent d'un export récent qui ne montre que l'IBAN |
+| en-tête ou bandeau de l'établissement bancaire, logo et nom | fort |
+| bloc « Titulaire du compte », nom et adresse | moyen, absent sur un des deux exemples réels |
+| mention d'usage en pied (« Remettez ce relevé à tout organisme... ») | moyen |
+| aucun cartouche à signer, aucune clause d'autorisation, aucun montant | fort en négatif, c'est ce qui le distingue du mandat SEPA |
+
+### Désambiguïsation
+
+Le seul risque de confusion réel est avec ses deux voisins directs du même groupe, `SEPA` et `RIB_SEPA` : les trois partagent le même pavé de coordonnées bancaires.
+
+| Confusion | Ce qui tranche |
+|---|---|
+| `SEPA` | le mandat ne montre jamais le pavé de codes établissement/guichet/compte/clé, seulement l'IBAN et le BIC, et il porte en revanche RUM, ICS, un cartouche de type de paiement et une signature. Le RIB isolé n'a rien de tout cela |
+| `RIB_SEPA` | présence conjointe du pavé de codes bancaires **et** du cartouche de mandat, RUM et ICS, tranche pour `RIB_SEPA`. Le RIB isolé n'a jamais de RUM ni d'ICS |
+| pavé RIB en pied d'une facture ou d'un devis | un RIB isolé occupe toute la page à lui seul. Le pavé qui figure au bas d'une pièce comptable est un fragment au milieu d'un tableau de lignes, de totaux et d'un pavé légal, jamais la totalité du document |
+
+**Règle opérationnelle :** en présence d'un IBAN et d'un BIC, sans cartouche de mandat ni RUM ni ICS, et occupant la totalité d'une page par ailleurs peu chargée, répondre RIB.
+
+### Ce que montrent les 2 exemples réels
+
+Fournis par le métier, non versionnés, dans `tmp/samples/RIB`. Deux PDF d'une seule page chacun, tous deux d'origine bancaire.
+
+**Le premier est un export bancaire sans couche texte.** `IPTIC-2020-IPTIC-6144-RIB 2.pdf` est un relevé CIC, PDF A4 sans aucun texte extractible malgré un rendu net et vectoriel : ni `pdftotext` ni un lecteur de texte PDF n'y trouvent le moindre mot, seule une inspection visuelle révèle le contenu. Il porte un bandeau CIC, un pavé de quatre codes (banque, guichet, compte, clé, plus la devise EUR), une section IBAN et BIC, un bloc « Titulaire du compte (Account Owner) » nominatif avec adresse, un bloc domiciliation avec le téléphone de l'agence, et une mention d'usage en pied de page.
+
+**Le second est explicitement un spécimen pédagogique.** `RIB_AXA-BANQUE 1.pdf` porte un filigrane diagonal « DOCUMENT PÉDAGOGIQUE » et une couche de texte native. Sa mise en page est empilée en un seul bloc plutôt qu'en deux colonnes : titre « Relevé d'identité bancaire édité le JJ/MM/AAAA » avec la date d'édition intégrée au titre plutôt qu'affichée à part, puis trois blocs successifs, Domiciliation avec le pavé de codes, IBAN découpé en sept cases individuelles, Code BIC dans sa propre case. **Aucun bloc titulaire n'y figure du tout** : le document ne montre que l'identité bancaire, pas celle du client.
+
+**L'invariant confirmé sur les deux exemples est réduit à l'essentiel.** Codes nationaux, IBAN, BIC. Tout le reste, présence du titulaire, disposition en une ou deux colonnes, position de la date d'édition, filigrane ou non, varie déjà sur un échantillon de deux. Ce constat valide le choix déjà pris par le générateur : produire une seule mise en page mais volontairement peu chargée, plutôt que plusieurs mises en page qui simuleraient une variété non observée.
+
+**Le découpage de l'IBAN par groupes de quatre caractères**, déjà implémenté via `iban_formate`, est confirmé par l'exemple AXA : `FR76 4497 1647 9557 2177 4041 842`, exactement le format que produit `python-stdnum`.
+
+### Spécification de génération
+
+1. **Un seul template**, volontairement peu variable : dans la réalité, les RIB se ressemblent presque tous, leur forme étant quasi normalisée. Inventer plusieurs présentations rendrait le corpus moins représentatif, pas plus.
+2. **Pavé des quatre codes nationaux, IBAN et BIC toujours présents**, seuls marqueurs communs aux deux exemples réels.
+3. **Bloc titulaire tiré, pas systématique** : le second exemple réel n'en montre aucun, un export purement bancaire peut se limiter à l'identité du compte.
+4. **Titulaire personne physique ou entreprise**, tiré indépendamment, une entreprise étant imposée quand le RIB est celui de l'organisme émetteur d'une facture ou d'un devis.
+5. **Aucun cartouche à signer, aucune clause d'autorisation, aucun montant** : c'est ce qui distingue structurellement ce type de `SEPA` et `RIB_SEPA`.
+
+Le manifest enregistre pour chaque document le titulaire, sa nature personne ou entreprise, et les identifiants bancaires injectés comme PII de vérité terrain.
+
+## `SEPA`, mandat SEPA
+
+### Définition
+
+Formulaire par lequel un débiteur autorise un créancier, ici l'organisme de formation, à prélever son compte. Il repose sur un modèle largement normalisé au niveau européen (spécification EPC, reprise telle quelle par la quasi-totalité des créanciers français) : référence unique de mandat (RUM), identifiant créancier SEPA (ICS), type de paiement, clause d'autorisation, signature du débiteur.
+
+**Aucun exemple réel n'a été fourni pour ce type** (D25 ne couvre que carte de visite, feuille d'émargement, offre et RIB). Cette fiche s'appuie sur le modèle normatif EPC/CFONB, la source recommandée par [[Etape 1 - Corpus et protocole]] pour les types normés de la priorité 2, plutôt que sur un dépouillement d'exemples.
+
+### Marqueurs
+
+| Marqueur | Force |
+|---|---|
+| référence unique de mandat (RUM) | fort, et propre au groupe `SEPA` / `RIB_SEPA` |
+| identifiant créancier SEPA (ICS), forme `FR` + 2 chiffres + 3 caractères + identifiant national | fort, et propre au groupe `SEPA` / `RIB_SEPA` |
+| clause d'autorisation standardisée (« vous autorisez (A)... et (B)... ») | fort, texte quasi identique d'un créancier à l'autre |
+| cartouche de type de paiement, « récurrent / répétitif » ou « ponctuel » | fort |
+| IBAN et BIC du débiteur, sans le pavé de codes établissement/guichet/compte/clé | moyen, présents mais sous une forme plus dépouillée que sur un RIB |
+| identité du créancier et du débiteur, chacun avec son adresse | moyen |
+| lieu, date et signature manuscrite du débiteur | moyen |
+
+### Désambiguïsation
+
+| Confusion | Ce qui tranche |
+|---|---|
+| `RIB` | le RIB ne porte jamais de RUM ni d'ICS, jamais de cartouche de type de paiement, jamais de signature |
+| `RIB_SEPA` | présence conjointe du pavé de coordonnées bancaires **et** du cartouche de mandat tranche pour `RIB_SEPA`. Un mandat isolé n'a pas le pavé de codes établissement/guichet/compte/clé, seulement l'IBAN et le BIC |
+| formulaire d'autorisation générique, hors périmètre | RUM et ICS sont propres au prélèvement SEPA, aucun autre formulaire du périmètre ne les porte |
+
+**Règle opérationnelle :** en présence d'un RUM et d'un ICS, avec une clause d'autorisation de prélèvement et une signature, mais sans le pavé de codes établissement/guichet/compte/clé, répondre mandat SEPA.
+
+### Spécification de génération
+
+1. **Un seul template**, partagé avec `RIB_SEPA` (`mandat_sepa_01.html`) : seul le booléen qui affiche ou masque le pavé de codes bancaires distingue les deux types au rendu, sur le modèle de ce que `documents/piece.py` fait déjà pour la facture et le devis.
+2. **Jamais le pavé de codes établissement/guichet/compte/clé**, seulement l'IBAN et le BIC du débiteur, cohérents avec ces mêmes codes en interne.
+3. **RUM et ICS toujours présents et valides**, l'ICS portant ses deux chiffres de contrôle calculés par le même algorithme ISO 7064 que l'IBAN.
+4. **Type de paiement tiré**, récurrent ou répétitif dans la majorité des cas, un paiement ponctuel restant minoritaire.
+5. **Clause d'autorisation standardisée**, reprise du modèle EPC quasi universel en France, avec le nom du créancier interpolé.
+6. **Signature manuscrite tracée**, jamais du texte en police cursive : même contrainte que sur la feuille d'émargement, un mandat déposé en gestion documentaire est signé, et un copier-coller ne doit jamais en révéler le nom.
+7. **Débiteur et créancier tirés indépendamment** du débiteur et du créancier d'une facture ou d'un devis de même numéro, pour éviter les quasi-jumeaux textuels au sein du corpus.
+
+Le manifest enregistre le RUM, le type de paiement et les identifiants bancaires injectés comme PII de vérité terrain.
+
+## `RIB_SEPA`, relevé d'identité bancaire et mandat SEPA
+
+### Définition
+
+Formulaire combiné qui réunit dans une seule pièce le relevé d'identité bancaire du débiteur et le mandat de prélèvement SEPA qu'il signe. C'est le document que beaucoup de créanciers envoient à faire compléter et retourner en une fois, plutôt que deux pièces séparées.
+
+**Aucun exemple réel n'a été fourni pour ce type**, comme pour `SEPA` : cette fiche combine le modèle normatif du mandat et la forme du RIB observée sur les deux exemples réels du groupe.
+
+### Marqueurs
+
+C'est l'union littérale des marqueurs de `RIB` et de `SEPA` : c'est ce qui en fait le cas le plus dur du corpus, décrit comme tel dans [[Etape 1 - Corpus et protocole]].
+
+| Marqueur | Force |
+|---|---|
+| présence simultanée du pavé de codes établissement/guichet/compte/clé **et** du cartouche RUM/ICS | fort, et c'est le marqueur qui tranche à lui seul |
+| IBAN, BIC | fort, partagé avec `RIB` et `SEPA` |
+| clause d'autorisation, type de paiement, signature | fort, partagé avec `SEPA` |
+| identité du créancier et du débiteur | moyen |
+
+### Désambiguïsation
+
+| Confusion | Ce qui tranche |
+|---|---|
+| `RIB` | absence du cartouche RUM/ICS sur un RIB isolé |
+| `SEPA` | absence du pavé de codes établissement/guichet/compte/clé sur un mandat isolé |
+
+**Règle opérationnelle :** un seul des deux blocs, pavé de codes bancaires ou cartouche de mandat, tranche pour l'autre type du groupe. Leur présence conjointe tranche pour `RIB_SEPA`, et c'est la seule règle qui sépare correctement les trois types.
+
+### Spécification de génération
+
+1. **Même template et mêmes données que `SEPA`**, avec le pavé de codes établissement/guichet/compte/clé affiché en plus, au-dessus du cartouche de mandat.
+2. **Les mêmes identifiants bancaires** alimentent le pavé, l'IBAN et le BIC : ils sont générés ensemble, comme pour `RIB`, afin qu'un document ne se contredise jamais lui-même.
+3. Pour le reste, cf. la spécification de `SEPA`, points 3 à 7, inchangée.
+
+Le manifest enregistre les mêmes champs que `SEPA`.

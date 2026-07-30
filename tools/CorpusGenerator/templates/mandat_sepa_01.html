@@ -1,0 +1,179 @@
+{# Template de mandat de prelevement SEPA, variante 01. Sert a la fois SEPA et RIB_SEPA :
+   seul s.avec_pave_rib decide si le pave de codes bancaires du RIB s'affiche au-dessus
+   du cartouche de mandat. Reprend la structure de rib_01.html pour le pave et l'IBAN,
+   sous l'en-tete du creancier plutot que celui de la banque du titulaire. #}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Mandat de prélèvement SEPA</title>
+<style>
+  @page { size: A4; margin: 20mm 18mm; }
+  body {
+    font-family: "{{ s.police }}", Arial, sans-serif;
+    font-size: {{ s.corps_pt }}pt;
+    color: #1a1a1a;
+  }
+  table { border-collapse: collapse; }
+  .entete { width: 100%; margin-bottom: 10mm; }
+  .entete td { vertical-align: top; }
+  .creancier-nom { font-size: 15pt; font-weight: bold; color: {{ s.couleur }}; }
+  .creancier-detail { font-size: 8pt; color: #555; line-height: 1.4; }
+  .titre {
+    background: {{ s.couleur }}; color: #fff; padding: 5px 10px;
+    font-size: 12pt; font-weight: bold; letter-spacing: 1.5px;
+    text-transform: uppercase; text-align: center;
+  }
+  .cadre { border: 1px solid #999; border-top: none; padding: 7mm 8mm; }
+  .section { margin-bottom: 6mm; }
+  .section:last-child { margin-bottom: 0; }
+  .intitule {
+    font-size: 7.5pt; text-transform: uppercase; letter-spacing: 1px;
+    color: #666; border-bottom: 1px solid #ddd; padding-bottom: 2px;
+    margin-bottom: 3px;
+  }
+  .codes { width: 100%; margin-top: 2px; }
+  .codes th {
+    border: 1px solid #999; background: #f2f2f2; padding: 4px;
+    font-size: 7.5pt; font-weight: normal; color: #444;
+  }
+  .codes td {
+    border: 1px solid #999; padding: 7px 4px; text-align: center;
+    font-family: "{{ s.police_mono }}", monospace; font-size: 11pt;
+    letter-spacing: 1px;
+  }
+  .international td { padding: 2px 0; vertical-align: top; }
+  .international .cle { width: 22mm; font-size: 8.5pt; color: #555; }
+  .valeur-mono {
+    font-family: "{{ s.police_mono }}", monospace; font-size: 11pt;
+    letter-spacing: 0.5px;
+  }
+  .deux-colonnes { width: 100%; }
+  .deux-colonnes td { vertical-align: top; width: 50%; }
+  .deux-colonnes td:first-child { padding-right: 8mm; }
+  .nom-fort { font-weight: bold; }
+  .paiement div { margin-bottom: 2px; }
+  .case {
+    display: inline-block; width: 8px; height: 8px; margin-right: 5px;
+    border: 1px solid #333; vertical-align: middle;
+  }
+  .case.cochee { background: #333; }
+  .clause {
+    margin-top: 6mm; font-size: 7.5pt; color: #555; line-height: 1.5;
+    border-top: 1px solid #ddd; padding-top: 3mm; text-align: justify;
+  }
+  .signature { margin-top: 3px; height: 12mm; }
+</style>
+</head>
+<body>
+
+<table class="entete">
+  <tr>
+    <td style="width: 62px">{{ logo }}</td>
+    <td>
+      <div class="creancier-nom">{{ m.creancier.raison_sociale }}</div>
+      <div class="creancier-detail">
+        {{ m.creancier.adresse.ligne1 }}<br>
+        {{ m.creancier.adresse.code_postal }} {{ m.creancier.adresse.ville }}
+      </div>
+    </td>
+    <td style="text-align: right; font-size: 8pt; color: #555">
+      RUM {{ m.rum }}<br>
+      ICS {{ m.ics }}
+    </td>
+  </tr>
+</table>
+
+<div class="titre">Mandat de prélèvement SEPA</div>
+
+<div class="cadre">
+
+  {% if s.avec_pave_rib %}
+  <div class="section">
+    <div class="intitule">Identifiant national de compte</div>
+    <table class="codes">
+      <tr>
+        <th style="width: 22%">Code établissement</th>
+        <th style="width: 22%">Code guichet</th>
+        <th style="width: 38%">Numéro de compte</th>
+        <th style="width: 18%">Clé RIB</th>
+      </tr>
+      <tr>
+        <td>{{ r.code_banque }}</td>
+        <td>{{ r.code_guichet }}</td>
+        <td>{{ r.numero_compte }}</td>
+        <td>{{ r.cle }}</td>
+      </tr>
+    </table>
+  </div>
+  {% endif %}
+
+  <div class="section">
+    <div class="intitule">Identifiant international de compte bancaire</div>
+    <table class="international">
+      <tr>
+        <td class="cle">IBAN</td>
+        <td class="valeur-mono">{{ r.iban_formate }}</td>
+      </tr>
+      <tr>
+        <td class="cle">BIC</td>
+        <td class="valeur-mono">{{ r.bic }}</td>
+      </tr>
+    </table>
+  </div>
+
+  <table class="deux-colonnes">
+    <tr>
+      <td>
+        <div class="intitule">Débiteur</div>
+        <div class="nom-fort">{{ r.titulaire }}</div>
+        <div>{{ r.adresse_titulaire.ligne1 }}</div>
+        <div>{{ r.adresse_titulaire.code_postal }} {{ r.adresse_titulaire.ville }}</div>
+      </td>
+      <td>
+        <div class="intitule">Créancier</div>
+        <div class="nom-fort">{{ m.creancier.raison_sociale }}</div>
+        <div>{{ m.creancier.adresse.ligne1 }}</div>
+        <div>{{ m.creancier.adresse.code_postal }} {{ m.creancier.adresse.ville }}</div>
+        <div>ICS {{ m.ics }}</div>
+      </td>
+    </tr>
+  </table>
+
+  <div class="section paiement">
+    <div class="intitule">Type de paiement</div>
+    <div>
+      <span class="case {{ 'cochee' if m.type_paiement == 'recurrent' else '' }}"></span>
+      Paiement récurrent / répétitif
+    </div>
+    <div>
+      <span class="case {{ 'cochee' if m.type_paiement == 'ponctuel' else '' }}"></span>
+      Paiement ponctuel
+    </div>
+  </div>
+
+  <div class="clause">
+    En signant ce formulaire de mandat, vous autorisez (A) {{ m.creancier.raison_sociale }}
+    à envoyer des instructions à votre banque pour débiter votre compte, et (B) votre
+    banque à débiter votre compte conformément aux instructions de
+    {{ m.creancier.raison_sociale }}. Vous bénéficiez du droit d'être remboursé par votre
+    banque suivant les conditions décrites dans la convention que vous avez passée avec
+    elle. Une demande de remboursement doit être présentée dans les 8 semaines suivant la
+    date de débit de votre compte pour un prélèvement autorisé.
+  </div>
+
+  <table class="deux-colonnes" style="margin-top: 6mm">
+    <tr>
+      <td>
+        <div class="intitule">Signature du débiteur</div>
+        <div>Signé à {{ m.lieu_signature }}, le {{ m.date_signature | date_fr }}</div>
+        <div class="signature">{{ r.titulaire | paraphe }}</div>
+      </td>
+      <td></td>
+    </tr>
+  </table>
+
+</div>
+
+</body>
+</html>

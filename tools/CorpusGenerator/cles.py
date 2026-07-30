@@ -41,3 +41,16 @@ def cle_tva_intracommunautaire(siren: str) -> str:
 
 def numero_tva_intracommunautaire(siren: str) -> str:
     return f"FR{cle_tva_intracommunautaire(siren)}{siren}"
+
+
+def identifiant_creancier_sepa(code_activite: str, identifiant_national: str) -> str:
+    """Assemble un Identifiant Créancier SEPA (ICS) français et calcule ses 2 chiffres de
+    contrôle.
+
+    La spécification EPC fait porter les chiffres de contrôle sur le code activité suivi
+    de l'identifiant national, avec le même algorithme ISO 7064 MOD 97-10 que l'IBAN :
+    calculer les deux à part aurait rendu deux implémentations à tenir cohérentes pour un
+    seul et même calcul.
+    """
+    corps = f"{code_activite}{identifiant_national}"
+    return f"FR{iban_stdnum.calc_check_digits(f'FR00{corps}')}{corps}"

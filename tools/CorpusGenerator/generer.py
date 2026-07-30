@@ -17,12 +17,15 @@ from documents.facture import DOCUMENT as facture
 from documents.feuille_emargement import DOCUMENT as feuille_emargement
 from documents.offre import DOCUMENT as offre_emploi
 from documents.rib import DOCUMENT as rib
+from documents.rib_sepa import DOCUMENT as rib_sepa
+from documents.sepa import DOCUMENT as sepa
 from configuration import DOCUMENTS, FICHIER, SHA256
 from degradation import degrader, profil_acquisition, profil_degradation
 
 TYPES = {
     document.type_attendu: document
-    for document in [facture, devis, rib, carte_visite, feuille_emargement, offre_emploi]
+    for document in [facture, devis, rib, sepa, rib_sepa, carte_visite,
+                     feuille_emargement, offre_emploi]
 }
 
 # Les types produits et les types que le manifest accepte sont déclarés dans deux

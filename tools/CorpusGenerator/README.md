@@ -160,6 +160,16 @@ Le type de contrat affiché ne suffit pas à lui seul : sur le template institut
 
 Un sixième des offres environ sort en **capture d'écran nette**, sans aucune couche texte, à la différence des autres types du corpus : ce n'est pas la reprise dégradée d'un objet physique, seule la couche texte disparaît, le rendu reste net. `documents/offre.py` porte donc `autonome = True` plutôt que `physique = True` : contrairement à la carte de visite, ce n'est pas la reprise d'un objet, et contrairement à la facture, il n'existe jamais deux versions du même document. `degradation.capturer_ecran` réutilise la rastérisation et l'écriture reproductible de `degrader`, sans chaîne Augraphy ni catalogue de profils.
 
+## Le RIB, le mandat SEPA et leur fusion
+
+`RIB`, `SEPA` et `RIB_SEPA` forment le groupe de quasi-synonymes le plus dur du corpus : `RIB_SEPA` est l'union littérale des deux autres. Le RIB montre le pavé de codes établissement/guichet/compte/clé, l'IBAN et le BIC, jamais de cartouche de mandat. Le mandat isolé montre le cartouche RUM et ICS, la clause d'autorisation et la signature du débiteur, jamais le pavé de codes. `RIB_SEPA` montre les deux à la fois : c'est la seule règle qui les sépare, détaillée dans `docs/types-documentaires.md`.
+
+Le RIB (`documents/rib.py`, `templates/rib_01.html`) reste indépendant : sa dataclass `Rib` sert aussi de pavé de coordonnées bancaires embarqué en pied de facture ou de devis. Le mandat et sa variante fusionnée partagent tout, modèle de données et style dans `documents/mandat.py`, un seul template `templates/mandat_sepa_01.html` : le booléen `avec_pave_rib` du style choisit lequel des deux types est rendu, exactement comme `documents/piece.py` fait déjà varier quelques blocs pour distinguer la facture du devis sur les mêmes quatre templates.
+
+Le débiteur du mandat, tiré via `generer_rib`, et son créancier, tiré via `generer_organisme`, portent chacun un décalage de seed propre (1000 et 1500) pour ne jamais réutiliser l'organisme ou le RIB d'une facture, d'un devis ou d'un RIB isolé de même numéro, sur le modèle du décalage de 500 déjà appliqué entre facture et devis.
+
+L'ICS porte ses deux chiffres de contrôle calculés par `cles.identifiant_creancier_sepa`, avec le même algorithme ISO 7064 MOD 97-10 que l'IBAN. Comme pour la feuille d'émargement, la signature du débiteur est un tracé produit par `paraphe_svg`, jamais du texte en police cursive : un mandat déposé en gestion documentaire est signé, et un copier-coller ne doit jamais en révéler le nom.
+
 ## Le modèle de données
 
 ```mermaid
@@ -234,6 +244,15 @@ classDiagram
         +str code_postal
         +str ville
     }
+    class MandatSepa {
+        +str rum
+        +str ics
+        +str type_paiement
+        +Organisme creancier
+        +str lieu_signature
+        +date date_signature
+        +str libelle_type_paiement
+    }
     class FeuilleEmargement {
         +str numero_session
         +str intitule_action
@@ -291,6 +310,7 @@ classDiagram
     Organisme --> Coordonnees : adresse
     Client --> Coordonnees : adresse
     Rib --> Coordonnees : titulaire et agence
+    MandatSepa "1" --> "1" Organisme : créancier
     FeuilleEmargement "1" --> "1" Organisme : organisme
     FeuilleEmargement "1" --> "*" ParticipantEmargement : participants
     FeuilleEmargement "1" --> "1" FormateurEmargement : formateur
@@ -299,7 +319,7 @@ classDiagram
     FormateurEmargement "1" --> "*" CaseEmargement : cases
 ```
 
-`Style` n'est rattaché à aucun document : il est choisi séparément à partir de la même seed, puis passé au template à côté du document. Un `Rib` mène une double vie, comme document à part entière et comme pavé de coordonnées bancaires au bas d'une pièce.
+`Style` n'est rattaché à aucun document : il est choisi séparément à partir de la même seed, puis passé au template à côté du document. Un `Rib` mène une double vie, comme document à part entière et comme pavé de coordonnées bancaires au bas d'une pièce. `MandatSepa` n'a pas de lien formel vers le `Rib` de son débiteur : les deux sont générés séparément puis passés ensemble au template, qui les assemble au rendu plutôt que le modèle de données.
 
 Le devis n'est pas tiré sur la même seed que la facture de même numéro. Sans ce décalage, `dev-0001` et `fac-0001` sortiraient avec le même organisme, le même client et les mêmes montants : le corpus contiendrait des paires de quasi-jumeaux textuels, et la matrice de confusion mesurerait un cas de figure qui n'existe pas en production.
 

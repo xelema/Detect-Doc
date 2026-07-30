@@ -6,7 +6,11 @@ output_dir = "../../corpus"
 # confusion ne se lit que sur des effectifs comparables.
 facture = 12
 devis = 12
+# Les trois voisins bancaires se dédoublent à parité, comme la facture et le devis : une
+# matrice de confusion ne se lit que sur des effectifs comparables.
 rib = 4
+sepa = 4
+rib_sepa = 4
 # La carte de visite ne produit qu'un fichier par entree : elle est reprise d'un carton
 # physique, et sa numerisation remplace l'original au lieu de s'y ajouter. Compter donc
 # une entree par unite ici, contre deux environ pour les autres types.

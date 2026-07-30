@@ -34,6 +34,8 @@ from documents.offre import (ARTICLES_SUGGERES, DUREES_CONTRAT, LIBELLES_TROMPEU
                              NATURES_CONTRAT, POSTES, PRESENTATIONS_ENTREPRISE, PROFIL,
                              ROLES_CONTACT, ROLES_TEMOIGNAGE, TAILLES_ENTREPRISE,
                              TELETRAVAILS, TEMPLATES, generer_offre, style_offre)
+from documents.mandat import DECALAGE_SEED_DEBITEUR, generer_mandat_sepa
+from documents.rib import generer_rib
 from manifest import hash_fichier
 from rendu import logo_svg, montant_en_lettres, rendre_pdf
 
@@ -98,6 +100,33 @@ def verifier_piece(piece) -> list[str]:
     # se contredit lui-même et un lecteur attentif le voit.
     if rib.iban[4:] != f"{rib.code_banque}{rib.code_guichet}{rib.numero_compte}{rib.cle}":
         anomalies.append("L'IBAN ne correspond pas aux codes du pavé RIB")
+
+    return anomalies
+
+
+def _ics_valide(ics: str) -> bool:
+    """`stdnum` ne connaît pas l'ICS : ses deux chiffres de contrôle se recalculent avec
+    le même algorithme que l'IBAN, cf. `cles.identifiant_creancier_sepa`."""
+    corps = ics[4:]
+    return ics[2:4] == iban_stdnum.calc_check_digits(f"FR00{corps}")
+
+
+def verifier_mandat_sepa(seed: int) -> list[str]:
+    """Anomalies des identifiants d'un mandat SEPA ou d'un RIB_SEPA, les deux partageant
+    le même RIB et le même cartouche, cf. `documents/mandat.py`."""
+    anomalies = []
+    rib = generer_rib(seed + DECALAGE_SEED_DEBITEUR)
+    mandat = generer_mandat_sepa(seed, rib)
+
+    if not iban_stdnum.is_valid(rib.iban):
+        anomalies.append(f"IBAN invalide : {rib.iban}")
+    if cle_rib(rib.code_banque, rib.code_guichet, rib.numero_compte) != rib.cle:
+        anomalies.append(f"Clé RIB invalide : {rib.cle}")
+    if not _ics_valide(mandat.ics):
+        anomalies.append(f"ICS invalide : {mandat.ics}")
+    if len(mandat.rum) > 35:
+        anomalies.append(f"RUM de {len(mandat.rum)} caractères, au-delà des 35 permis : "
+                         f"{mandat.rum}")
 
     return anomalies
 
@@ -501,6 +530,7 @@ def main() -> None:
         ("devis", verifier_devis),
         ("feuille émargement", verifier_feuille_emargement),
         ("offre", verifier_offre),
+        ("mandat SEPA", verifier_mandat_sepa),
     )
 
     for intitule, controle in controles_par_seed:
