@@ -30,7 +30,7 @@ DOSSIER_DOCUMENTS = DOSSIER_CORPUS / "raw"
 # manifest.py doit pouvoir valider un corpus déjà produit sans importer les
 # bibliothèques de rendu (WeasyPrint, Augraphy) que documents/ entraîne avec lui.
 # generer.py vérifie au démarrage que les deux listes concordent.
-TYPES_CONNUS = {"facture", "devis", "rib", "carte_visite", "feuille_emar"}
+TYPES_CONNUS = {"facture", "devis", "rib", "carte_visite", "feuille_emar", "offre_emploi"}
 SENSIBILITES = {"public", "interne_assaini", "production_valide"}
 
 # Toutes les clés écrites par construire_entree. La liste doit rester alignée avec

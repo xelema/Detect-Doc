@@ -1,0 +1,71 @@
+{# Template institutionnel : sobre, service public de l'emploi.
+   Bloc de métadonnées à droite, « d'autres offres » en bruit de bas de document, dont
+   le contrat affiché peut mentir sur la nature réelle du poste, comme observé sur trois
+   offres France Travail réelles où « CDD » ou « Intérim » couvrent un apprentissage ou
+   un contrat de professionnalisation. #}
+{% extends "_offre_page.html" %}
+{% import "_offre_macros.html" as om %}
+
+{% block style_template %}
+  .fil-ariane { font-size: 0.78em; color: #888; margin-bottom: 4mm; }
+  .entete { border-bottom: 0.6mm solid {{ s.couleur }}; padding-bottom: 3mm; margin-bottom: 5mm; }
+  .titre-poste { font-size: 1.5em; font-weight: 700; color: {{ s.couleur }}; }
+  .reference { font-size: 0.78em; color: #888; margin-top: 1mm; }
+  .corps { display: grid; grid-template-columns: 1fr 55mm; gap: 8mm; }
+  .panneau {
+    border: 0.3mm solid #ccc;
+    background: #f7f7f7;
+    padding: 4mm;
+    align-self: start;
+  }
+  .panneau dt { font-size: 0.75em; color: #777; text-transform: uppercase; margin-top: 3mm; }
+  .panneau dt:first-child { margin-top: 0; }
+  .panneau dd { margin: 0; font-weight: 700; }
+  .section-titre { font-weight: 700; color: {{ s.couleur }}; margin: 5mm 0 2mm; }
+{% endblock %}
+
+{% block contenu %}
+<div class="fil-ariane">Accueil &gt; Offres d'emploi &gt; {{ o.ville }} &gt; {{ o.intitule_poste }}</div>
+
+<div class="entete">
+  <div class="titre-poste">{{ o.intitule_poste }} ({{ o.entreprise }})</div>
+  <div class="reference">Offre n° {{ o.url_capture[-8:] | upper }} · Actualisée le
+    {{ o.date_publication | date_fr }} · {{ o.code_postal }} {{ o.ville }}</div>
+</div>
+
+<div class="corps">
+  <div>
+    <p>{{ o.presentation_entreprise }}</p>
+
+    <div class="section-titre">Vos missions</div>
+    <ul class="simple">
+      {% for mission in o.missions %}<li>{{ mission }}</li>{% endfor %}
+    </ul>
+
+    <div class="section-titre">Profil recherché</div>
+    <ul class="simple">
+      {% for ligne in o.profil %}<li>{{ ligne }}</li>{% endfor %}
+    </ul>
+
+    {{ om.contact_bloc(o.contact, contact_portrait) }}
+  </div>
+
+  <dl class="panneau">
+    <dt>Type de contrat</dt><dd>{{ o.type_contrat_affiche }}</dd>
+    <dt>Durée</dt><dd>{{ o.duree }}</dd>
+    <dt>Lieu</dt><dd>{{ o.code_postal }} {{ o.ville }}</dd>
+    <dt>Date de début</dt><dd>{{ o.date_debut_libelle }}</dd>
+    <dt>Rémunération</dt><dd>{{ o.remuneration }}</dd>
+    <dt>Télétravail</dt><dd>{{ o.teletravail }}</dd>
+    <dt>Secteur</dt><dd>{{ o.secteur }}</dd>
+    <dt>Taille de l'entreprise</dt><dd>{{ o.taille_entreprise }}</dd>
+  </dl>
+</div>
+
+{% for i in range(s.nombre_pages - 1) %}
+<section class="page-bruit">
+  {{ om.offres_similaires(o.offres_similaires[i * 4 : i * 4 + 4],
+                          "D'autres offres peuvent vous intéresser") }}
+</section>
+{% endfor %}
+{% endblock %}

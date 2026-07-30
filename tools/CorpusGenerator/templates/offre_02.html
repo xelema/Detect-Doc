@@ -1,0 +1,85 @@
+{# Template jobboard commercial : barre de recherche, bloc « Détails de l'emploi », et
+   surtout un formulaire de candidature intégré au document, prénom, nom, e-mail, CV,
+   comme observé sur les impressions HelloWork réelles. #}
+{% extends "_offre_page.html" %}
+{% import "_offre_macros.html" as om %}
+
+{% block style_template %}
+  .recherche {
+    display: flex; gap: 2mm; border: 0.3mm solid #ccc; border-radius: 1mm;
+    padding: 2mm 3mm; font-size: 0.8em; color: #888; margin-bottom: 6mm;
+  }
+  .recherche span { border-right: 0.2mm solid #ccc; padding-right: 2mm; }
+  .titre-poste { font-size: 1.5em; font-weight: 700; }
+  .sous-titre { color: #555; margin: 1mm 0 4mm; }
+  .resume {
+    display: flex; gap: 4mm; flex-wrap: wrap; font-size: 0.85em;
+    border: 0.3mm solid #ddd; padding: 3mm 4mm; margin-bottom: 5mm;
+  }
+  .resume span { padding: 0.5mm 2mm; background: #f0f0f0; border-radius: 3mm; }
+  .section-titre {
+    font-weight: 700; color: {{ s.couleur }}; text-transform: uppercase;
+    font-size: 0.9em; letter-spacing: 0.4px; margin: 5mm 0 2mm;
+  }
+  .formulaire {
+    border: 0.3mm solid #ccc; padding: 4mm; margin-top: 6mm; background: #fafafa;
+  }
+  .champ { margin-bottom: 3mm; }
+  .champ .libelle { font-size: 0.8em; color: #666; margin-bottom: 1mm; }
+  .champ .valeur {
+    border: 0.25mm solid #bbb; border-radius: 1mm; padding: 1.5mm 2mm;
+    background: #fff; min-height: 5mm;
+  }
+  .bouton {
+    display: inline-block; background: {{ s.couleur }}; color: #fff; font-weight: 700;
+    padding: 2mm 6mm; border-radius: 1mm; margin-top: 2mm;
+  }
+{% endblock %}
+
+{% block contenu %}
+<div class="recherche">
+  <span>Quoi : {{ o.intitule_poste }}</span>
+  <span>Où : {{ o.ville }}</span>
+  <span>Rechercher</span>
+</div>
+
+<div class="titre-poste">{{ o.intitule_poste }}</div>
+<div class="sous-titre">{{ o.entreprise }} · {{ o.code_postal }} {{ o.ville }} · {{ o.type_contrat_affiche }}</div>
+
+<div class="resume">
+  <span>{{ o.duree }}</span>
+  <span>{{ o.remuneration }}</span>
+  <span>Télétravail {{ o.teletravail | lower }}</span>
+  <span>{{ o.secteur }}</span>
+</div>
+
+<div class="section-titre">Détails de l'emploi</div>
+<p>{{ o.presentation_entreprise }}</p>
+
+<div class="section-titre">Missions</div>
+<ul class="simple">
+  {% for mission in o.missions %}<li>{{ mission }}</li>{% endfor %}
+</ul>
+
+<div class="section-titre">Profil recherché</div>
+<ul class="simple">
+  {% for ligne in o.profil %}<li>{{ ligne }}</li>{% endfor %}
+</ul>
+
+{{ om.contact_bloc(o.contact, contact_portrait) }}
+
+<div class="formulaire">
+  <div class="fort" style="margin-bottom: 3mm">Créez votre compte et envoyez votre candidature</div>
+  <div class="champ"><div class="libelle">Prénom</div><div class="valeur">Votre prénom</div></div>
+  <div class="champ"><div class="libelle">Nom</div><div class="valeur">Votre nom</div></div>
+  <div class="champ"><div class="libelle">E-mail</div><div class="valeur">contactezmoi@exemple.com</div></div>
+  <div class="champ"><div class="libelle">CV</div><div class="valeur">Ajouter mon CV, poids max. 2 Mo</div></div>
+  <span class="bouton">Continuer</span>
+</div>
+
+{% for i in range(s.nombre_pages - 1) %}
+<section class="page-bruit">
+  {{ om.offres_similaires(o.offres_similaires[i * 4 : i * 4 + 4], "Recherches similaires") }}
+</section>
+{% endfor %}
+{% endblock %}

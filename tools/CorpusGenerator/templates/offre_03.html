@@ -1,0 +1,79 @@
+{# Template réseau professionnel : deux colonnes, compteur de vues, bandeau Premium, et
+   surtout un contact nominatif avec sa photo, « Auteur de l'offre d'emploi », comme
+   observé sur l'offre LinkedIn réelle du Groupe Panzani. #}
+{% extends "_offre_page.html" %}
+{% import "_offre_macros.html" as om %}
+
+{% block style_template %}
+  .barre-nav { font-size: 0.75em; color: #888; margin-bottom: 5mm; }
+  .titre-poste { font-size: 1.4em; font-weight: 700; }
+  .sous-ligne { color: #555; margin: 1mm 0 3mm; }
+  .badges { font-size: 0.82em; color: #444; margin-bottom: 4mm; }
+  .badges span:not(:last-child)::after { content: " · "; }
+  .premium {
+    border: 0.25mm solid #e0c95f; background: #fdf8e3; padding: 3mm;
+    font-size: 0.82em; margin: 4mm 0;
+  }
+  .colonnes { display: grid; grid-template-columns: 1fr 55mm; gap: 8mm; }
+  .section-titre { font-weight: 700; margin: 5mm 0 2mm; }
+  .grille-similaires { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; }
+  .carte-similaire {
+    border: 0.25mm solid #ddd; border-radius: 1mm; padding: 3mm;
+  }
+{% endblock %}
+
+{% block contenu %}
+<div class="barre-nav">Accueil · Réseau · Emplois · Messagerie · Notifications</div>
+
+<div class="fort">{{ o.entreprise }}</div>
+<div class="titre-poste">{{ o.intitule_poste }}</div>
+<div class="sous-ligne">
+  {{ o.code_postal }} {{ o.ville }} · il y a {{ o.jours_avant_capture }} jours ·
+  {{ o.nombre_clics }} autres personnes ont cliqué sur Postuler
+</div>
+<div class="badges">
+  <span>Sur site</span><span>{{ o.type_contrat_affiche }}</span><span>{{ o.duree }}</span>
+</div>
+
+<div class="premium">
+  Envie de savoir si vous avez vos chances ? Réessayez Premium pour 0 EUR.
+</div>
+
+<div class="colonnes">
+  <div>
+    <div class="section-titre">À propos de l'offre d'emploi</div>
+    <p>{{ o.presentation_entreprise }}</p>
+    <ul class="simple">
+      {% for mission in o.missions %}<li>{{ mission }}</li>{% endfor %}
+    </ul>
+    <div class="section-titre">Profil recherché</div>
+    <ul class="simple">
+      {% for ligne in o.profil %}<li>{{ ligne }}</li>{% endfor %}
+    </ul>
+  </div>
+  <div>
+    {% if o.contact %}
+    <div class="petit muted" style="margin-bottom: 2mm">Auteur de l'offre d'emploi</div>
+    {{ om.contact_bloc(o.contact, contact_portrait) }}
+    {% endif %}
+    <div class="petit muted" style="margin-top: 4mm">
+      {{ o.secteur }} · {{ o.taille_entreprise }}
+    </div>
+  </div>
+</div>
+
+{% for i in range(s.nombre_pages - 1) %}
+<section class="page-bruit">
+  <div class="fort" style="margin-bottom: 3mm">Plus d'offres d'emploi</div>
+  <div class="grille-similaires">
+    {% for item in o.offres_similaires[i * 4 : i * 4 + 4] %}
+    <div class="carte-similaire">
+      <div class="fort petit">{{ item.intitule }}</div>
+      <div class="petit muted">{{ item.entreprise }}</div>
+      <div class="petit muted">{{ item.ville }} · {{ item.contrat }}</div>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endfor %}
+{% endblock %}

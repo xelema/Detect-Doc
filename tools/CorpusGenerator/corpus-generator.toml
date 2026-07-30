@@ -14,6 +14,9 @@ carte_visite = 10
 # Une feuille produit une seule entrée, dans son régime d'acquisition final.
 # Dix unités couvrent deux fois chacune des cinq structures.
 feuille_emar = 10
+# Une offre produit une seule entrée : texte natif ou capture nette selon le tirage,
+# jamais les deux. Quinze unités couvrent trois fois chacun des cinq templates de site.
+offre_emploi = 15
 
 [split]
 dev_probability = 0.25

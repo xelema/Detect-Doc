@@ -15,13 +15,14 @@ from documents.carte_visite import DOCUMENT as carte_visite
 from documents.devis import DOCUMENT as devis
 from documents.facture import DOCUMENT as facture
 from documents.feuille_emargement import DOCUMENT as feuille_emargement
+from documents.offre import DOCUMENT as offre_emploi
 from documents.rib import DOCUMENT as rib
 from configuration import DOCUMENTS, FICHIER, SHA256
 from degradation import degrader, profil_acquisition, profil_degradation
 
 TYPES = {
     document.type_attendu: document
-    for document in [facture, devis, rib, carte_visite, feuille_emargement]
+    for document in [facture, devis, rib, carte_visite, feuille_emargement, offre_emploi]
 }
 
 # Les types produits et les types que le manifest accepte sont déclarés dans deux
@@ -89,6 +90,12 @@ def _produire(type_document: str, nombre: int) -> list[dict]:
     entrees = []
     for numero in range(1, nombre + 1):
         propre = document.produire(numero)
+
+        if document.autonome:
+            # produire() a déjà tranché lui-même le régime final : ni reprise forcée,
+            # ni jumeau probabiliste. Voir documents/base.py.
+            entrees.append(propre)
+            continue
 
         if document.physique:
             entrees.append(_reprise_physique(propre, numero))

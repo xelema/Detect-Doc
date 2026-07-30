@@ -29,6 +29,11 @@ from documents.feuille_emargement import (ANNOTATIONS_EMARGEMENT, FAMILLES_EMARG
                                           FONCTIONS_STAGIAIRES, NATURES_PRESENCE,
                                           generer_feuille_emargement,
                                           style_feuille_emargement)
+from documents.offre import (ARTICLES_SUGGERES, DUREES_CONTRAT, LIBELLES_TROMPEURS,
+                             METIERS_SIMILAIRES, MISSIONS, MOTIFS_EMPLOYEUR,
+                             NATURES_CONTRAT, POSTES, PRESENTATIONS_ENTREPRISE, PROFIL,
+                             ROLES_CONTACT, ROLES_TEMOIGNAGE, TAILLES_ENTREPRISE,
+                             TELETRAVAILS, TEMPLATES, generer_offre, style_offre)
 from manifest import hash_fichier
 from rendu import logo_svg, montant_en_lettres, rendre_pdf
 
@@ -185,6 +190,40 @@ def verifier_feuille_emargement(seed: int) -> list[str]:
     return anomalies
 
 
+def verifier_offre(seed: int) -> list[str]:
+    """Contrôle la cohérence du contrat affiché et le volume de bruit de bas de document.
+
+    Le contrat affiché ne doit mentir que sur une nature qui s'y prête, apprentissage ou
+    professionnalisation, jamais sur un stage ou une alternance générique : c'est
+    exactement le cas observé sur les trois offres France Travail réelles où « CDD » ou
+    « Intérim » couvrent un contrat d'apprentissage ou de professionnalisation.
+    """
+    style = style_offre(seed)
+    offre = generer_offre(seed, style)
+    anomalies = []
+
+    if offre.type_contrat_affiche != offre.libelle_nature:
+        if offre.nature_contrat not in {"apprentissage", "professionnalisation"}:
+            anomalies.append(
+                f"offre {seed} : contrat affiché trompeur sur une nature "
+                f"'{offre.nature_contrat}' qui ne devrait jamais l'être")
+        if offre.type_contrat_affiche not in LIBELLES_TROMPEURS:
+            anomalies.append(
+                f"offre {seed} : libellé trompeur inconnu "
+                f"'{offre.type_contrat_affiche}'")
+
+    if not offre.missions or not offre.profil:
+        anomalies.append(f"offre {seed} : missions ou profil vide")
+
+    attendu = max(style.nombre_pages - 1, 0) * 4
+    if len(offre.offres_similaires) != attendu:
+        anomalies.append(
+            f"offre {seed} : {len(offre.offres_similaires)} offre(s) similaire(s) au "
+            f"lieu de {attendu} pour {style.nombre_pages} page(s)")
+
+    return anomalies
+
+
 def verifier_montants_en_lettres() -> list[str]:
     """Contrôle la conversion des montants en toutes lettres.
 
@@ -214,9 +253,19 @@ def _caracteres_produits() -> set[str]:
     fonction ou une accroche rare passerait sinon entre les mailles. Les valeurs tirées,
     noms et adresses en tête, sont elles échantillonnées, faute de pouvoir les énumérer.
     """
-    fixes = "".join(FONCTIONS + FONCTIONS_STAGIAIRES + ANNOTATIONS_EMARGEMENT
-                    + ACCROCHES + CERTIFICATIONS + MOTIFS_ORGANISME
-                    + MOTIFS_CLIENT + [ville for _, ville in VILLES])
+    fixes = "".join(
+        FONCTIONS + FONCTIONS_STAGIAIRES + ANNOTATIONS_EMARGEMENT
+        + ACCROCHES + CERTIFICATIONS + MOTIFS_ORGANISME
+        + MOTIFS_CLIENT + [ville for _, ville in VILLES]
+        + [intitule for intitule, _, _ in POSTES]
+        + [secteur for _, _, secteur in POSTES]
+        + MISSIONS + PROFIL + MOTIFS_EMPLOYEUR + TAILLES_ENTREPRISE + DUREES_CONTRAT
+        + TELETRAVAILS + list(NATURES_CONTRAT.values()) + LIBELLES_TROMPEURS
+        + ROLES_CONTACT + ROLES_TEMOIGNAGE + ARTICLES_SUGGERES
+        + [intitule for intitule, _ in METIERS_SIMILAIRES]
+        + [contrat for _, contrat in METIERS_SIMILAIRES]
+        + PRESENTATIONS_ENTREPRISE
+    )
 
     cartes = [generer_carte_visite(seed) for seed in range(1, NB_ECHANTILLONS + 1)]
     tires_cartes = "".join(
@@ -234,11 +283,18 @@ def _caracteres_produits() -> set[str]:
         )
         for f in feuilles
     )
+    offres = [generer_offre(seed, style_offre(seed)) for seed in range(1, NB_ECHANTILLONS + 1)]
+    tires_offres = "".join(
+        f"{o.entreprise}{o.presentation_entreprise}{o.horodatage_impression}"
+        f"{o.url_capture}" + (o.contact.nom_complet if o.contact else "")
+        + "".join(item.entreprise for item in o.offres_similaires)
+        for o in offres
+    )
 
     # Séparateurs et symboles posés par les templates eux-mêmes, absents des données.
     templates = "·%()[]«»"
 
-    return set(fixes + tires_cartes + tires_feuilles + templates)
+    return set(fixes + tires_cartes + tires_feuilles + tires_offres + templates)
 
 
 # Le symbole monétaire n'apparaît que sur les pièces comptables. Les polices manuscrites
@@ -406,6 +462,34 @@ def verifier_reproductibilite() -> list[str]:
                 f"émargement {style.famille} : nombre de pages différent de "
                 f"{style.nombre_pages}")
 
+    for seed in range(1, len(TEMPLATES) + 1):
+        style = style_offre(seed)
+        offre = generer_offre(seed, style)
+        portrait = (portrait_svg(style.couleur)
+                   if offre.contact and offre.contact.avec_photo else None)
+        empreintes = []
+        nombres_pages = []
+        with tempfile.TemporaryDirectory() as dossier:
+            for essai in range(2):
+                chemin = Path(dossier) / f"offre-{essai}.pdf"
+                nombres_pages.append(rendre_pdf(
+                    style.fichier_html, chemin, o=offre, s=style,
+                    contact_portrait=portrait, articles=ARTICLES_SUGGERES,
+                ))
+                empreintes.append(hash_fichier(chemin))
+        if empreintes[0] != empreintes[1]:
+            anomalies.append(
+                f"deux rendus de la même offre {style.template} produisent des "
+                "fichiers différents")
+        # Contrairement à l'émargement, le contenu principal d'une offre n'est pas
+        # découpé en pages pré-tranchées : il peut déborder d'une page selon son
+        # volume. Seule compte donc la reproductibilité du nombre de pages d'un rendu
+        # à l'autre, pas sa conformité à l'objectif qui a dimensionné le bruit.
+        if nombres_pages[0] != nombres_pages[1]:
+            anomalies.append(
+                f"offre {style.template} : nombre de pages différent d'un rendu à "
+                "l'autre")
+
     return anomalies
 
 
@@ -416,6 +500,7 @@ def main() -> None:
             generer_facture(seed, professionnel=client_professionnel(seed)))),
         ("devis", verifier_devis),
         ("feuille émargement", verifier_feuille_emargement),
+        ("offre", verifier_offre),
     )
 
     for intitule, controle in controles_par_seed:
@@ -434,9 +519,9 @@ def main() -> None:
         for anomalie in anomalies:
             print(f"  {intitule}, {anomalie}")
 
-    print(f"\n{NB_ECHANTILLONS} factures, {NB_ECHANTILLONS} devis et "
-          f"{NB_ECHANTILLONS} feuilles d'émargement vérifiés, "
-          f"{total} anomalie(s).")
+    print(f"\n{NB_ECHANTILLONS} factures, {NB_ECHANTILLONS} devis, "
+          f"{NB_ECHANTILLONS} feuilles d'émargement et {NB_ECHANTILLONS} offres "
+          f"vérifiées, {total} anomalie(s).")
 
     facture = generer_facture(1)
     print("\nExemple de facture, seed 1 :")

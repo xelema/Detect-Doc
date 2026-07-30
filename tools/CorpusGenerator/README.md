@@ -144,6 +144,22 @@ Les signatures sont des tracés vectoriels produits par `paraphe_svg`, jamais un
 
 Le document final suit l'un des trois régimes observés : PDF à texte natif, scan à plat ou photo au smartphone. Une partie des scans est conservée tournée de 90 ou 270 degrés et plusieurs documents comptent deux ou trois pages. Comme pour une carte de visite, le rendu propre n'est qu'une étape de fabrication lorsque la feuille est numérisée : une seule entrée autonome représente le document réellement déposé.
 
+## L'offre d'emploi
+
+`OFF_STAG_EMP` n'est jamais un document de bureau : c'est la capture d'une page web de site d'emploi, imprimée en PDF depuis un navigateur. Cinq templates sans tronc commun de mise en page couvrent les familles observées sur les vingt-quatre exemples métier distincts, eux-mêmes répartis sur dix plateformes sources :
+
+| Template | Ce qu'il imite |
+|---|---|
+| institutionnel | service public de l'emploi, bloc de métadonnées à droite, bruit de fin de document dont le contrat affiché peut mentir sur la nature réelle du poste |
+| jobboard commercial | barre de recherche, formulaire de candidature intégré au document |
+| réseau professionnel | deux colonnes, compteur de vues, contact nominatif avec sa photo |
+| portail RH bilingue | bandeau de cookies RGPD, libellés en anglais, jamais de contact nominatif |
+| éditorial et jeune | bandeau de cookies répété sur chaque page, portrait d'un collaborateur, suggestions d'articles de blog |
+
+Le type de contrat affiché ne suffit pas à lui seul : sur le template institutionnel, un apprentissage ou un contrat de professionnalisation peut être étiqueté « CDD » ou « Intérim » dans le bloc métadonnées, comme observé sur trois offres France Travail réelles. Le bruit de fin de document, offres similaires ou postes suggérés, mélange librement d'autres types de contrat et d'autres métiers.
+
+Un sixième des offres environ sort en **capture d'écran nette**, sans aucune couche texte, à la différence des autres types du corpus : ce n'est pas la reprise dégradée d'un objet physique, seule la couche texte disparaît, le rendu reste net. `documents/offre.py` porte donc `autonome = True` plutôt que `physique = True` : contrairement à la carte de visite, ce n'est pas la reprise d'un objet, et contrairement à la facture, il n'existe jamais deux versions du même document. `degradation.capturer_ecran` réutilise la rastérisation et l'écriture reproductible de `degrader`, sans chaîne Augraphy ni catalogue de profils.
+
 ## Le modèle de données
 
 ```mermaid
@@ -355,6 +371,10 @@ Le style tire l'un de **trois modes d'acquisition**, et le reste de la chaîne l
 
 Le profil de dégradation n'est pas tiré au hasard mais déduit du mode, par `profil_acquisition`. Un document photographié reçoit les défauts d'une photo, un document passé à plat ceux d'un scanner. Le tirage libre produirait des documents que leur propre manifest décrirait de travers.
 
+### Les types autonomes
+
+Un type peut aussi trancher lui-même son régime final sans être la reprise d'un objet physique. C'est le cas de l'offre d'emploi : chaque instance est, dès sa génération, un fichier à texte natif ou une capture d'écran nette, jamais les deux, et jamais un objet qu'on aurait scanné. Ces types portent `autonome = True` sur leur classe, et `generer.py` n'y ajoute ni reprise forcée ni jumeau dégradé probabiliste : `produire` renvoie l'entrée de manifest définitive.
+
 ## Les polices
 
 Les polices décident de ce que l'OCR voit : elles font partie du corpus au même titre que les templates. `documents/commun.py` déclare les familles bureautiques des pièces comptables et les manuscrites, partagées par plusieurs types ; `documents/carte_visite.py` ajoute les familles d'imprimeur propres à ce seul type.
@@ -374,7 +394,7 @@ Toute police ajoutée dans `documents/` doit donc l'être aussi au `Dockerfile` 
 3. ajouter le type à `manifest.TYPES_CONNUS` ;
 4. ajouter son quota au TOML.
 
-Si le nouveau type a un voisin confondable déjà présent, comme la facture et le devis, lui faire partager ses templates plutôt que d'en écrire de nouveaux, et voir si un module partagé sur le modèle de `documents/piece.py` a du sens. S'il circule surtout comme reprise d'un objet physique, poser `physique = True` sur sa classe. Ce qui est utile à au moins deux types va dans `documents/commun.py`, jamais un axe propre à un seul type même s'il y ressemble.
+Si le nouveau type a un voisin confondable déjà présent, comme la facture et le devis, lui faire partager ses templates plutôt que d'en écrire de nouveaux, et voir si un module partagé sur le modèle de `documents/piece.py` a du sens. S'il circule surtout comme reprise d'un objet physique, poser `physique = True` sur sa classe. S'il tranche lui-même son régime final sans être la reprise d'un objet, comme l'offre d'emploi, poser `autonome = True`. Ce qui est utile à au moins deux types va dans `documents/commun.py`, jamais un axe propre à un seul type même s'il y ressemble.
 
 **Ajouter un type dont la page n'est pas le document.** La carte de visite occupe un coin d'une feuille par ailleurs vide. Son template `_carte_page.html` décrit le support, feuille de scanner ou plan de travail, et les trois `carte_0X.html` en héritent pour ne décrire que la face imprimée. Reprendre ce découpage pour tout type dont le support compte autant que le contenu.
 

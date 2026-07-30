@@ -18,10 +18,19 @@ class DocumentType(ABC):
     propre n'est qu'une étape de fabrication, écrasée par sa numérisation avant d'entrer
     au manifest : une carte de visite ou une feuille d'émargement arrivent en gestion
     documentaire comme la reprise d'un objet physique, pas comme un fichier natif.
+
+    `autonome` signale un type dont `produire` a déjà tranché lui-même son régime final,
+    texte natif ou capture nette, sans détour par la reprise d'un objet. `generer.py`
+    n'y ajoute alors ni reprise forcée ni jumeau dégradé probabiliste : contrairement à
+    la carte de visite, ce n'est pas la reprise d'un objet physique, et contrairement à
+    la facture, il n'existe jamais deux versions du même document. Une offre d'emploi
+    imprimée depuis un navigateur est soit un fichier natif, soit une capture d'écran,
+    jamais les deux, et jamais un objet qu'on aurait scanné.
     """
 
     type_attendu: str
     physique: bool = False
+    autonome: bool = False
 
     @abstractmethod
     def produire(self, numero: int) -> dict:

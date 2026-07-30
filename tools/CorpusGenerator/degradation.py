@@ -207,6 +207,21 @@ def _ecrire_pdf(pages: list[np.ndarray], destination: Path, seed: int) -> None:
         document.close()
 
 
+def capturer_ecran(source: Path, destination: Path, seed: int) -> None:
+    """Rastérise un PDF propre en image nette, sans aucune dégradation.
+
+    Réservé à `OFF_STAG_EMP` : contrairement à `degrader`, qui imite l'impression et la
+    numérisation d'un papier, cette fonction ne simule aucun défaut. Une offre d'emploi
+    capturée en image est la capture d'écran d'une page web, jamais la reprise d'un
+    objet physique, et le rendu reste net, seule la couche texte disparaît. Réutilise la
+    rastérisation et l'écriture reproductible de `degrader`, sans chaîne Augraphy et
+    sans passer par le catalogue de profils : ce régime n'a pas sa place dans le tirage
+    générique des jumeaux dégradés de `profil_degradation`, qui ne doit imiter que la
+    numérisation d'un papier.
+    """
+    _ecrire_pdf(_rasteriser(source), destination, seed)
+
+
 def degrader(source: Path, destination: Path, seed: int, profil: str,
              rotation_page_deg: int = 0) -> list[str]:
     """Produit le jumeau dégradé d'un document. Retourne les effets réellement appliqués."""
