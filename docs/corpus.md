@@ -43,15 +43,15 @@ Le tableau qui suit est réécrit par le générateur à chaque exécution, à p
 | Type | Documents | `dev` | `test` | Texte natif | Numérisés | Rôle |
 |---|---|---|---|---|---|---|
 | `carte_visite` | 12 | 3 | 9 | 1 | 11 | liste métier |
-| `devis` | 16 | 4 | 12 | 11 | 5 | distracteur |
-| `facture` | 16 | 4 | 12 | 11 | 5 | distracteur |
-| `feuille_emar` | 12 | 3 | 9 | 2 | 10 | liste métier |
+| `devis` | 12 | 3 | 9 | 8 | 4 | distracteur |
+| `facture` | 12 | 2 | 10 | 8 | 4 | distracteur |
+| `feuille_emar` | 15 | 4 | 11 | 3 | 12 | liste métier |
 | `offre_emploi` | 15 | 3 | 12 | 11 | 4 | liste métier |
 | `rib` | 8 | 3 | 5 | 6 | 2 | liste métier |
 | `rib_sepa` | 8 | 1 | 7 | 6 | 2 | liste métier |
 | `sepa` | 8 | 3 | 5 | 6 | 2 | liste métier |
 
-**95 documents** en 8 types, pour 79 contenus distincts : 16 documents sont le jumeau scanné d'un autre, même contenu et même jeu, reliés par `derive_de`.
+**90 documents** en 8 types, pour 76 contenus distincts : 14 documents sont le jumeau scanné d'un autre, même contenu et même jeu, reliés par `derive_de`.
 
 <!-- composition:fin -->
 

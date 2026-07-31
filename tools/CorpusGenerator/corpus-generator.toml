@@ -10,8 +10,8 @@ output_dir = "../../corpus"
 # Facture et devis à parité, et les trois voisins bancaires à parité entre eux : ce sont
 # les groupes confondables du corpus, et une matrice de confusion ne se lit que sur des
 # effectifs comparables.
-facture = 16
-devis = 16
+facture = 12
+devis = 12
 rib = 8
 sepa = 8
 rib_sepa = 8
@@ -20,7 +20,7 @@ rib_sepa = 8
 # feuilles couvrent deux fois chacune de leurs cinq structures et plus, quinze offres couvrent
 # trois fois chacun des cinq templates de site.
 carte_visite = 12
-feuille_emar = 12
+feuille_emar = 15
 offre_emploi = 15
 
 [split]
