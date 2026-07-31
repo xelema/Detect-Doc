@@ -5,12 +5,12 @@ légal. Le tronc commun aux deux types, et la façon dont leur présentation var
 dans `documents/piece.py`.
 """
 
-import random
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
 
 import manifest
+from configuration import flux
 from documents.base import DocumentType
 from documents.commun import (CATALOGUE_FORMATIONS, DEBUT_PERIODE, FIN_PERIODE,
                               client_professionnel, faker, generer_client,
@@ -72,7 +72,7 @@ def generer_facture(seed: int, professionnel: bool = True) -> Facture:
 
 
 def style_facture(seed: int) -> Style:
-    return style_piece(seed, random.Random(seed), devis=False)
+    return style_piece(seed, flux("facture", seed), devis=False)
 
 
 class FactureDocument(DocumentType):

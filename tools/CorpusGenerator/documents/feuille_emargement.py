@@ -15,12 +15,16 @@ import random
 from dataclasses import asdict, dataclass
 from datetime import date, timedelta
 
+import degradation
 import manifest
+from configuration import flux
 from documents.base import DocumentType
 from documents.commun import (CATALOGUE_FORMATIONS, COULEURS, DEBUT_PERIODE, FIN_PERIODE,
                               MOTIFS_CLIENT, POLICES_CONDENSEES, POLICES_MANUSCRITES,
                               POLICES_SANS, Organisme, faker, generer_organisme)
 from rendu import logo_svg, rendre_pdf
+
+TYPE_ATTENDU = "feuille_emar"
 
 # Fonctions assez courtes pour tenir dans une grille d'émargement, tout en couvrant
 # les secteurs où les exemples métier ont été produits.
@@ -55,16 +59,6 @@ TITRES_EMARGEMENT = [
     "Feuille collective d'émargement",
     "Émargements par demi-journée ou soirée",
 ]
-
-# La liste tourne sur dix documents. Deux feuilles de la même famille ne reçoivent pas
-# automatiquement le même mode d'acquisition, ce qui évite de confondre structure et
-# régime dans les mesures.
-ACQUISITIONS_EMARGEMENT = [
-    "scan", "photo", "scan", "fichier", "scan",
-    "fichier", "scan", "photo", "scan", "scan",
-]
-
-ROTATIONS_EMARGEMENT = [0, 0, 90, 0, 0, 0, 0, 270, 90, 0]
 
 # Les cinq entrées décrivent cinq structures de grille, pas cinq habillages d'un même
 # tableau. Le choix tourne sur la seed pour que chacune reste représentée.
@@ -272,10 +266,9 @@ def generer_feuille_emargement(seed: int, nombre_participants: int,
                                mensuel: bool) -> FeuilleEmargement:
     """Feuille d'émargement synthétique pour une structure décidée par le style."""
     seed_organisme = seed + 1000
-    tirage = random.Random(f"emargement-{seed}")
+    tirage = flux("emargement", seed)
     organisme = generer_organisme(seed_organisme)
-    taux_cible = random.Random(f"remplissage-{seed}").choice(
-        TAUX_REMPLISSAGE_EMARGEMENT)
+    taux_cible = flux("remplissage", seed).choice(TAUX_REMPLISSAGE_EMARGEMENT)
 
     # Construit après l'appel ci-dessus : `faker()` reseede une instance partagée, la
     # prendre plus tôt la ferait dériver au passage de `generer_organisme` au lieu de
@@ -355,11 +348,18 @@ def generer_feuille_emargement(seed: int, nombre_participants: int,
 
 
 def style_feuille_emargement(seed: int) -> StyleEmargement:
-    """Style d'une feuille d'émargement, sur les axes observés dans les exemples."""
-    tirage = random.Random(f"feuille-emargement-{seed}")
+    """Style d'une feuille d'émargement, sur les axes observés dans les exemples.
+
+    La reprise, scanner du secrétariat, photo au téléphone ou export resté fichier, et le
+    quart de tour se règlent dans le TOML. Ils sont demandés sur le seul numéro du
+    document, jamais sur sa famille de grille : les faire dépendre l'un de l'autre
+    empêcherait de distinguer, dans une mesure, ce qui tient à la structure de la feuille
+    de ce qui tient à la façon dont elle est arrivée.
+    """
+    tirage = flux("feuille-emargement", seed)
     famille = FAMILLES_EMARGEMENT[(seed - 1) % len(FAMILLES_EMARGEMENT)]
-    acquisition_index = (seed - 1) % len(ACQUISITIONS_EMARGEMENT)
-    acquisition = ACQUISITIONS_EMARGEMENT[acquisition_index]
+    acquisition, _ = degradation.acquisition(TYPE_ATTENDU, seed)
+    pivotee = acquisition != "fichier" and degradation.quart_de_tour(TYPE_ATTENDU, seed)
 
     if seed % 9 == 0:
         nombre_pages = 3
@@ -379,10 +379,7 @@ def style_feuille_emargement(seed: int) -> StyleEmargement:
         corps_pt=tirage.choice([7.0, 7.5, 8.0, 8.5]),
         couleur=tirage.choice(COULEURS),
         acquisition=acquisition,
-        rotation_page_deg=(
-            0 if acquisition == "fichier"
-            else ROTATIONS_EMARGEMENT[acquisition_index]
-        ),
+        rotation_page_deg=tirage.choice([90, 270]) if pivotee else 0,
         nombre_pages=nombre_pages,
         titre=titre,
         # Le formulaire sectoriel consacre une table entière à l'intervenant : sa
@@ -407,7 +404,7 @@ def style_feuille_emargement(seed: int) -> StyleEmargement:
 
 
 class FeuilleEmargementDocument(DocumentType):
-    type_attendu = "feuille_emar"
+    type_attendu = TYPE_ATTENDU
     physique = True
 
     def produire(self, numero: int) -> dict:

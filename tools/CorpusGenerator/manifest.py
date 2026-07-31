@@ -12,7 +12,6 @@ régénération.
 
 import hashlib
 import json
-import random
 from collections import Counter
 from pathlib import Path
 
@@ -20,6 +19,7 @@ from configuration import (
     DOSSIER_CORPUS,
     UNITE_SUR_N_EN_DEV,
     SHA256 as CONFIGURATION_SHA256,
+    flux,
 )
 
 FICHIER_MANIFEST = DOSSIER_CORPUS / "manifest.jsonl"
@@ -85,7 +85,7 @@ def _split(type_attendu: str, seed: int) -> str:
     blocs déjà constitués.
     """
     bloc, rang = divmod(seed - 1, UNITE_SUR_N_EN_DEV)
-    position = random.Random(f"split-{type_attendu}-{bloc}").randrange(UNITE_SUR_N_EN_DEV)
+    position = flux(f"split-{type_attendu}", bloc).randrange(UNITE_SUR_N_EN_DEV)
     return "dev" if rang == position else "test"
 
 

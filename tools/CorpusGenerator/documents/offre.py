@@ -19,11 +19,14 @@ from dataclasses import asdict, dataclass
 from datetime import date, timedelta
 
 import manifest
-from degradation import capturer_ecran
+from configuration import flux
+from degradation import capturer_ecran, numerise
 from documents.base import DocumentType
 from documents.commun import (COULEURS, DEBUT_PERIODE, FIN_PERIODE, POLICES_SANS,
                               VILLES, faker, sans_accent)
 from rendu import portrait_svg, rendre_pdf
+
+TYPE_ATTENDU = "offre_emploi"
 
 # (intitulé du poste, nature réelle du contrat, secteur). Calqué sur les métiers des
 # vingt-quatre exemples réels : commerce, IT, hôtellerie, RH, marketing, industrie
@@ -271,9 +274,9 @@ class StyleOffre:
     # template jobboard avec son formulaire de candidature, ne doit jamais faire
     # mentir le manifest sur le nombre de pages du document.
     nombre_pages: int
-    # Capture d'écran nette, sans couche texte, observée sur un sixième des exemples
-    # réels, tous issus d'une même famille de site. Ni bruit ni rotation : ce n'est pas
-    # la reprise d'un objet physique, seule la couche texte disparaît.
+    # Capture d'écran nette, sans couche texte. Ni bruit ni rotation : ce n'est pas la
+    # reprise d'un objet physique, seule la couche texte disparaît. Sa part se règle dans
+    # le TOML, un sixième des exemples réels étant dans ce cas.
     capture_ecran: bool
     contrat_trompeur: bool
     avec_cookies_repetes: bool
@@ -324,7 +327,7 @@ def style_offre(seed: int) -> StyleOffre:
     """Style d'une offre. Le template tourne sur la seed, comme les templates de carte
     de visite ou les familles de feuille d'émargement, pour qu'aucun ne reste
     sous-représenté sur un corpus de taille modeste."""
-    tirage = random.Random(f"offre-{seed}")
+    tirage = flux("offre", seed)
     modele = TEMPLATES[(seed - 1) % len(TEMPLATES)]
     minimum, maximum = modele["pages_bruit"]
 
@@ -334,7 +337,7 @@ def style_offre(seed: int) -> StyleOffre:
         police=tirage.choice(POLICES_SANS),
         couleur=tirage.choice(COULEURS),
         nombre_pages=tirage.randint(minimum, maximum),
-        capture_ecran=random.Random(f"capture-{seed}").random() < 1 / 6,
+        capture_ecran=numerise(TYPE_ATTENDU, seed),
         contrat_trompeur=(modele["template"] == "institutionnel"
                           and tirage.random() < 0.4),
         avec_cookies_repetes=(modele["template"] == "editorial"),
@@ -343,7 +346,7 @@ def style_offre(seed: int) -> StyleOffre:
 
 def generer_offre(seed: int, style: StyleOffre) -> OffreEmploi:
     fake = faker(seed)
-    tirage = random.Random(f"offre-contenu-{seed}")
+    tirage = flux("offre-contenu", seed)
 
     intitule, nature, secteur = fake.random_element(POSTES)
     code_postal, ville = fake.random_element(VILLES)
@@ -422,7 +425,7 @@ def generer_offre(seed: int, style: StyleOffre) -> OffreEmploi:
 
 
 class OffreDocument(DocumentType):
-    type_attendu = "offre_emploi"
+    type_attendu = TYPE_ATTENDU
     autonome = True
 
     def produire(self, numero: int) -> dict:

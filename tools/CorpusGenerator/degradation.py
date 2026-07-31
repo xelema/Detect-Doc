@@ -9,19 +9,28 @@ Les deux versions coexistent dans le corpus et sont reliées l'une à l'autre. C
 résultat sur le document propre et sur son jumeau isole exactement ce que l'OCR coûte en
 qualité, sur un contenu strictement identique.
 
+Ce module décide aussi **qui** est numérisé et **comment**, à partir des parts et des
+poids déclarés type par type dans le fichier TOML. Le reste de l'outil ne lit jamais ces
+réglages lui-même : il pose la question ici, pour ne pas avoir à connaître la règle.
+
 Le nom des effets appliqués est relevé sur les objets eux-mêmes plutôt que saisi à la
 main : une liste écrite en dur finirait par mentir sur ce que le document a subi.
 """
 
-import hashlib
 import os
 import random
 from pathlib import Path
 from configuration import (
-    POIDS_PROFILS,
-    UNITE_SUR_N_DEDOUBLEE,
+    DEGRADATION_ACTIVE,
+    DOCUMENTS,
+    POIDS_PROFILS_DEFAUT,
     QUALITE_JPEG as QUALITE_CONTENEUR,
     RESOLUTION_DPI,
+    entier,
+    flux,
+    part_numerisee,
+    part_pivotee,
+    poids_profils,
 )
 
 # Doit être posé avant l'import d'augraphy, qui charge numba.
@@ -49,8 +58,7 @@ from augraphy import (AugraphyPipeline, DirtyDrum, DirtyRollers,  # noqa: E402
 # sept. Un effet qui fait échouer la génération par intermittence n'a pas sa place ici,
 # et le rendu de photocopie s'obtient très bien avec Letterpress et DirtyDrum.
 
-# Résolution des scanners de bureau. En dessous de 150 l'OCR se dégrade pour une raison
-# qui n'a rien à voir avec le document lui-même, ce qui fausserait la comparaison.
+
 def _scan_propre() -> dict:
     """Numérisation correcte sur un matériel entretenu : le cas favorable."""
     return {
@@ -112,57 +120,98 @@ PROFILS = {
     "photocopie": _photocopie,
 }
 
-# Répartition volontairement inégale : en production, un scan correct est bien plus
-# fréquent qu'un fax. Un corpus qui donnerait autant de poids à chaque profil
-# surestimerait la difficulté moyenne.
-if set(POIDS_PROFILS) != set(PROFILS):
-    raise ValueError("les poids doivent déclarer exactement les cinq profils")
+# Le nom des profils est écrit dans le TOML, leur fabrique ici : un nom qui n'existe pas
+# de ce côté ne serait jamais tiré, et un type se croirait numérisé d'une façon dont il ne
+# l'est pas. Contrôlé à l'import, sur les poids de chaque type comme sur ceux par défaut.
+for _origine, _poids in [("[defaults.profiles]", POIDS_PROFILS_DEFAUT)] + [
+        (f"[types.{_nom}] profiles", poids_profils(_nom)) for _nom in DOCUMENTS]:
+    _inconnus = set(_poids) - set(PROFILS)
+    if _inconnus:
+        raise ValueError(f"{_origine} : profil(s) inconnu(s) {sorted(_inconnus)}, "
+                         f"attendu parmi {sorted(PROFILS)}")
+
+# Le profil décide aussi de la façon dont un objet physique a été repris : photographier
+# un carton ne produit pas les mêmes défauts que le passer au scanner. Un seul tirage pour
+# les deux questions, sinon le document et le manifest finissent par se contredire.
+ACQUISITION_PAR_PROFIL = {"photo-smartphone": "photo"}
 
 
-# Profils compatibles avec la façon dont un original physique a été repris. Photographier
-# un carton ne produit pas les mêmes défauts que le passer au scanner : appliquer les uns
-# à la place des autres donnerait un document que son propre manifest décrit de travers.
-PROFILS_PAR_ACQUISITION = {
-    "photo": ["photo-smartphone"],
-    "scan": ["scan-propre", "scan-degrade", "photocopie", "fax"],
-}
+def _retenu(rang: int, numerateur: int, denominateur: int) -> bool:
+    """Vrai pour `numerateur` rangs sur `denominateur`, répartis le plus régulièrement
+    possible et sans jamais redistribuer les rangs déjà passés.
 
+    C'est ce qui rend les parts déclarées exactes plutôt qu'espérées. Sur quatre unités,
+    un tirage à 55 % en donne aussi bien deux que quatre, et chaque type se retrouverait
+    avec sa propre proportion de documents numérisés : un type plus mal classé qu'un autre
+    serait alors impossible à départager de sa part de scans. La part étant arithmétique,
+    le nombre de paires propre et numérisé est connu avant la génération, ce qui fixe la
+    précision de la comparaison entre les deux régimes.
 
-def profil_acquisition(seed: int, acquisition: str) -> str:
-    """Profil de numérisation d'un document qui n'existe que sous forme d'objet physique.
-
-    La question n'est pas ici de savoir *si* le document est numérisé, il l'est toujours,
-    mais *comment*. Le style a déjà décidé de la reprise, photo posée sur un bureau ou
-    passage au scanner, et il ne reste qu'à choisir les défauts cohérents avec elle.
+    Le demi-dénominateur ajouté aux deux membres arrondit au plus proche au lieu de
+    tronquer. Sans lui, la règle attend d'avoir accumulé un rang entier de retard avant de
+    retenir le premier, ce qui coûte un document sur les effectifs modestes du corpus :
+    une part de 33 % en donnait 25 sur douze factures.
     """
-    candidats = PROFILS_PAR_ACQUISITION[acquisition]
-    return random.Random(f"acquisition-{seed}").choices(
-        candidats, weights=[POIDS_PROFILS[nom] for nom in candidats])[0]
+    moitie = denominateur // 2
+    return ((rang * numerateur + moitie) // denominateur
+            > ((rang - 1) * numerateur + moitie) // denominateur)
 
 
-def profil_degradation(seed: int) -> str | None:
-    """Profil à appliquer au document, ou None s'il reste à texte natif.
+def numerise(type_document: str, numero: int) -> bool:
+    """Ce document part-il en numérisation, plutôt que de rester à texte natif ?
 
-    Les deux régimes doivent rester bien représentés : sans documents propres, on perd
-    la référence qui permet de chiffrer le coût de l'OCR ; sans documents dégradés, on
-    ne mesure pas l'OCR du tout.
-
-    Le dédoublement est arithmétique et non tiré au sort : sur quatre unités, un tirage
-    à 55 % en donne aussi bien deux que quatre, et chaque type se retrouverait avec sa
-    propre proportion de documents scannés. Un type plus mal classé qu'un autre serait
-    alors impossible à départager de sa part de scans, et la matrice de confusion
-    mesurerait un écart que personne n'a voulu. Le nombre de paires devient du même coup
-    connu avant la génération, ce qui compte puisque c'est lui qui fixe la précision de
-    la comparaison entre document propre et document scanné.
+    Pour les types qui n'existent qu'en un seul exemplaire, repris d'un objet physique ou
+    capturés à l'écran. Les types qui conservent leur original passent par `jumeau`.
     """
-    if seed % UNITE_SUR_N_DEDOUBLEE:
-        return None
-    # Le tirage parcourt PROFILS et non POIDS_PROFILS : un profil ajouté à la table
-    # des poids sans fabrique échoue alors franchement, au lieu de n'être jamais tiré.
-    # L'aléa reste ici à sa place : il produit de la variété de défauts, il ne décide
-    # pas de la structure du corpus.
-    return random.Random(f"degradation-{seed}").choices(
-        list(PROFILS), weights=[POIDS_PROFILS[n] for n in PROFILS])[0]
+    return DEGRADATION_ACTIVE and _retenu(numero, part_numerisee(type_document), 100)
+
+
+def jumeau(type_document: str, numero: int) -> bool:
+    """Cette unité se dédouble-t-elle en un jumeau numérisé du même contenu ?
+
+    La part demandée porte sur les documents écrits au manifest, or une unité dédoublée en
+    produit deux : il faut donc dédoubler `part / (100 - part)` unités pour que la part des
+    documents numérisés tombe juste. D'où le plafond de 50 %, au-delà duquel il faudrait
+    plus d'un jumeau par unité ; `generer.py` le refuse.
+    """
+    part = part_numerisee(type_document)
+    return DEGRADATION_ACTIVE and _retenu(numero, part, 100 - part)
+
+
+def profil(type_document: str, numero: int) -> str:
+    """Profil de numérisation à appliquer, tiré dans les poids déclarés pour ce type.
+
+    L'aléa est ici à sa place : il produit de la variété de défauts, il ne décide pas de
+    la structure du corpus. Les noms sont triés pour que réordonner la table du TOML, qui
+    ne change rien à ce qu'elle déclare, ne change pas non plus le corpus produit.
+    """
+    poids = poids_profils(type_document)
+    noms = sorted(poids)
+    return flux(f"profil-{type_document}", numero).choices(
+        noms, weights=[poids[nom] for nom in noms])[0]
+
+
+def acquisition(type_document: str, numero: int) -> tuple[str, str | None]:
+    """Comment un document repris d'un objet physique est arrivé, et sous quel profil.
+
+    Trois modes. `photo` est le carton ou la feuille photographiée à la main, `scan` le
+    passage à plat, et `fichier` l'export bureautique déposé tel quel, qui reste à texte
+    natif et ne reçoit donc aucun profil. Le mode se déduit du profil tiré plutôt que
+    l'inverse : c'est la table de poids du type, dans le TOML, qui décide de tout.
+    """
+    if not numerise(type_document, numero):
+        return "fichier", None
+    nom = profil(type_document, numero)
+    return ACQUISITION_PAR_PROFIL.get(nom, "scan"), nom
+
+
+def quart_de_tour(type_document: str, numero: int) -> bool:
+    """Ce document numérisé est-il posé de travers d'un quart de tour ?
+
+    À n'appeler que sur un document effectivement numérisé : un export bureautique est
+    droit, et la part déclarée porte sur les seuls documents numérisés du type.
+    """
+    return flux(f"pivot-{type_document}", numero).randrange(100) < part_pivotee(type_document)
 
 
 def _rasteriser(source: Path) -> list[np.ndarray]:
@@ -184,9 +233,9 @@ def _ecrire_pdf(pages: list[np.ndarray], destination: Path, seed: int) -> None:
 
     Deux précautions pour que le fichier soit reproductible octet pour octet. Les
     métadonnées sont vidées, sinon PyMuPDF y écrit la date du jour. Et l'identifiant de
-    document du trailer, que PyMuPDF tire au hasard à chaque sauvegarde, est calculé à
-    partir de la seed : c'était le seul reste de non-déterminisme, cinquante-neuf octets
-    qui suffisaient à changer l'empreinte du fichier.
+    document du trailer, que PyMuPDF tire au hasard à chaque sauvegarde, est dérivé de la
+    seed : c'était le seul reste de non-déterminisme, cinquante-neuf octets qui suffisaient
+    à changer l'empreinte du fichier.
     """
     document = fitz.open()
     try:
@@ -206,7 +255,7 @@ def _ecrire_pdf(pages: list[np.ndarray], destination: Path, seed: int) -> None:
             feuille.insert_image(feuille.rect, stream=tampon.tobytes())
 
         document.set_metadata({})
-        empreinte = hashlib.sha256(str(seed).encode()).hexdigest()[:32].upper()
+        empreinte = f"{flux('identifiant-pdf', seed).getrandbits(128):032X}"
         document.xref_set_key(-1, "ID", f"[<{empreinte}><{empreinte}>]")
 
         destination.parent.mkdir(parents=True, exist_ok=True)
@@ -224,33 +273,33 @@ def capturer_ecran(source: Path, destination: Path, seed: int) -> None:
     numérisation d'un papier, cette fonction ne simule aucun défaut. Une offre d'emploi
     capturée en image est la capture d'écran d'une page web, jamais la reprise d'un
     objet physique, et le rendu reste net, seule la couche texte disparaît. Réutilise la
-    rastérisation et l'écriture reproductible de `degrader`, sans chaîne Augraphy et
-    sans passer par le catalogue de profils : ce régime n'a pas sa place dans le tirage
-    générique des jumeaux dégradés de `profil_degradation`, qui ne doit imiter que la
-    numérisation d'un papier.
+    rastérisation et l'écriture reproductible de `degrader`, sans chaîne Augraphy et sans
+    passer par le catalogue de profils : c'est pourquoi déclarer une table `profiles` sur
+    ce type est refusé, aucun profil ne saurait s'y appliquer.
     """
     _ecrire_pdf(_rasteriser(source), destination, seed)
 
 
-def degrader(source: Path, destination: Path, seed: int, profil: str,
+def degrader(source: Path, destination: Path, seed: int, nom_profil: str,
              rotation_page_deg: int = 0) -> list[str]:
     """Produit le jumeau dégradé d'un document. Retourne les effets réellement appliqués."""
     if rotation_page_deg not in {0, 90, 180, 270}:
         raise ValueError(f"rotation de page invalide : {rotation_page_deg}")
 
-    phases = PROFILS[profil]()
+    phases = PROFILS[nom_profil]()
 
     # Le random_seed de la chaîne ne suffit pas : plusieurs effets tirent directement
-    # dans les générateurs globaux de Python et de numpy. Sans ces deux lignes, deux
+    # dans les générateurs globaux de Python et de numpy. Sans ces trois lignes, deux
     # exécutions du même document produisent deux fichiers différents.
-    random.seed(seed)
-    np.random.seed(seed)
+    graine = entier("effets", seed)
+    random.seed(graine)
+    np.random.seed(graine)
 
     chaine = AugraphyPipeline(
         ink_phase=phases["ink"],
         paper_phase=phases["paper"],
         post_phase=phases["post"],
-        random_seed=seed,
+        random_seed=graine,
     )
 
     pages = []

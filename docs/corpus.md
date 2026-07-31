@@ -28,7 +28,7 @@ Les 96 entrées actuelles sont toutes `public` : le corpus ne contient à ce jou
 
 ## Traçabilité
 
-Le validateur, `tools/CorpusGenerator/manifest.py`, vérifie pour chaque entrée que le fichier déclaré existe et que son `sha256` correspond. `configuration_sha256` fixe l'empreinte du `corpus-generator.toml` utilisé : à seed, code, configuration et versions de dépendances identiques, une régénération redonne les mêmes fichiers, octet pour octet.
+Le validateur, `tools/CorpusGenerator/manifest.py`, vérifie pour chaque entrée que le fichier déclaré existe et que son `sha256` correspond. `configuration_sha256` fixe l'empreinte du `corpus-generator.toml` utilisé, seed globale comprise : à code, configuration et versions de dépendances identiques, une régénération redonne les mêmes fichiers, octet pour octet.
 
 `pii_injectees` enregistre les valeurs personnelles injectées dans le document, nom, IBAN, e-mail. C'est la vérité terrain qui permettra de mesurer le rappel du masquage PII sans détecteur dédié, une fois ce chantier ouvert.
 
@@ -42,14 +42,14 @@ Le tableau qui suit est réécrit par le générateur à chaque exécution, à p
 
 | Type | Documents | `dev` | `test` | Texte natif | Numérisés | Rôle |
 |---|---|---|---|---|---|---|
-| `carte_visite` | 12 | 3 | 9 | 1 | 11 | liste métier |
-| `devis` | 12 | 3 | 9 | 8 | 4 | distracteur |
-| `facture` | 12 | 2 | 10 | 8 | 4 | distracteur |
+| `carte_visite` | 12 | 3 | 9 | 2 | 10 | liste métier |
+| `devis` | 12 | 2 | 10 | 8 | 4 | distracteur |
+| `facture` | 12 | 4 | 8 | 8 | 4 | distracteur |
 | `feuille_emar` | 15 | 4 | 11 | 3 | 12 | liste métier |
-| `offre_emploi` | 15 | 3 | 12 | 11 | 4 | liste métier |
-| `rib` | 8 | 3 | 5 | 6 | 2 | liste métier |
-| `rib_sepa` | 8 | 1 | 7 | 6 | 2 | liste métier |
-| `sepa` | 8 | 3 | 5 | 6 | 2 | liste métier |
+| `offre_emploi` | 15 | 4 | 11 | 12 | 3 | liste métier |
+| `rib` | 8 | 2 | 6 | 6 | 2 | liste métier |
+| `rib_sepa` | 8 | 3 | 5 | 6 | 2 | liste métier |
+| `sepa` | 8 | 1 | 7 | 6 | 2 | liste métier |
 
 **90 documents** en 8 types, pour 76 contenus distincts : 14 documents sont le jumeau scanné d'un autre, même contenu et même jeu, reliés par `derive_de`.
 
@@ -58,6 +58,8 @@ Le tableau qui suit est réécrit par le générateur à chaque exécution, à p
 Huit types de la liste métier, la priorité 2 et `EVAL_FORM` de la priorité 1, ne sont pas encore produits.
 
 Les documents numérisés le sont en scan, photocopie, fax ou photo au smartphone. Les deux régimes coexistent volontairement : c'est l'écart entre eux qui mesure ce que coûte l'OCR, et les jumeaux le mesurent à contenu strictement identique.
+
+La part de documents numérisés et les profils applicables se déclarent type par type dans `tools/CorpusGenerator/corpus-generator.toml`, avec la part de pages posées de travers et l'effectif de chaque type. Une carte de visite arrive donc presque toujours numérisée et jamais faxée, une facture reste majoritairement à texte natif : ce sont des décisions de corpus, pas des propriétés du code. Le détail des réglages est dans le README de l'outil.
 
 ## Reproduire le corpus
 

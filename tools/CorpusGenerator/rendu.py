@@ -5,11 +5,12 @@ du système : le corpus doit sortir identique sur n'importe quelle machine.
 """
 
 import os
-import random
 from datetime import date
 from decimal import Decimal
 from functools import cache
 from pathlib import Path
+
+from configuration import flux
 
 # Doit être posé avant l'import de weasyprint, qui charge fontTools.
 #
@@ -137,7 +138,7 @@ def paraphe_svg(texte: str) -> Markup:
     paraphe, deux personnes différentes ne signent pas pareil, et le corpus reste
     reproductible d'une exécution à l'autre.
     """
-    tirage = random.Random(f"paraphe-{texte}")
+    tirage = flux("paraphe", texte)
     largeur, hauteur = 100, 30
     ligne_base = tirage.uniform(19.0, 23.0)
 
@@ -225,7 +226,7 @@ def qr_svg(seed: int, taille_mm: float = 15) -> Markup:
     masqué du tout.
     """
     modules = 21
-    tirage = random.Random(f"qr-{seed}")
+    tirage = flux("qr", seed)
     cibles = [(0, 0), (modules - 7, 0), (0, modules - 7)]
 
     def dans_une_cible(x: int, y: int) -> bool:

@@ -7,12 +7,12 @@ jeu de marqueurs que la classification devra savoir lire. Le tronc commun aux de
 est dans `documents/piece.py`.
 """
 
-import random
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
 
 import manifest
+from configuration import flux
 from documents.base import DocumentType
 from documents.commun import (CATALOGUE_FORMATIONS, DEBUT_PERIODE, FIN_PERIODE,
                               client_professionnel, faker, generer_client,
@@ -130,7 +130,7 @@ def style_devis(seed: int) -> Style:
     non seulement sur le même template, ce qui est voulu, mais aussi avec la même police,
     le même corps et la même couleur, ce qui réduirait la variété du corpus de moitié.
     """
-    return style_piece(seed, random.Random(f"devis-{seed}"), devis=True)
+    return style_piece(seed, flux("devis", seed), devis=True)
 
 
 class DevisDocument(DocumentType):

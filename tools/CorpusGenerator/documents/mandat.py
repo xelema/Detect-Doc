@@ -9,13 +9,13 @@ exactement comme la facture et le devis partagent leur tronc commun dans
 `produire_mandat` avec le bon booléen.
 """
 
-import random
 from dataclasses import asdict, dataclass
 from datetime import date, timedelta
 from pathlib import Path
 
 import manifest
 from cles import identifiant_creancier_sepa
+from configuration import flux
 from documents.commun import (COULEURS, DEBUT_PERIODE, FIN_PERIODE, Organisme,
                               POLICES_SANS, faker, generer_organisme, sans_accent)
 from documents.rib import Rib, generer_rib
@@ -71,7 +71,7 @@ class StyleMandat:
 
 
 def generer_mandat_sepa(seed: int, rib: Rib) -> MandatSepa:
-    tirage = random.Random(f"mandat-{seed}")
+    tirage = flux("mandat", seed)
 
     creancier = generer_organisme(seed + DECALAGE_SEED_CREANCIER)
 
@@ -104,7 +104,7 @@ def generer_mandat_sepa(seed: int, rib: Rib) -> MandatSepa:
 
 
 def style_mandat(seed: int, avec_pave_rib: bool) -> StyleMandat:
-    tirage = random.Random(f"mandat-style-{seed}")
+    tirage = flux("mandat-style", seed)
     return StyleMandat(
         template="mandat_sepa_01.html",
         police=tirage.choice(POLICES_SANS),

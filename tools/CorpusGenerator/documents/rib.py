@@ -5,7 +5,6 @@ ressemblent presque tous, leur forme étant quasi normalisée. Inventer plusieur
 présentations rendrait le corpus moins représentatif, pas plus.
 """
 
-import random
 from dataclasses import dataclass
 from datetime import date, timedelta
 
@@ -13,6 +12,7 @@ from stdnum import iban as iban_stdnum
 
 import manifest
 from cles import cle_rib, iban_francais
+from configuration import flux
 from documents.base import DocumentType
 from documents.commun import (COULEURS, DEBUT_PERIODE, FIN_PERIODE, MOTIFS_CLIENT,
                               POLICES_SANS, Coordonnees, Style, coordonnees, faker,
@@ -113,7 +113,7 @@ def style_rib(seed: int) -> Style:
 
     Volontairement peu variable : cf. le docstring du module.
     """
-    tirage = random.Random(seed)
+    tirage = flux("rib", seed)
     return Style(
         template="rib_01.html",
         police=tirage.choice(POLICES_SANS),

@@ -15,12 +15,16 @@ import random
 from dataclasses import asdict, dataclass
 from datetime import date, timedelta
 
+import degradation
 import manifest
+from configuration import flux
 from documents.base import DocumentType
 from documents.commun import (COULEURS, DEBUT_PERIODE, FIN_PERIODE, POLICES_MANUSCRITES,
                               Coordonnees, coordonnees, faker, nom_de_domaine,
                               raison_sociale_organisme, sans_accent, telephone)
 from rendu import logo_svg, portrait_svg, qr_svg, rendre_pdf
+
+TYPE_ATTENDU = "carte_visite"
 
 # Fonctions portées par les cartes de visite qui atterrissent dans un dossier de
 # formation : dirigeants de petites structures, commerciaux, référents pédagogiques.
@@ -209,14 +213,14 @@ def generer_carte_visite(seed: int) -> CarteVisite:
     )
 
 
-def _acquisition(tirage: random.Random) -> dict:
+def _reprise(seed: int, tirage: random.Random) -> dict:
     """Comment le carton a été repris, et comment il se présente dans le cadre.
 
     Une carte de visite arrive presque toujours en gestion documentaire comme la reprise
     d'un objet physique, scannée à plat sur une feuille restée vide à 90 %, ou
     photographiée posée sur un bureau. Les deux régimes donnent des images très
-    différentes à un OCR, d'où le tirage explicite plutôt qu'un rendu unique qu'on
-    dégraderait ensuite.
+    différentes à un OCR, d'où la question posée explicitement plutôt qu'un rendu unique
+    qu'on dégraderait ensuite.
 
     Le troisième mode, `fichier`, est la minorité qui compte quand même : un export d'un
     outil de mise en page, déposé tel quel. La page fait alors la taille du carton, sans
@@ -224,15 +228,15 @@ def _acquisition(tirage: random.Random) -> dict:
     n'en contiendrait aucun ne dirait rien de ce cas, et personne ne saurait si le service
     le traite correctement.
 
-    Trois cartes sur dix reçoivent un quart de tour. C'est la proportion observée sur les
-    exemples fournis : un carton paysage se photographie volontiers en portrait, et se
-    pose en travers sur la vitre d'un scanner. Un OCR qui ne redresse pas la page n'en
-    lit alors rien, ce qui est exactement ce que le corpus doit pouvoir révéler.
+    Le mode, la part de cartons restés fichiers et la part de quarts de tour se règlent
+    dans le TOML : un carton paysage se photographie volontiers en portrait, et se pose en
+    travers sur la vitre d'un scanner, mais la proportion exacte est une décision de
+    corpus, pas une propriété du type.
     """
-    quart_de_tour = tirage.random() < 0.3
-    manuscrite = tirage.random() < 0.15
-    acquisition = tirage.choices(["photo", "scan", "fichier"], weights=[50, 35, 15])[0]
+    acquisition, _ = degradation.acquisition(TYPE_ATTENDU, seed)
     physique = acquisition != "fichier"
+    quart_de_tour = physique and degradation.quart_de_tour(TYPE_ATTENDU, seed)
+    manuscrite = tirage.random() < 0.15
     return {
         "orientation": "portrait" if tirage.random() < 0.15 else "paysage",
         "acquisition": acquisition,
@@ -253,7 +257,7 @@ def _acquisition(tirage: random.Random) -> dict:
     }
 
 
-def _carte_moderne(tirage: random.Random) -> StyleCarte:
+def _carte_moderne(tirage: random.Random, reprise: dict) -> StyleCarte:
     """Carte d'imprimeur en ligne : logo en tête, couleur d'accent, coordonnées alignées.
 
     La forme la plus courante, et la plus riche en texte du lot.
@@ -273,11 +277,11 @@ def _carte_moderne(tirage: random.Random) -> StyleCarte:
         avec_site=tirage.random() < 0.75,
         avec_reseau=tirage.random() < 0.25,
         avec_certification=tirage.random() < 0.3,
-        **_acquisition(tirage),
+        **reprise,
     )
 
 
-def _carte_sobre(tirage: random.Random) -> StyleCarte:
+def _carte_sobre(tirage: random.Random, reprise: dict) -> StyleCarte:
     """Carte minimaliste : noir sur blanc, beaucoup de vide, quelques mots.
 
     Le cas limite du corpus. Une fois océrisée, elle peut ne rendre que huit mots, dont
@@ -300,11 +304,11 @@ def _carte_sobre(tirage: random.Random) -> StyleCarte:
         avec_site=tirage.random() < 0.35,
         avec_reseau=False,
         avec_certification=False,
-        **_acquisition(tirage),
+        **reprise,
     )
 
 
-def _carte_aplat(tirage: random.Random) -> StyleCarte:
+def _carte_aplat(tirage: random.Random, reprise: dict) -> StyleCarte:
     """Carte imprimée en fond perdu : couleur pleine, texte en réserve blanche.
 
     Le contraste inversé est le cas hostile de ce type. Beaucoup de binarisations d'OCR
@@ -325,7 +329,7 @@ def _carte_aplat(tirage: random.Random) -> StyleCarte:
         avec_site=tirage.random() < 0.7,
         avec_reseau=tirage.random() < 0.35,
         avec_certification=tirage.random() < 0.25,
-        **_acquisition(tirage),
+        **reprise,
     )
 
 
@@ -338,12 +342,17 @@ def style_carte_visite(seed: int) -> StyleCarte:
     Le template tourne sur la seed, comme pour les pièces comptables : sur un corpus de
     taille modeste, un tirage aléatoire laisserait une des trois mises en page
     sous-représentée, et les mesures la concernant sans valeur.
+
+    La reprise est calculée à part et passée aux trois fabriques : elle ne dépend pas de
+    la mise en page du carton, et deux cartes du même numéro doivent arriver de la même
+    façon quelle que soit la fabrique qui les dessine.
     """
-    return FABRIQUES_CARTE[seed % len(FABRIQUES_CARTE)](random.Random(f"carte-{seed}"))
+    tirage = flux("carte", seed)
+    return FABRIQUES_CARTE[seed % len(FABRIQUES_CARTE)](tirage, _reprise(seed, tirage))
 
 
 class CarteVisiteDocument(DocumentType):
-    type_attendu = "carte_visite"
+    type_attendu = TYPE_ATTENDU
     physique = True
 
     def produire(self, numero: int) -> dict:

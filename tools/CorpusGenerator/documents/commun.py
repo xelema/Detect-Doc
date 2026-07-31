@@ -8,8 +8,8 @@ listé ici : la duplication d'un futur type qui ne partage rien avec ceux-ci ne 
 coûter à ce module.
 
 Comme pour la génération elle-même, tout est piloté par une seed. Le même numéro de
-document redonne exactement le même contenu, ce qui autorise à ne pas versionner les
-binaires du corpus : ils se refabriquent.
+document redonne exactement le même contenu, à seed globale inchangée, ce qui autorise à
+ne pas versionner les binaires du corpus : ils se refabriquent.
 """
 
 import random
@@ -20,6 +20,7 @@ from datetime import date, timedelta
 from faker import Faker
 
 from cles import numero_tva_intracommunautaire
+from configuration import SEED, flux
 
 # Intitulés et durées des actions de formation vendues par l'organisme. Un organisme de
 # formation doit afficher son numéro de déclaration d'activité et, depuis 2022, sa
@@ -263,7 +264,7 @@ def client_professionnel(seed: int) -> bool:
     partagé les ferait s'aligner. Le jeu de réglage n'aurait alors jamais vu de facture
     adressée à un particulier.
     """
-    return random.Random(f"professionnel-{seed}").random() < 0.75
+    return flux("professionnel", seed).random() < 0.75
 
 
 _FAKER = Faker("fr_FR")
@@ -278,6 +279,10 @@ def faker(seed: int) -> Faker:
     ce qu'un corpus entier, avec plusieurs appels par document, finit par payer plein
     tarif.
 
+    La seed globale entre dans la valeur passée à Faker, comme elle entre dans le nom des
+    flux nommés : sans elle, changer de seed globale laisserait tous les noms, adresses et
+    montants du corpus rigoureusement identiques.
+
     Attention à l'ordre d'appel : l'instance étant partagée, un appelant qui la récupère
     puis appelle une fonction imbriquée qui reseede à nouveau via `faker()` (par exemple
     `generer_organisme`, `generer_client` ou `generer_rib` sur une seed différente) verra
@@ -285,7 +290,7 @@ def faker(seed: int) -> Faker:
     demander l'instance juste avant de la consommer, une fois les sous-générateurs
     exécutés, jamais avant.
     """
-    _FAKER.seed_instance(seed)
+    _FAKER.seed_instance(f"{SEED}-{seed}")
     return _FAKER
 
 
