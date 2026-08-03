@@ -19,7 +19,7 @@ from configuration import flux
 from documents.commun import (COULEURS, DEBUT_PERIODE, FIN_PERIODE, Organisme,
                               POLICES_SANS, faker, generer_organisme, sans_accent)
 from documents.rib import Rib, generer_rib
-from rendu import logo_svg, rendre_pdf
+from rendu import logo_svg, rendre_pdf, texte_natif
 
 # Décalages appliqués à la seed du document pour dériver le débiteur et le créancier.
 # Sans eux, le mandat n°1 réutiliserait exactement le même RIB et le même organisme que
@@ -146,4 +146,5 @@ def produire_mandat(numero: int, type_attendu: str, prefixe: str,
         },
         tags=["titulaire-personne" if rib.titulaire_est_personne
               else "titulaire-entreprise", mandat.type_paiement],
+        texte_reference=texte_natif(chemin),
     )

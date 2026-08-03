@@ -22,7 +22,7 @@ from documents.base import DocumentType
 from documents.commun import (CATALOGUE_FORMATIONS, COULEURS, DEBUT_PERIODE, FIN_PERIODE,
                               MOTIFS_CLIENT, POLICES_CONDENSEES, POLICES_MANUSCRITES,
                               POLICES_SANS, Organisme, faker, generer_organisme)
-from rendu import logo_svg, rendre_pdf
+from rendu import logo_svg, rendre_pdf, texte_natif
 
 TYPE_ATTENDU = "feuille_emar"
 
@@ -466,6 +466,7 @@ class FeuilleEmargementDocument(DocumentType):
             variante=variante,
             pii=pii,
             tags=tags,
+            texte_reference=texte_natif(chemin),
         )
 
 

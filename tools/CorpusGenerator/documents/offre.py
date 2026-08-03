@@ -24,7 +24,7 @@ from degradation import capturer_ecran, numerise
 from documents.base import DocumentType
 from documents.commun import (COULEURS, DEBUT_PERIODE, FIN_PERIODE, POLICES_SANS,
                               VILLES, faker, sans_accent)
-from rendu import portrait_svg, rendre_pdf
+from rendu import portrait_svg, rendre_pdf, texte_natif
 
 TYPE_ATTENDU = "offre_emploi"
 
@@ -474,6 +474,7 @@ class OffreDocument(DocumentType):
             variante=style.as_dict(),
             pii=pii,
             tags=tags,
+            texte_reference=texte_natif(chemin),
         )
 
         if style.capture_ecran:
