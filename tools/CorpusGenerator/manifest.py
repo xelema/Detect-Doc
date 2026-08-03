@@ -52,7 +52,7 @@ SENSIBILITES = {"public", "interne_assaini", "production_valide"}
 CHAMPS_OBLIGATOIRES = [
     "id", "fichier", "sha256", "type_attendu", "source", "licence", "sensibilite",
     "langue", "pages", "regime", "seed", "variante", "degradations", "derive_de",
-    "tags", "pii_injectees", "split", "configuration_sha256",
+    "tags", "pii_injectees", "split", "configuration_sha256", "texte_reference",
 ]
 
 REGIMES = {"texte-natif", "scanne"}
@@ -94,7 +94,8 @@ def _chemin_relatif(chemin: Path) -> str:
 
 
 def construire_entree(identifiant: str, chemin: Path, type_attendu: str, seed: int,
-                      pages: int, variante: dict, pii: dict, tags: list[str]) -> dict:
+                      pages: int, variante: dict, pii: dict, tags: list[str],
+                      texte_reference: str) -> dict:
     """Assemble la ligne de manifest d'un document qui vient d'être produit."""
     return {
         "id": identifiant,
@@ -120,6 +121,10 @@ def construire_entree(identifiant: str, chemin: Path, type_attendu: str, seed: i
         "pii_injectees": pii,
         "split": _split(type_attendu, seed),
         "configuration_sha256": CONFIGURATION_SHA256,
+        # Vérité terrain textuelle pour le comparatif OCR : le texte natif du
+        # document au moment de son rendu, avant qu'une éventuelle numérisation ne
+        # l'écrase avec sa version dégradée. Voir rendu.texte_natif.
+        "texte_reference": texte_reference,
     }
 
 

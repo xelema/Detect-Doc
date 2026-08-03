@@ -17,7 +17,7 @@ from documents.base import DocumentType
 from documents.commun import (COULEURS, DEBUT_PERIODE, FIN_PERIODE, MOTIFS_CLIENT,
                               POLICES_SANS, Coordonnees, Style, coordonnees, faker,
                               marque)
-from rendu import logo_svg, rendre_pdf
+from rendu import logo_svg, rendre_pdf, texte_natif
 
 # Noms de banques inventés. Aucune banque réelle n'est nommée : le corpus doit être
 # réaliste dans sa forme, pas usurper une marque existante.
@@ -158,6 +158,7 @@ class RibDocument(DocumentType):
             },
             tags=["titulaire-personne" if rib.titulaire_est_personne
                   else "titulaire-entreprise"],
+            texte_reference=texte_natif(chemin),
         )
 
 

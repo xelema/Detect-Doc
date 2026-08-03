@@ -20,7 +20,7 @@ from documents.commun import (CATALOGUE_FORMATIONS, DEBUT_PERIODE, FIN_PERIODE,
 from documents.piece import (Piece, Style, lignes_formation, pii, stagiaires_piece,
                              style_piece, tags)
 from documents.rib import generer_rib
-from rendu import logo_svg, rendre_pdf
+from rendu import logo_svg, rendre_pdf, texte_natif
 
 # Intitulés sous lesquels un devis circule réellement. Le premier est de loin le plus
 # fréquent, d'où sa répétition : le tirage suit la réalité plutôt qu'une équiprobabilité
@@ -168,6 +168,7 @@ class DevisDocument(DocumentType):
             variante=style.as_dict(),
             pii=pii(devis, style),
             tags=etiquettes,
+            texte_reference=texte_natif(chemin),
         )
 
 

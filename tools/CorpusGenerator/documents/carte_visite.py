@@ -22,7 +22,7 @@ from documents.base import DocumentType
 from documents.commun import (COULEURS, DEBUT_PERIODE, FIN_PERIODE, POLICES_MANUSCRITES,
                               Coordonnees, coordonnees, faker, nom_de_domaine,
                               raison_sociale_organisme, sans_accent, telephone)
-from rendu import logo_svg, portrait_svg, qr_svg, rendre_pdf
+from rendu import logo_svg, portrait_svg, qr_svg, rendre_pdf, texte_natif
 
 TYPE_ATTENDU = "carte_visite"
 
@@ -401,6 +401,7 @@ class CarteVisiteDocument(DocumentType):
             variante=style.as_dict(),
             pii=pii,
             tags=tags,
+            texte_reference=texte_natif(chemin),
         )
 
 

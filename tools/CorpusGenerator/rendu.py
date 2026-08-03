@@ -24,6 +24,7 @@ from configuration import flux
 # que rien ne l'explique.
 os.environ["SOURCE_DATE_EPOCH"] = "1735689600"
 
+import fitz  # noqa: E402
 from jinja2 import Environment, FileSystemLoader, select_autoescape  # noqa: E402
 from markupsafe import Markup  # noqa: E402
 from weasyprint import HTML  # noqa: E402
@@ -299,3 +300,17 @@ def rendre_pdf(template: str, destination: Path, **contexte) -> int:
     document = HTML(string=html, base_url=str(DOSSIER_TEMPLATES)).render()
     document.write_pdf(destination)
     return len(document.pages)
+
+
+def texte_natif(chemin: Path) -> str:
+    """Texte natif du PDF qui vient d'être rendu à `chemin`.
+
+    Vérité terrain pour la comparaison des moteurs OCR : le générateur connaît
+    par construction le contenu exact de chaque document, plutôt que de le redéduire d'un
+    fichier séparé. À appeler juste après `rendre_pdf`, avant qu'une éventuelle
+    numérisation n'écrase le fichier avec sa version dégradée : un paraphe manuscrit, par
+    exemple, est une courbe SVG et ne ressort jamais dans ce texte, exactement comme il ne
+    ressortirait pas d'un OCR sur le document scanné.
+    """
+    with fitz.open(chemin) as document:
+        return "".join(page.get_text() for page in document)
