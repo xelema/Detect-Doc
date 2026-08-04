@@ -9,33 +9,36 @@ public static class SimilariteMots
     /// </summary>
     /// <param name="reference">Texte de référence attendu.</param>
     /// <param name="extrait">Texte produit par l'extraction.</param>
-    /// <returns>Le rapport entre la taille de l'intersection et celle de l'union des mots. 
+    /// <returns>Le rapport entre la taille de l'intersection et celle de l'union des mots.
     /// (1 = identique, 0 = totalement différent)</returns>
     public static double Jaccard(string reference, string extrait)
     {
-        var listeMotsReference = reference.Split(' ').ToList();
-        var listeMotsExtrait = extrait.Split(' ').ToList();
-        
-        var occurrencesMotsReference = listeMotsReference.GroupBy(w => w).
-            ToDictionary(g => g.Key, g => g.Count());
-        
-        var occurrencesMotsExtrait = listeMotsExtrait.GroupBy(w => w).
-            ToDictionary(g => g.Key,  g => g.Count());
+        // RemoveEmptyEntries : une espace en bordure ou doublée produirait un mot vide, qui
+        // compterait alors comme un mot commun de plus et gonflerait le score.
+        var occurrencesMotsReference = CompterMots(reference);
+        var occurrencesMotsExtrait = CompterMots(extrait);
 
-        var intersectionSize = 0;
-        var unionSize = 0;
+        var tailleIntersection = 0;
+        var tailleUnion = 0;
 
-        var allWords = occurrencesMotsExtrait.Keys.Union(occurrencesMotsReference.Keys);
+        var tousLesMots = occurrencesMotsExtrait.Keys.Union(occurrencesMotsReference.Keys);
 
-        foreach (var words in allWords)
+        foreach (var mot in tousLesMots)
         {
-            var nbMotsRef = occurrencesMotsReference.GetValueOrDefault(words, 0);
-            var nbMotsExtrait = occurrencesMotsExtrait.GetValueOrDefault(words, 0);
+            var nbMotsReference = occurrencesMotsReference.GetValueOrDefault(mot, 0);
+            var nbMotsExtrait = occurrencesMotsExtrait.GetValueOrDefault(mot, 0);
 
-            intersectionSize += Math.Min(nbMotsRef, nbMotsExtrait);
-            unionSize += Math.Max(nbMotsRef, nbMotsExtrait);
+            tailleIntersection += Math.Min(nbMotsReference, nbMotsExtrait);
+            tailleUnion += Math.Max(nbMotsReference, nbMotsExtrait);
         }
 
-        return unionSize == 0 ? 1.0 : (double)intersectionSize / unionSize;
+        return tailleUnion == 0 ? 1.0 : (double)tailleIntersection / tailleUnion;
+    }
+
+    private static Dictionary<string, int> CompterMots(string texte)
+    {
+        return texte.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .GroupBy(mot => mot)
+            .ToDictionary(groupe => groupe.Key, groupe => groupe.Count());
     }
 }
