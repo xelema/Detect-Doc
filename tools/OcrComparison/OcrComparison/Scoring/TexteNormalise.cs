@@ -1,11 +1,11 @@
 ﻿namespace OcrComparison.Scoring;
 using System.Text.RegularExpressions;
 
-public static class TexteNormalise
+public static partial class TexteNormalise
 {
     public static string Normaliser(string texte)
     {
-        return Regex.Replace(texte, @"\s+", " ");
+        return MyRegex().Replace(texte, " ");
     }
 
     /// <summary>
@@ -16,7 +16,12 @@ public static class TexteNormalise
     /// <returns></returns>
     public static string NormaliserPourScore(string texte)
     {
-        var sansPonctuation = Regex.Replace(texte, @"[^\p{L}\p{N}\s]", "");
+        var sansPonctuation = MyRegex1().Replace(texte, "");
         return Normaliser(sansPonctuation);
     }
+
+    [GeneratedRegex(@"\s+")]
+    private static partial Regex MyRegex();
+    [GeneratedRegex(@"[^\p{L}\p{N}\s]")]
+    private static partial Regex MyRegex1();
 }
