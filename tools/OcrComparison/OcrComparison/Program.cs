@@ -18,16 +18,16 @@ using var writer = new StreamWriter($"result_{DateTime.Now:yyyy-MM-dd_HH-mm-ss}_
 
 foreach (var manifestEntry in ManifestReader.ReadManifest(manifestPath))
 {
-    if (manifestEntry.Id is "cvi-0004" or "dev-0002")
+    if (manifestEntry.Regime is "texte-natif")
     {
-        var textReferenceNorm = TexteNormalise.Normaliser(manifestEntry.TextReference);
-        var textExtraitNorm = TexteNormalise.Normaliser(engine.Extract(Path.Combine(corpusPath, manifestEntry.Fichier)));
+        var textReferenceNorm = TexteNormalise.NormaliserPourScore(manifestEntry.TextReference);
+        var textExtraitNorm = TexteNormalise.NormaliserPourScore(engine.Extract(Path.Combine(corpusPath, manifestEntry.Fichier)));
         var scoreLevenshtein = 1 - levenshtein.Distance(textReferenceNorm, textExtraitNorm);
         var scoreJaccard = SimilariteMots.Jaccard(textReferenceNorm, textExtraitNorm);
         writer.WriteLine("====================================================================================");
         writer.WriteLine($"{manifestEntry.Id} ({manifestEntry.TypeAttendu}) - Score Levenshtein: {scoreLevenshtein} - Score Jaccard: {scoreJaccard}\n");
-        writer.WriteLine($"Texte de référence : \n{textReferenceNorm}\n");
-        writer.WriteLine($"Texte extrait : \n{textExtraitNorm}\n");
+        writer.WriteLine($"Texte de référence (normalisé pour score) : \n{textReferenceNorm}\n");
+        writer.WriteLine($"Texte extrait (normalisé pour score) : \n{textExtraitNorm}\n");
         writer.WriteLine("====================================================================================");
     }
 }
