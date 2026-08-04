@@ -4,7 +4,7 @@ using UglyToad.PdfPig.DocumentLayoutAnalysis.WordExtractor;
 
 public class PdfPigNativeTextEngine : ITextExtractionEngine
 {
-    public string Name => "PdfPigNativeTextEngine";
+    public string Name => "PdfPig";
 
     public string Extract(string pdfPath)
     {
