@@ -13,11 +13,11 @@ if (args.Length != 2)
 }
 
 EvaluerBenchmark(args[0], args[1]);
-// Evaluer(args[0], args[1]);
+// EvaluerTxt(args[0], args[1]);
 
 void EvaluerBenchmark(string cheminCorpus, string cheminManifest)
 {
-    using var engine = new TesseractOcrEngine();
+    var engine = new PdfPigNativeTextEngine();
     var entrees = ManifestReader.ReadManifest(cheminManifest).Where(e => e.Split == "dev");
     using var writer = new ResultWriter($"run_{DateTime.Now:yyyy-MM-dd_HH-mm-ss}_{engine.Name}.jsonl");
     foreach (var resultat in new BenchmarkRunner(engine, cheminCorpus).Executer(entrees))
@@ -26,7 +26,7 @@ void EvaluerBenchmark(string cheminCorpus, string cheminManifest)
     }
 }
 
-void Evaluer(string cheminCorpus, string cheminManifest)
+void EvaluerTxt(string cheminCorpus, string cheminManifest)
 {
     using var engine = new TesseractOcrEngine();
     var levenshtein = new NormalizedLevenshtein();
