@@ -1,8 +1,10 @@
 ﻿using System.Globalization;
 using F23.StringSimilarity;
+using OcrComparison.Benchmark;
 using OcrComparison.Engines;
 using OcrComparison.Manifest;
 using OcrComparison.Scoring;
+
 
 if (args.Length != 2)
 {
@@ -10,7 +12,19 @@ if (args.Length != 2)
     return;
 }
 
-Evaluer(args[0], args[1]);
+EvaluerBenchmark(args[0], args[1]);
+// Evaluer(args[0], args[1]);
+
+void EvaluerBenchmark(string cheminCorpus, string cheminManifest)
+{
+    using var engine = new TesseractOcrEngine();
+    var entrees = ManifestReader.ReadManifest(cheminManifest).Where(e => e.Split == "dev");
+    using var writer = new ResultWriter($"run_{DateTime.Now:yyyy-MM-dd_HH-mm-ss}_{engine.Name}.jsonl");
+    foreach (var resultat in new BenchmarkRunner(engine, cheminCorpus).Executer(entrees))
+    {
+        writer.Ecrire(resultat);
+    }
+}
 
 void Evaluer(string cheminCorpus, string cheminManifest)
 {
@@ -21,7 +35,7 @@ void Evaluer(string cheminCorpus, string cheminManifest)
 
     foreach (var manifestEntry in ManifestReader.ReadManifest(cheminManifest))
     {
-        if (manifestEntry.Regime is not "scanne")
+        if ((manifestEntry.Regime != "scanne") || (manifestEntry.Split != "dev"))
         {
             continue;
         }
@@ -47,6 +61,7 @@ void Evaluer(string cheminCorpus, string cheminManifest)
     }
 }
 
-// Culture invariante : le rapport se lit et se dépouille de la même façon quelle que soit la
-// machine qui l'a produit, là où la culture courante y écrirait un séparateur décimal français.
+// Permet d'afficher les scores toujours de la même manière (F4 = 4 décimales fixes)
 string Score(double valeur) => valeur.ToString("F4", CultureInfo.InvariantCulture);
+
+

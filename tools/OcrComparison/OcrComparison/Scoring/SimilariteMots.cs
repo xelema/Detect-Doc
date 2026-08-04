@@ -34,6 +34,11 @@ public static class SimilariteMots
 
         return tailleUnion == 0 ? 1.0 : (double)tailleIntersection / tailleUnion;
     }
+    
+    public static int NombreDeMots(string texte)
+    {
+        return texte.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
+    }
 
     private static Dictionary<string, int> CompterMots(string texte)
     {
