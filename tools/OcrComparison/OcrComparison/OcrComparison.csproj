@@ -8,6 +8,7 @@
     </PropertyGroup>
 
     <ItemGroup>
+      <PackageReference Include="F23.StringSimilarity" Version="7.0.1" />
       <PackageReference Include="PdfPig" Version="0.1.15" />
     </ItemGroup>
 

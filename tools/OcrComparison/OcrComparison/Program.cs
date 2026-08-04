@@ -1,4 +1,5 @@
-﻿using OcrComparison.Engines;
+﻿using F23.StringSimilarity;
+using OcrComparison.Engines;
 using OcrComparison.Manifest;
 
 if (args.Length != 2)
@@ -10,9 +11,20 @@ if (args.Length != 2)
 var corpusPath = args[0];
 var manifestPath = args[1];
 var engine = new PdfPigNativeTextEngine();
+var levenshtein = new NormalizedLevenshtein();
+
+using var writer = new StreamWriter("result.txt");
 
 foreach (var manifestEntry in ManifestReader.ReadManifest(manifestPath))
 {
-    var text = engine.Extract(Path.Combine(corpusPath, manifestEntry.Fichier));
-    Console.WriteLine($"{manifestEntry.Id} ({manifestEntry.TypeAttendu}) : {text}");
+    if (manifestEntry.Id is "cvi-0004" or "dev-0002")
+    {
+        var textExtrait = engine.Extract(Path.Combine(corpusPath, manifestEntry.Fichier));
+        var score = levenshtein.Distance(manifestEntry.TextReference, textExtrait);
+        writer.WriteLine("====================================================================================");
+        writer.WriteLine($"{manifestEntry.Id} ({manifestEntry.TypeAttendu}) - Score: {score}\n");
+        writer.WriteLine($"Texte de référence : \n{manifestEntry.TextReference}\n");
+        writer.WriteLine($"Texte extrait : \n{textExtrait}\n");
+        writer.WriteLine("====================================================================================");
+    }
 }
