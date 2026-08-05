@@ -1,9 +1,10 @@
-﻿namespace OcrComparison.Scoring;
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
+
+namespace OcrComparison.Scoring;
 
 public static partial class TexteNormalise
 {
-    public static string Normaliser(string texte)
+    private static string Normaliser(string texte)
     {
         return EspacesMultiples().Replace(texte, " ").Trim();
     }

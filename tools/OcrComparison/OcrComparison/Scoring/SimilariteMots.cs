@@ -1,4 +1,4 @@
-﻿namespace OcrComparison.Scoring;
+namespace OcrComparison.Scoring;
 
 public static class SimilariteMots
 {
@@ -13,8 +13,6 @@ public static class SimilariteMots
     /// (1 = identique, 0 = totalement différent)</returns>
     public static double Jaccard(string reference, string extrait)
     {
-        // RemoveEmptyEntries : une espace en bordure ou doublée produirait un mot vide, qui
-        // compterait alors comme un mot commun de plus et gonflerait le score.
         var occurrencesMotsReference = CompterMots(reference);
         var occurrencesMotsExtrait = CompterMots(extrait);
 
@@ -34,16 +32,27 @@ public static class SimilariteMots
 
         return tailleUnion == 0 ? 1.0 : (double)tailleIntersection / tailleUnion;
     }
-    
+
     public static int NombreDeMots(string texte)
     {
-        return texte.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
+        return Decouper(texte).Length;
     }
 
     private static Dictionary<string, int> CompterMots(string texte)
     {
-        return texte.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+        return Decouper(texte)
             .GroupBy(mot => mot)
             .ToDictionary(groupe => groupe.Key, groupe => groupe.Count());
+    }
+
+    /// <remarks>
+    /// La définition du mot est commune au comptage publié et au score de Jaccard : les deux
+    /// chiffres doivent décrire le même découpage, donc il n'existe qu'ici.
+    /// RemoveEmptyEntries : une espace en bordure ou doublée produirait un mot vide, qui
+    /// compterait alors comme un mot commun de plus et gonflerait le score.
+    /// </remarks>
+    private static string[] Decouper(string texte)
+    {
+        return texte.Split(' ', StringSplitOptions.RemoveEmptyEntries);
     }
 }
