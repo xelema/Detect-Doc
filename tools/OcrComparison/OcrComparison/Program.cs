@@ -10,60 +10,63 @@ if (args.Length != 2)
     return;
 }
 
-EvaluerBenchmark(args[0], args[1]);
-return;
+const string split = "dev";
+var (cheminCorpus, cheminManifest) = (args[0], args[1]);
 
-void EvaluerBenchmark(string cheminCorpus, string cheminManifest)
+using var moteur = new TesseractOcrEngine();
+var runId = $"ocr-{moteur.Name.ToLowerInvariant()}-{DateTime.Now:yyyy-MM-dd_HH-mm-ss}";
+
+var metadata = RunMetadata.Creer(runId, split, cheminManifest, moteur);
+File.WriteAllText($"{runId}.json", JsonSerializer.Serialize(metadata, JsonRun.OptionsIndentees));
+
+var entrees = ManifestReader.ReadManifest(cheminManifest).Where(e => e.Split == split);
+var resultats = new List<ResultatDocument>();
+
+// Chaque résultat part sur le disque dès qu'il est produit : un run OCR complet dure des
+// heures, et une interruption à mi-parcours ne doit pas emporter les documents déjà payés
+// en temps de calcul. La liste ne sert qu'aux moyennes, calculées après coup.
+using (var writer = new ResultWriter($"{runId}.jsonl"))
 {
-    const string split = "dev";
-    var engine = new TesseractOcrEngine();
-    var runId = $"ocr-{engine.Name.ToLowerInvariant()}-{DateTime.Now:yyyy-MM-dd_HH-mm-ss}";
-    
-    var entrees = ManifestReader.ReadManifest(cheminManifest).Where(e => e.Split == split);
-    
-    var metadata = RunMetadata.Creer(runId, split, cheminManifest, engine);
-    File.WriteAllText($"{runId}.json", JsonSerializer.Serialize(metadata, JsonRun.OptionsIndentees));
-    using var writer = new ResultWriter($"{runId}.jsonl");
-    var resultats = new BenchmarkRunner(engine, cheminCorpus).Executer(entrees).ToList();
-    foreach (var resultat in resultats)
+    foreach (var resultat in new BenchmarkRunner(moteur, cheminCorpus).Executer(entrees))
     {
         writer.Ecrire(resultat);
-    }
-    
-    // affichage des moyennes des scores temporaires dans la console
-    var moyennesParTypeList = resultats
-        .Where(r => r.Statut == Statut.Ok)
-        .GroupBy(r => r.TypeAttendu)
-        .Select(g => new
-        {
-            TypeAttendu = g.Key,
-            MoyenneLevenshtein = g.Average(x => x.ScoreLevenshtein),
-            MoyenneJaccard = g.Average(x => x.ScoreJaccard),
-            NombreDocuments = g.Count()
-        })
-        .ToList();
-
-    var sb = new StringBuilder();
-
-    foreach (var item in moyennesParTypeList)
-    {
-        sb.AppendLine($"[{item.TypeAttendu}] ({item.NombreDocuments} docs)");
-        sb.AppendLine($"  Moyenne Levenshtein : {item.MoyenneLevenshtein:F4}");
-        sb.AppendLine($"  Moyenne Jaccard     : {item.MoyenneJaccard:F4}");
-        sb.AppendLine();
-    }
-
-    if (moyennesParTypeList.Count > 0)
-    {
-        var macroLevenshtein = moyennesParTypeList.Average(m => m.MoyenneLevenshtein);
-        var macroJaccard = moyennesParTypeList.Average(m => m.MoyenneJaccard);
-
-        sb.AppendLine("========================================");
-        sb.AppendLine("Moyenne GLOBALE (Macro par type) :");
-        sb.AppendLine($"  Levenshtein : {macroLevenshtein:F4}");
-        sb.AppendLine($"  Jaccard     : {macroJaccard:F4}");
-        sb.AppendLine("========================================");
-
-        File.WriteAllText($"{runId}_score.txt", sb.ToString());
+        resultats.Add(resultat);
     }
 }
+
+var moyennesParType = resultats
+    .Where(r => r.Statut == Statut.Ok)
+    .GroupBy(r => r.TypeAttendu)
+    .Select(g => new
+    {
+        TypeAttendu = g.Key,
+        MoyenneLevenshtein = g.Average(x => x.ScoreLevenshtein),
+        MoyenneJaccard = g.Average(x => x.ScoreJaccard),
+        NombreDocuments = g.Count()
+    })
+    .ToList();
+
+if (moyennesParType.Count == 0)
+{
+    return;
+}
+
+var rapport = new StringBuilder();
+
+foreach (var moyenne in moyennesParType)
+{
+    rapport.AppendLine($"[{moyenne.TypeAttendu}] ({moyenne.NombreDocuments} docs)");
+    rapport.AppendLine($"  Moyenne Levenshtein : {moyenne.MoyenneLevenshtein:F4}");
+    rapport.AppendLine($"  Moyenne Jaccard     : {moyenne.MoyenneJaccard:F4}");
+    rapport.AppendLine();
+}
+
+// Macro-moyenne : chaque type documentaire pèse pareil, quel que soit son nombre de documents,
+// pour qu'un type surreprésenté au corpus ne dicte pas le score global du moteur.
+rapport.AppendLine("========================================");
+rapport.AppendLine("Moyenne GLOBALE (Macro par type) :");
+rapport.AppendLine($"  Levenshtein : {moyennesParType.Average(m => m.MoyenneLevenshtein):F4}");
+rapport.AppendLine($"  Jaccard     : {moyennesParType.Average(m => m.MoyenneJaccard):F4}");
+rapport.AppendLine("========================================");
+
+File.WriteAllText($"{runId}_score.txt", rapport.ToString());
