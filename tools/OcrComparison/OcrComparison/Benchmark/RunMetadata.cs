@@ -19,7 +19,7 @@ public sealed record RunMetadata
         {
             RunId = runId,
             Date = DateTime.UtcNow,
-            ManifestSha256 = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(cheminManifest))).ToLowerInvariant(),
+            ManifestSha256 = CalculerSha256(cheminManifest),
             Split = split,
             Ocr = new MoteurInfo
             {
@@ -36,6 +36,17 @@ public sealed record RunMetadata
                 RamOctets = GC.GetGCMemoryInfo().TotalAvailableMemoryBytes
             }
         };
+    }
+
+    /// <remarks>
+    /// Haché en flux : le manifest porte le texte de référence de tout le corpus et pèse
+    /// plusieurs centaines de kilo-octets. Le charger d'un bloc gonflerait le working set
+    /// juste avant que le benchmark ne commence à relever des pics mémoire.
+    /// </remarks>
+    private static string CalculerSha256(string cheminManifest)
+    {
+        using var flux = File.OpenRead(cheminManifest);
+        return Convert.ToHexString(SHA256.HashData(flux)).ToLowerInvariant();
     }
 }
 
