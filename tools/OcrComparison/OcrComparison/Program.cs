@@ -16,16 +16,16 @@ var (cheminCorpus, cheminManifest) = (args[0], args[1]);
 using var moteur = new TesseractOcrEngine();
 var runId = $"ocr-{moteur.Name.ToLowerInvariant()}-{DateTime.Now:yyyy-MM-dd_HH-mm-ss}";
 
-var metadata = RunMetadata.Creer(runId, split, cheminManifest, moteur);
-File.WriteAllText($"{runId}.json", JsonSerializer.Serialize(metadata, JsonRun.OptionsIndentees));
+var dossierRun = Directory.CreateDirectory(Path.Combine("run", runId)).FullName;
 
-var entrees = ManifestReader.ReadManifest(cheminManifest).Where(e => e.Split == split);
+var metadata = RunMetadata.Creer(runId, split, cheminManifest, moteur);
+File.WriteAllText(Path.Combine(dossierRun, "run.json"),
+    JsonSerializer.Serialize(metadata, JsonRun.OptionsIndentees));
+
+var entrees = ManifestReader.ReadManifest(cheminManifest).Where(e => e.TypeAttendu == split);
 var resultats = new List<ResultatDocument>();
 
-// Chaque résultat part sur le disque dès qu'il est produit : un run OCR complet dure des
-// heures, et une interruption à mi-parcours ne doit pas emporter les documents déjà payés
-// en temps de calcul. La liste ne sert qu'aux moyennes, calculées après coup.
-using (var writer = new ResultWriter($"{runId}.jsonl"))
+using (var writer = new ResultWriter(Path.Combine(dossierRun, "resultats.jsonl")))
 {
     foreach (var resultat in new BenchmarkRunner(moteur, cheminCorpus).Executer(entrees))
     {
@@ -69,4 +69,4 @@ rapport.AppendLine($"  Levenshtein : {moyennesParType.Average(m => m.MoyenneLeve
 rapport.AppendLine($"  Jaccard     : {moyennesParType.Average(m => m.MoyenneJaccard):F4}");
 rapport.AppendLine("========================================");
 
-File.WriteAllText($"{runId}_score.txt", rapport.ToString());
+File.WriteAllText(Path.Combine(dossierRun, "score.txt"), rapport.ToString());

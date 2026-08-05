@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using F23.StringSimilarity;
 using OcrComparison.Engines;
 using OcrComparison.Manifest;
@@ -73,7 +73,7 @@ public sealed class BenchmarkRunner(ITextExtractionEngine moteur, string cheminC
 
     /// <summary>
     /// Assemble le résultat d'un document. Les champs communs viennent tous du manifest, les
-    /// autres sont ceux que le chemin de sortie a réellement mesurés : ce qu'il n'a pas mesuré
+    /// autres sont ceux que le chemin de sortie a réellement mesuré : ce qu'il n'a pas mesuré
     /// reste à sa valeur neutre, sans être écrit puis réécrit.
     /// </summary>
     private ResultatDocument Creer(ManifestEntry manifestEntry, Statut statut, int nbMotsReference,
