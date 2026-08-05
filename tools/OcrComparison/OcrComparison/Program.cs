@@ -22,9 +22,7 @@ void EvaluerBenchmark(string cheminCorpus, string cheminManifest)
     var entrees = ManifestReader.ReadManifest(cheminManifest).Where(e => e.Split == split);
     
     var metadata = RunMetadata.Creer(runId, split, cheminManifest, engine);
-    File.WriteAllText($"{runId}.json", JsonSerializer.Serialize(metadata, 
-        new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower, 
-            WriteIndented = true }));
+    File.WriteAllText($"{runId}.json", JsonSerializer.Serialize(metadata, JsonRun.OptionsIndentees));
     using var writer = new ResultWriter($"{runId}.jsonl");
     var resultats = new BenchmarkRunner(engine, cheminCorpus).Executer(entrees).ToList();
     foreach (var resultat in resultats)

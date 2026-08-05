@@ -1,27 +1,18 @@
-﻿using System.Text.Json;
-using System.Text.Json.Serialization;
+using System.Text.Json;
 
 namespace OcrComparison.Benchmark;
 
 public sealed class ResultWriter(string chemin) : IDisposable
 {
-    private readonly StreamWriter _fichier = new(chemin){ AutoFlush = true };
-    
-    private static readonly JsonSerializerOptions Options = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-        Converters = { new JsonStringEnumConverter() }
-    };
+    private readonly StreamWriter _fichier = new(chemin) { AutoFlush = true };
 
     public void Ecrire(ResultatDocument resultat)
     {
-        var jsonLine = JsonSerializer.Serialize(resultat, Options);
-        _fichier.WriteLine(jsonLine);
+        _fichier.WriteLine(JsonSerializer.Serialize(resultat, JsonRun.Options));
     }
-    
+
     public void Dispose()
     {
         _fichier.Dispose();
     }
-
 }
