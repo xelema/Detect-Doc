@@ -1,14 +1,21 @@
-﻿namespace OcrComparison.Engines;
 using UglyToad.PdfPig;
+
+namespace OcrComparison.Engines;
 
 public class PdfPigNativeTextEngine : ITextExtractionEngine
 {
+    private static readonly IReadOnlyDictionary<string, object> ParametresMoteur =
+        new Dictionary<string, object>
+        {
+            ["extraction"] = "GetWords"
+        };
+
+    private static readonly string VersionAssembly =
+        typeof(PdfDocument).Assembly.GetName().Version?.ToString() ?? string.Empty;
+
     public string Name => "PdfPig";
-    public string Version => typeof(PdfDocument).Assembly.GetName().Version?.ToString() ?? string.Empty;
-    public IReadOnlyDictionary<string, object> Parametres => new Dictionary<string, object>
-    {
-        ["extraction"] = "GetWords"
-    };
+    public string Version => VersionAssembly;
+    public IReadOnlyDictionary<string, object> Parametres => ParametresMoteur;
 
     public string Extract(string pdfPath)
     {
