@@ -14,5 +14,16 @@ public record ManifestEntry(
         [property: JsonPropertyName("texte_reference")] string TexteReference,
         [property: JsonPropertyName("regime")] string Regime,
         [property: JsonPropertyName("split")] string Split,
-        [property: JsonPropertyName("pages")] int Pages
+        [property: JsonPropertyName("pages")] int Pages,
+    
+        // temporaire pour selectionner uniquement les rotations
+        [property: JsonPropertyName("variante")] VarianteEntry? Variante,
+        [property: JsonPropertyName("degradations")] List<string> DegradationParameters 
+        
     );
+
+// temporaire pour selectionner uniquement les rotations
+public record VarianteEntry(
+    [property: JsonPropertyName("angle_deg")] int AngleDeg,
+    [property: JsonPropertyName("rotation_page_deg")] int RotationPageDeg
+);
