@@ -10,6 +10,8 @@ sur le même modèle, de l'enregistrer ci-dessous dans TYPES, et d'ajouter son n
 `manifest.TYPES_CONNUS`.
 """
 
+from concurrent.futures import ProcessPoolExecutor
+
 import manifest
 from documents.carte_visite import DOCUMENT as carte_visite
 from documents.devis import DOCUMENT as devis
@@ -172,9 +174,16 @@ def _verifier_configuration() -> None:
 def main() -> None:
     _verifier_configuration()
 
-    entrees = []
-    for type_document, nombre in sorted(DOCUMENTS.items()):
-        entrees.extend(_produire(type_document, nombre))
+    # Un processus par type plutôt qu'un thread : `degradation.py` seede `random` et
+    # `numpy` au niveau du module, et `documents/commun.py` reseede une instance Faker
+    # partagée. Des threads concurrents se marcheraient sur ces états globaux et
+    # casseraient la reproductibilité ; des processus séparés en ont chacun leur copie.
+    # Les flux nommés de chaque type sont indépendants de ceux des autres, l'ordre des
+    # types n'a donc aucune influence sur le corpus produit.
+    with ProcessPoolExecutor() as executeur:
+        futurs = [executeur.submit(_produire, type_document, nombre)
+                  for type_document, nombre in sorted(DOCUMENTS.items())]
+        entrees = [entree for futur in futurs for entree in futur.result()]
 
     manifest.enregistrer(entrees)
     if ECRIRE_COMPOSITION:

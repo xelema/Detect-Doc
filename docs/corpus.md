@@ -44,16 +44,16 @@ Le tableau qui suit est réécrit par le générateur à chaque exécution, à p
 
 | Type | Documents | `dev` | `test` | Texte natif | Numérisés | Rôle |
 |---|---|---|---|---|---|---|
-| `carte_visite` | 12 | 3 | 9 | 2 | 10 | liste métier |
-| `devis` | 12 | 2 | 10 | 8 | 4 | distracteur |
-| `facture` | 12 | 4 | 8 | 8 | 4 | distracteur |
-| `feuille_emar` | 15 | 4 | 11 | 3 | 12 | liste métier |
-| `offre_emploi` | 15 | 4 | 11 | 12 | 3 | liste métier |
-| `rib` | 8 | 2 | 6 | 6 | 2 | liste métier |
-| `rib_sepa` | 8 | 3 | 5 | 6 | 2 | liste métier |
-| `sepa` | 8 | 1 | 7 | 6 | 2 | liste métier |
+| `carte_visite` | 36 | 9 | 27 | 5 | 31 | liste métier |
+| `devis` | 36 | 7 | 29 | 24 | 12 | distracteur |
+| `facture` | 36 | 10 | 26 | 24 | 12 | distracteur |
+| `feuille_emar` | 45 | 12 | 33 | 9 | 36 | liste métier |
+| `offre_emploi` | 45 | 12 | 33 | 37 | 8 | liste métier |
+| `rib` | 24 | 6 | 18 | 16 | 8 | liste métier |
+| `rib_sepa` | 24 | 6 | 18 | 16 | 8 | liste métier |
+| `sepa` | 24 | 5 | 19 | 16 | 8 | liste métier |
 
-**90 documents** en 8 types, pour 76 contenus distincts : 14 documents sont le jumeau scanné d'un autre, même contenu et même jeu, reliés par `derive_de`.
+**270 documents** en 8 types, pour 222 contenus distincts : 48 documents sont le jumeau scanné d'un autre, même contenu et même jeu, reliés par `derive_de`.
 
 <!-- composition:fin -->
 
