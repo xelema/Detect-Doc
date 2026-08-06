@@ -22,7 +22,7 @@ var metadata = RunMetadata.Creer(runId, split, cheminManifest, moteur);
 File.WriteAllText(Path.Combine(dossierRun, "run.json"),
     JsonSerializer.Serialize(metadata, JsonRun.OptionsIndentees));
 
-var entrees = ManifestReader.ReadManifest(cheminManifest).Where(e => e.TypeAttendu == split);
+var entrees = ManifestReader.ReadManifest(cheminManifest).Where(e => e.Split == split);
 var resultats = new List<ResultatDocument>();
 
 using (var writer = new ResultWriter(Path.Combine(dossierRun, "resultats.jsonl")))

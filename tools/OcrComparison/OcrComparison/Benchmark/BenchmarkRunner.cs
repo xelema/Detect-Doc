@@ -60,13 +60,14 @@ public sealed class BenchmarkRunner(ITextExtractionEngine moteur, string cheminC
 
         if (string.IsNullOrWhiteSpace(texteExtrait))
         {
-            return Creer(manifestEntry, Statut.TexteVide, nbMotsReference, ressources);
+            return Creer(manifestEntry, Statut.TexteVide, nbMotsReference, ressources, texteExtrait: texteExtrait);
         }
 
         var texteExtraitNormalise = TexteNormalise.NormaliserPourScore(texteExtrait);
 
         return Creer(manifestEntry, Statut.Ok, nbMotsReference, ressources,
             nbMotsExtrait: SimilariteMots.NombreDeMots(texteExtraitNormalise),
+            texteExtrait: texteExtrait,
             scoreLevenshtein: 1 - _levenshtein.Distance(texteReferenceNormalise, texteExtraitNormalise),
             scoreJaccard: SimilariteMots.Jaccard(texteReferenceNormalise, texteExtraitNormalise));
     }
@@ -74,10 +75,12 @@ public sealed class BenchmarkRunner(ITextExtractionEngine moteur, string cheminC
     /// <summary>
     /// Assemble le résultat d'un document. Les champs communs viennent tous du manifest, les
     /// autres sont ceux que le chemin de sortie a réellement mesuré : ce qu'il n'a pas mesuré
-    /// reste à sa valeur neutre, sans être écrit puis réécrit.
+    /// reste à sa valeur neutre, sans être écrit puis réécrit. Les textes portés sont les
+    /// versions brutes, pas celles normalisées pour le score : une relecture humaine du jsonl
+    /// veut la ponctuation et la casse d'origine, le calcul du score s'en passe déjà ailleurs.
     /// </summary>
     private ResultatDocument Creer(ManifestEntry manifestEntry, Statut statut, int nbMotsReference,
-        Ressources ressources, int nbMotsExtrait = 0, double scoreLevenshtein = 0,
+        Ressources ressources, int nbMotsExtrait = 0, string? texteExtrait = null, double scoreLevenshtein = 0,
         double scoreJaccard = 0, string? messageErreur = null)
     {
         return new ResultatDocument
@@ -90,6 +93,8 @@ public sealed class BenchmarkRunner(ITextExtractionEngine moteur, string cheminC
             Pages = manifestEntry.Pages,
             NbMotsReference = nbMotsReference,
             NbMotsExtrait = nbMotsExtrait,
+            TexteReference = manifestEntry.TexteReference,
+            TexteExtrait = texteExtrait,
             ScoreLevenshtein = scoreLevenshtein,
             ScoreJaccard = scoreJaccard,
             Statut = statut,
