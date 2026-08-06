@@ -14,7 +14,7 @@ if (args.Length != 2)
 const string split = "dev";
 var (cheminCorpus, cheminManifest) = (args[0], args[1]);
 
-var optionsPretraitement = new OptionsPretraitement(Redresser: true);
+var optionsPretraitement = new OptionsPretraitement(Redresser: true, DetourerAvantOsd: true, Deskew: true);
 using var moteur = new TesseractOcrEngine(optionsPretraitement);
 
 var runId = $"ocr-{moteur.Name.ToLowerInvariant()}-{DateTime.Now:yyyy-MM-dd_HH-mm-ss}";

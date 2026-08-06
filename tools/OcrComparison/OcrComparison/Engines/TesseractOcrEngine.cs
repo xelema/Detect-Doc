@@ -17,6 +17,12 @@ public class TesseractOcrEngine : ITextExtractionEngine, IDisposable
     private const string Langue = "fra";
     private const EngineMode Mode = EngineMode.Default;
 
+    // Mesuré le 06/08/2026 sur les cinq documents qui échouaient à l'OSD sur le split dev :
+    // les quatre détections correctes tombent à 2,04 ou plus, la seule détection fausse
+    // (cvi-0014-p1, un quart de tour opposé à celui attendu) tombe à 0,77. Ce plancher rejette
+    // ce cas précis sans perdre aucun des quatre gains.
+    private const float SeuilConfianceOsd = 1.0f;
+
     private readonly DetectOrientationTesseract? _detecteurOrientation;
     private readonly OptionsPretraitement _options;
 
@@ -32,7 +38,9 @@ public class TesseractOcrEngine : ITextExtractionEngine, IDisposable
         ["langue"] = Langue,
         ["dpi"] = Dpi,
         ["engine_mode"] = Mode.ToString(),
-        ["redressement"] = _options.Redresser
+        ["redressement"] = _options.Redresser,
+        ["detourage_avant_osd"] = _options.DetourerAvantOsd,
+        ["deskew"] = _options.Deskew
     };
 
     public TesseractOcrEngine(OptionsPretraitement? optionsPretraitement){
@@ -67,15 +75,31 @@ public class TesseractOcrEngine : ITextExtractionEngine, IDisposable
                 
                 // TEMPORAIRE, à retirer avant merge
                 Directory.CreateDirectory("debug-images-after");
+                Directory.CreateDirectory("debug-images-pass-crop");
+                Directory.CreateDirectory("debug-images-pass-deskew");
+                
                 
                 Pix? pixTourne = null;
                 if (_detecteurOrientation != null)
                 {
-                    int orientationDegree = 0;
+                    var octetsPourOsd = _options.DetourerAvantOsd
+                        ? DetourerZoneUtile.ApplyDetourage(pngPage.ToArray())
+                        : pngPage.ToArray();
+                    
+                    using var pixPourOsd = Pix.LoadFromMemory(octetsPourOsd);
+                    
+                    // TEMPORAIRE
+                    pixPourOsd.Save(Path.Combine("debug-images-pass-crop", nomPage), ImageFormat.Png);
+                    
+                    pixPourOsd.XRes = Dpi;
+                    pixPourOsd.YRes = Dpi;
+
+
+                    var orientationDegree = 0;
                     float confiance = 0;
                     try
                     {
-                        orientationDegree = _detecteurOrientation.DetectOrientation(img, out confiance);
+                        orientationDegree = _detecteurOrientation.DetectOrientation(pixPourOsd, out confiance);
                     }
                     catch (TesseractException ex)
                     {
@@ -83,13 +107,31 @@ public class TesseractOcrEngine : ITextExtractionEngine, IDisposable
                     }
 
                     Console.WriteLine($"{nomPage}: orientation : {orientationDegree}° avec une confiance de {confiance}");
-                    if (orientationDegree != 0)
+                    if (orientationDegree != 0 && confiance >= SeuilConfianceOsd)
                     {
                         pixTourne = PreprocessImage.ApplyRotation(img, orientationDegree);
                     }
+                    else if (orientationDegree != 0)
+                    {
+                        Console.WriteLine($"{nomPage}: rotation ignorée, confiance {confiance} sous le seuil de {SeuilConfianceOsd}");
+                    }
                 }
                 
-                var pixAProcess = pixTourne ?? img;
+                var pixAvantDeskew = pixTourne ?? img;
+
+                // Corrige le biais résiduel de quelques degrés qu'aucune
+                // détection d'orientation par quart de tour ne peut voir. 
+                Pix? pixDeskewed = null;
+                if (_options.Deskew)
+                {
+                    pixDeskewed = pixAvantDeskew.Deskew(out Scew scew);
+                    Console.WriteLine($"{nomPage}: deskew {scew.Angle}° avec une confiance de {scew.Confidence}");
+                    
+                    // TEMPORAIRE
+                    pixDeskewed.Save(Path.Combine("debug-images-pass-deskew", nomPage), ImageFormat.Png);
+                }
+
+                var pixAProcess = pixDeskewed ?? pixAvantDeskew;
 
                 try
                 {
@@ -102,6 +144,7 @@ public class TesseractOcrEngine : ITextExtractionEngine, IDisposable
                 }
                 finally
                 {
+                    pixDeskewed?.Dispose();
                     pixTourne?.Dispose();
                 }
 

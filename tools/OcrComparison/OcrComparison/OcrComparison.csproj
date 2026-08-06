@@ -9,6 +9,8 @@
 
     <ItemGroup>
       <PackageReference Include="F23.StringSimilarity" Version="7.0.1" />
+      <PackageReference Include="OpenCvSharp5" Version="5.0.0.20260730" />
+      <PackageReference Include="OpenCvSharp5.runtime.win.slim" Version="5.0.0.20260730" />
       <PackageReference Include="PdfPig" Version="0.1.15" />
       <PackageReference Include="PDFtoImage" Version="5.3.0" />
       <PackageReference Include="Tesseract" Version="5.2.0" />
