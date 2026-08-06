@@ -3,6 +3,7 @@ using System.Text.Json;
 using OcrComparison.Benchmark;
 using OcrComparison.Engines;
 using OcrComparison.Manifest;
+using OcrComparison.Preprocessing;
 
 if (args.Length != 2)
 {
@@ -13,9 +14,10 @@ if (args.Length != 2)
 const string split = "dev";
 var (cheminCorpus, cheminManifest) = (args[0], args[1]);
 
-using var moteur = new TesseractOcrEngine();
-var runId = $"ocr-{moteur.Name.ToLowerInvariant()}-{DateTime.Now:yyyy-MM-dd_HH-mm-ss}";
+var optionsPretraitement = new OptionsPretraitement(Redresser: true);
+using var moteur = new TesseractOcrEngine(optionsPretraitement);
 
+var runId = $"ocr-{moteur.Name.ToLowerInvariant()}-{DateTime.Now:yyyy-MM-dd_HH-mm-ss}";
 var dossierRun = Directory.CreateDirectory(Path.Combine("run", runId)).FullName;
 
 var metadata = RunMetadata.Creer(runId, split, cheminManifest, moteur);
