@@ -39,7 +39,11 @@ using (var writer = new ResultWriter(Path.Combine(dossierRun, "resultats.jsonl")
     foreach (var resultat in new BenchmarkRunner(moteur, cheminCorpus).Executer(entrees))
     {
         writer.Ecrire(resultat);
-        resultats.Add(resultat);
+
+        // Les textes intégraux partent au jsonl et n'y reviennent pas : le rapport n'agrège que
+        // des compteurs et des scores. Les garder en mémoire ferait grossir le working set à
+        // chaque document, c'est-à-dire exactement la mesure que le run cherche à relever.
+        resultats.Add(resultat with { TexteReference = null, TexteExtrait = null });
     }
 }
 
