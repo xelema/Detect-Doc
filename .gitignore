@@ -10,6 +10,14 @@ __pycache__/
 corpus/raw/
 augraphy_cache/
 
+# Modeles OCR. Meme regle que le corpus : trop lourds pour l'historique, et refabriquables a
+# l'identique. `tools/OcrComparison/Get-Modeles.ps1` porte leur source et leur empreinte sha256.
+tools/OcrComparison/OcrComparison/tessdata/
+tools/OcrComparison/OcrComparison/models/
+
+# Sorties d'execution du comparatif OCR, un dossier par run.
+tools/OcrComparison/OcrComparison/run/
+
 # Sorties de build .NET et fichiers d'IDE.
 bin/
 obj/
