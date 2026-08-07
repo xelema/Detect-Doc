@@ -16,15 +16,21 @@ Le script télécharge chaque fichier et rejette celui dont l'empreinte sha256 n
 .\Get-Modeles.ps1 -Source \\serveur\partage\modeles-ocr
 ```
 
-**Pourquoi pas dans le dépôt.** Les six fichiers pèsent 43 Mo, et il en faudra une soixantaine pour mesurer les trois tailles de PP-OCRv6. Un binaire commité reste dans l'historique pour toujours, y compris quand le modèle sera remplacé. C'est la règle déjà retenue pour le corpus : versionner l'identité, pas les octets. `Get-Modeles.ps1` tient lieu de manifest.
+Le script installe Tesseract (`fra`, `osd`) et PP-OCRv6 en tailles `tiny` et `small`. La taille `medium` pèse 138 Mo à elle seule et n'est pas installée par défaut : ajouter ses trois entrées à la table du script pour la mesurer.
+
+Le classifieur d'orientation n'y figure pas, RapidOcrNet le livre dans son paquet et le projet le recopie vers `models\v6` au build.
+
+**Pourquoi pas dans le dépôt.** Les huit fichiers pèsent 48 Mo, et le triple avec `medium`. Un binaire commité reste dans l'historique pour toujours, y compris quand le modèle sera remplacé. C'est la règle déjà retenue pour le corpus : versionner l'identité, pas les octets. `Get-Modeles.ps1` tient lieu de manifest.
+
+**Chaque taille de PP-OCRv6 a son propre dictionnaire** : 18 708 caractères pour `small` et `medium`, 6 904 pour `tiny`. Les intervertir ne lève aucune erreur, ça décale l'alphabet et rend du texte plausible et faux. C'est la raison d'être de la vérification d'empreinte.
 
 ## Lancer un run
 
 ```powershell
-dotnet run -c Release -- <chemin-du-corpus> <chemin-du-manifest> [tesseract|pdfpig]
+dotnet run -c Release -- <chemin-du-corpus> <chemin-du-manifest> [moteur]
 ```
 
-Le moteur vaut `tesseract` par défaut. Le corpus est le dossier qui contient `raw/`, le manifest est `corpus/manifest.jsonl`.
+Moteurs disponibles : `tesseract` (défaut), `pdfpig`, `ppocr-tiny`, `ppocr-small`, `ppocr-medium`. Le corpus est le dossier qui contient `raw/`, le manifest est `corpus/manifest.jsonl`.
 
 ```powershell
 dotnet run -c Release -- ..\..\corpus ..\..\corpus\manifest.jsonl tesseract

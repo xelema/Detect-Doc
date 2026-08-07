@@ -56,10 +56,27 @@ $modeles = @(
         Sha256      = '6F327246B50388F3C176AE304BD95767EA6DC0C9AE92153EF8CBE210B3C14884'
     }
     @{
-        # Va avec les modèles small et medium. Le tier tiny a le sien, ppocrv6_tiny_dict.txt.
+        # 18 708 caractères, les 50 langues. Va avec small et medium, jamais avec tiny.
         Destination = 'models\v6\ppocrv6_dict.txt'
         Url         = 'https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.9.2/paddle/PP-OCRv6/rec/PP-OCRv6_rec_small/ppocrv6_dict.txt'
         Sha256      = 'B5F2BFE2BDD9448429E3E82B51C789775D9B42F2403D082B00662EB77E401C5D'
+    }
+    @{
+        Destination = 'models\v6\PP-OCRv6_det_tiny.onnx'
+        Url         = 'https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.9.2/onnx/PP-OCRv6/det/PP-OCRv6_det_tiny.onnx'
+        Sha256      = 'F42C0FBD294D95EAC1A550E131B277DAC97462C8025FA4B6C3CEC1B7894BD3D5'
+    }
+    @{
+        Destination = 'models\v6\PP-OCRv6_rec_tiny.onnx'
+        Url         = 'https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.9.2/onnx/PP-OCRv6/rec/PP-OCRv6_rec_tiny.onnx'
+        Sha256      = 'E16E242DE5937AD92609223F19BC2AFF3727EE40B095F996907C24749BAD251B'
+    }
+    @{
+        # 6 904 caractères seulement : tiny a son propre alphabet, le confondre avec celui de
+        # small ne lève aucune erreur et décale tout le texte reconnu.
+        Destination = 'models\v6\ppocrv6_tiny_dict.txt'
+        Url         = 'https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.9.2/paddle/PP-OCRv6/rec/PP-OCRv6_rec_tiny/ppocrv6_tiny_dict.txt'
+        Sha256      = 'C5CBE34EF40C29C4DF07ED012BF96569CB69A2D2A01A07027E9F13CB832BD9CD'
     }
 )
 
