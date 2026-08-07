@@ -84,7 +84,8 @@ public sealed class BenchmarkRunner(ITextExtractionEngine moteur, string cheminC
         // avant l'échec fait partie de ce que coûte le moteur sur ce corpus.
         if (erreur != null)
         {
-            return Creer(manifestEntry, Statut.Erreur, nbMotsReference, ressources, messageErreur: erreur);
+            return Creer(manifestEntry, Statut.Erreur, nbMotsReference, ressources, messageErreur: erreur,
+                confianceOcr: confianceOcr, repliDeclenche: repliDeclenche);
         }
 
         if (string.IsNullOrWhiteSpace(texteExtrait))
