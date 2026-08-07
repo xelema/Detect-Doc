@@ -24,7 +24,7 @@ public static class DetourerZoneUtile
 
         if (contours.Length == 0) return source;
 
-        var plusGrandContour = contours.OrderByDescending(c => Cv2.ContourArea(c)).First();
+        var plusGrandContour = contours.MaxBy(c => Cv2.ContourArea(c))!;
         var rect = Cv2.BoundingRect(plusGrandContour);
 
         // marge autour du rectangle trouve, bornee aux dimensions de l'image
