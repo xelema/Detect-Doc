@@ -5,6 +5,10 @@ public sealed record ResultatDocument
     public required string Moteur { get; init; }
     public required string Id { get; init; }
     public required string TypeAttendu { get; init; }
+    public required double ScoreLevenshtein { get; init; }
+    public required double ScoreJaccard { get; init; }
+    public required Statut Statut { get; init; }
+    public string? MessageErreur { get; init; }
     public required string Regime { get; init; }
     public required string Split { get; init; }
     public required int Pages { get; init; }
@@ -12,10 +16,6 @@ public sealed record ResultatDocument
     public required int NbMotsExtrait { get; init; }
     public string? TexteReference { get; init; }
     public string? TexteExtrait { get; init; }
-    public required double ScoreLevenshtein { get; init; }
-    public required double ScoreJaccard { get; init; }
-    public required Statut Statut { get; init; }
-    public string? MessageErreur { get; init; }
     public required double DureeMs { get; init; } // temps écoulé
     public required double CpuMs {  get; init; } // temps processus consommé
     public required long PicMemoireOctets { get; init; } // pic du processus

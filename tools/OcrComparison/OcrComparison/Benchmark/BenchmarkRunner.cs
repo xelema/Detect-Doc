@@ -8,6 +8,12 @@ namespace OcrComparison.Benchmark;
 
 public sealed class BenchmarkRunner(ITextExtractionEngine moteur, string cheminCorpus)
 {
+    // En dessous, la pipeline normale est considérée en échec plutôt que simplement imparfaite :
+    // c'est le repli à quatre orientations qui prend le relais, pas un réglage plus fin du même
+    // chemin. Valeur proposée par Florian le 06/08/2026, à ajuster si mesurée trop permissive ou
+    // trop stricte sur un corpus plus large.
+    private const double SeuilJaccardOrientation = 0.10;
+
     private static readonly Process Processus = Process.GetCurrentProcess();
     private readonly NormalizedLevenshtein _levenshtein = new();
 
@@ -38,7 +44,23 @@ public sealed class BenchmarkRunner(ITextExtractionEngine moteur, string cheminC
 
         try
         {
-            texteExtrait = moteur.Extract(Path.Combine(cheminCorpus, manifestEntry.Fichier));
+            var cheminDocument = Path.Combine(cheminCorpus, manifestEntry.Fichier);
+            texteExtrait = moteur.Extract(cheminDocument);
+
+            // Repli à quatre orientations : seulement sur Tesseract, seul moteur dont l'image
+            // d'entrée peut être mal orientée. PdfPig lit le texte natif du PDF, l'orientation
+            // ne le concerne pas, un jaccard bas y signale autre chose qu'une mauvaise rotation.
+            if (moteur is TesseractOcrEngine moteurTesseract && !string.IsNullOrWhiteSpace(texteExtrait))
+            {
+                var jaccard = SimilariteMots.Jaccard(texteReferenceNormalise,
+                    TexteNormalise.NormaliserPourScore(texteExtrait));
+                if (jaccard < SeuilJaccardOrientation)
+                {
+                    Console.WriteLine(
+                        $"{manifestEntry.Id}: jaccard {jaccard:F4} sous le seuil de {SeuilJaccardOrientation}, tentative des quatre orientations");
+                    texteExtrait = moteurTesseract.ExtractMeilleureOrientation(cheminDocument);
+                }
+            }
         }
         catch (Exception ex)
         {
@@ -88,6 +110,10 @@ public sealed class BenchmarkRunner(ITextExtractionEngine moteur, string cheminC
             Moteur = moteur.Name,
             Id = manifestEntry.Id,
             TypeAttendu = manifestEntry.TypeAttendu,
+            ScoreLevenshtein = scoreLevenshtein,
+            ScoreJaccard = scoreJaccard,
+            Statut = statut,
+            MessageErreur = messageErreur,
             Regime = manifestEntry.Regime,
             Split = manifestEntry.Split,
             Pages = manifestEntry.Pages,
@@ -95,10 +121,6 @@ public sealed class BenchmarkRunner(ITextExtractionEngine moteur, string cheminC
             NbMotsExtrait = nbMotsExtrait,
             TexteReference = manifestEntry.TexteReference,
             TexteExtrait = texteExtrait,
-            ScoreLevenshtein = scoreLevenshtein,
-            ScoreJaccard = scoreJaccard,
-            Statut = statut,
-            MessageErreur = messageErreur,
             DureeMs = ressources.DureeMs,
             CpuMs = ressources.CpuMs,
             PicMemoireOctets = ressources.PicMemoireOctets,
