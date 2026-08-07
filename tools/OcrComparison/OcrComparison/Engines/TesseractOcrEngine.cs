@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using OcrComparison.Preprocessing;
 using PDFtoImage;
@@ -22,6 +23,8 @@ public class TesseractOcrEngine : ITextExtractionEngine, IDisposable
     // permet de remesurer l'OCR sur les 4 orientations (0°, 90°, 180°, 270°) si la confiance sur le TEXTE
     // est INFERIEURE à SeuilConfianceExtraction
     public const float SeuilConfianceExtraction = 0.80f;
+
+    private static readonly int[] OrientationsPossibles = [0, 90, 180, 270];
 
     private readonly DetectOrientationTesseract? _detecteurOrientation;
     private readonly OptionsPretraitement _options;
@@ -71,13 +74,86 @@ public class TesseractOcrEngine : ITextExtractionEngine, IDisposable
     /// </summary>
     public (string Texte, float ConfianceMoyenne) ExtraireAvecConfiance(string pdfPath)
     {
-        var resultat = new StringBuilder();
-        var confiances = new List<float>();
-        var documentBytes = File.ReadAllBytes(pdfPath);
+        var pages = ConvertirEnPages(pdfPath);
         var nomDocument = Path.GetFileNameWithoutExtension(pdfPath);
 
-        // PDF converti en PNG en mémoire (requis par Tesseract) une seule fois pour tout le doc.
+        // Une orientation par page, pas une pour tout le document : un recto-verso retourné
+        // tête-bêche (au lieu de tourné comme une page de livre) donne des pages à 180° l'une de
+        // l'autre, une seule orientation partagée serait fausse sur l'une des deux.
+        var orientationsParPage = _detecteurOrientation != null
+            ? DeciderOrientationsParPage(_detecteurOrientation, nomDocument, pages)
+            : new int[pages.Count];
+
+        var resultat = new StringBuilder();
+        var confiances = new List<float>();
+
+        for (var i = 0; i < pages.Count; i++)
+        {
+            var (texte, confiance) = TraiterPage(pages[i], orientationsParPage[i], NomPage(nomDocument, i));
+            resultat.Append(texte).Append(' ');
+            confiances.Add(confiance);
+        }
+
+        var confianceMoyenne = confiances.Count > 0 ? confiances.Average() : 0f;
+        return (resultat.ToString(), confianceMoyenne);
+    }
+
+    /// <summary>
+    /// Repli pour un document dont la confiance OCR reste basse malgré la pipeline normale :
+    /// OCRise le document dans les quatre orientations et garde celle dont la confiance moyenne
+    /// de l'OCR (<see cref="Page.GetMeanConfidence"/>) est la plus haute. Coûte quatre OCR
+    /// complets au lieu d'un, donc réservé à ce repli, jamais au chemin par défaut.
+    /// </summary>
+    public string ExtractMeilleureOrientation(string pdfPath)
+    {
+        var pages = ConvertirEnPages(pdfPath);
+        var nomDocument = Path.GetFileNameWithoutExtension(pdfPath);
+
+        var meilleurTexte = string.Empty;
+        var meilleureConfiance = float.MinValue;
+        var meilleureOrientation = 0;
+
+        foreach (var orientation in OrientationsPossibles)
+        {
+            var chrono = Stopwatch.StartNew();
+            var resultat = new StringBuilder();
+            var confiancesPages = new List<float>();
+
+            for (var i = 0; i < pages.Count; i++)
+            {
+                var (texte, confiance) = TraiterPage(pages[i], orientation, NomPage(nomDocument, i));
+                resultat.Append(texte).Append(' ');
+                confiancesPages.Add(confiance);
+            }
+
+            var confianceMoyenne = confiancesPages.Count > 0 ? confiancesPages.Average() : 0f;
+            Console.WriteLine(
+                $"{nomDocument}: orientation {orientation}° essayée, confiance OCR moyenne {confianceMoyenne} ({chrono.ElapsedMilliseconds} ms)");
+
+            if (confianceMoyenne > meilleureConfiance)
+            {
+                meilleureConfiance = confianceMoyenne;
+                meilleureOrientation = orientation;
+                meilleurTexte = resultat.ToString();
+            }
+        }
+
+        Console.WriteLine(
+            $"{nomDocument}: orientation {meilleureOrientation}° retenue par confiance OCR ({meilleureConfiance})");
+
+        return meilleurTexte;
+    }
+
+    /// <remarks>
+    /// Tesseract ne lit pas le PDF : chaque page est rendue une fois en PNG, en mémoire, et la
+    /// liste est réutilisée par toutes les passes qui suivent (détection d'orientation, OCR,
+    /// repli). Rendre à nouveau coûterait plus cher que garder les octets.
+    /// </remarks>
+    private static List<byte[]> ConvertirEnPages(string pdfPath)
+    {
+        var documentBytes = File.ReadAllBytes(pdfPath);
         var pages = new List<byte[]>();
+
         foreach (var imagePage in Conversion.ToImages(documentBytes, options: new RenderOptions(Dpi: Dpi)))
         {
             using (imagePage)
@@ -87,63 +163,7 @@ public class TesseractOcrEngine : ITextExtractionEngine, IDisposable
             }
         }
 
-        // TEMPORAIRE, à retirer avant merge
-        Directory.CreateDirectory("debug-images-before");
-        Directory.CreateDirectory("debug-images-after");
-        Directory.CreateDirectory("debug-images-pass-crop");
-        Directory.CreateDirectory("debug-images-pass-deskew");
-        for (var i = 0; i < pages.Count; i++)
-        {
-            File.WriteAllBytes(Path.Combine("debug-images-before", NomPage(nomDocument, i)), pages[i]);
-        }
-
-        // Une orientation par page, pas une pour tout le document : un recto-verso retourné
-        // tête-bêche (au lieu de tourné comme une page de livre) donne des pages à 180° l'une de
-        // l'autre, une seule orientation partagée serait fausse sur l'une des deux.
-        var orientationsParPage = _detecteurOrientation != null
-            ? DeciderOrientationsParPage(_detecteurOrientation, nomDocument, pages)
-            : new int[pages.Count];
-
-        for (var i = 0; i < pages.Count; i++)
-        {
-            var nomPage = NomPage(nomDocument, i);
-            using var img = Pix.LoadFromMemory(pages[i]);
-            img.XRes = Dpi;
-            img.YRes = Dpi;
-
-            var orientation = orientationsParPage[i];
-            var pixTourne = orientation != 0 ? PreprocessImage.ApplyRotation(img, orientation) : null;
-            var pixAvantDeskew = pixTourne ?? img;
-
-            // Corrige le biais résiduel de quelques degrés qu'aucune
-            // détection d'orientation par quart de tour ne peut voir.
-            Pix? pixDeskewed = null;
-            if (_options.Deskew)
-            {
-                pixDeskewed = pixAvantDeskew.Deskew(out Scew scew);
-                Console.WriteLine($"{nomPage}: deskew {scew.Angle}° avec une confiance de {scew.Confidence}");
-
-                // TEMPORAIRE
-                pixDeskewed.Save(Path.Combine("debug-images-pass-deskew", nomPage), ImageFormat.Png);
-            }
-
-            var pixAProcess = pixDeskewed ?? pixAvantDeskew;
-
-            try
-            {
-                confiances.Add(ProcessImageToText(resultat, pixAProcess));
-
-                pixAProcess.Save(Path.Combine("debug-images-after", nomPage), ImageFormat.Png);
-            }
-            finally
-            {
-                pixDeskewed?.Dispose();
-                pixTourne?.Dispose();
-            }
-        }
-
-        var confianceMoyenne = confiances.Count > 0 ? confiances.Average() : 0f;
-        return (resultat.ToString(), confianceMoyenne);
+        return pages;
     }
 
     // Analyse l'OSD page par page sans appliquer de rotation.
@@ -170,10 +190,6 @@ public class TesseractOcrEngine : ITextExtractionEngine, IDisposable
                 : pages[i];
 
             using var pixPourOsd = Pix.LoadFromMemory(octetsPourOsd);
-
-            // TEMPORAIRE
-            pixPourOsd.Save(Path.Combine("debug-images-pass-crop", nomPage), ImageFormat.Png);
-
             pixPourOsd.XRes = Dpi;
             pixPourOsd.YRes = Dpi;
 
@@ -231,122 +247,47 @@ public class TesseractOcrEngine : ITextExtractionEngine, IDisposable
         return orientationsRetenues;
     }
 
-    private static readonly int[] OrientationsPossibles = [0, 90, 180, 270];
-
     /// <summary>
-    /// Repli pour un document dont le score en aval s'avère mauvais malgré la pipeline normale :
-    /// OCRise le document dans les quatre orientations et garde celle dont la confiance moyenne
-    /// de l'OCR (<see cref="Page.GetMeanConfidence"/>) est la plus haute. Coûte quatre OCR
-    /// complets au lieu d'un, donc réservé à ce repli, jamais au chemin par défaut.
+    /// Applique le quart de tour demandé, corrige le biais résiduel de quelques degrés qu'aucune
+    /// détection par quart de tour ne peut voir, puis OCRise la page.
     /// </summary>
-    public string ExtractMeilleureOrientation(string pdfPath)
-    {
-        var documentBytes = File.ReadAllBytes(pdfPath);
-        var nomDocument = Path.GetFileNameWithoutExtension(pdfPath);
-
-        var pages = new List<byte[]>();
-        foreach (var imagePage in Conversion.ToImages(documentBytes, options: new RenderOptions(Dpi: Dpi)))
-        {
-            using (imagePage)
-            using (var pngPage = imagePage.Encode(SKEncodedImageFormat.Png, 100))
-            {
-                pages.Add(pngPage.ToArray());
-            }
-        }
-
-        string meilleurTexte = string.Empty;
-        List<(Pix Image, string NomPage)>? meilleuresImages = null;
-        var meilleureConfiance = float.MinValue;
-        var meilleureOrientation = 0;
-
-        foreach (var orientation in OrientationsPossibles)
-        {
-            var chrono = System.Diagnostics.Stopwatch.StartNew();
-            var resultat = new StringBuilder();
-            var confiancesPages = new List<float>();
-            var imagesFinales = new List<(Pix, string)>();
-
-            for (var i = 0; i < pages.Count; i++)
-            {
-                var (texte, confiance, imageFinale) = TraiterPage(pages[i], orientation);
-                resultat.Append(texte).Append(' ');
-                confiancesPages.Add(confiance);
-                imagesFinales.Add((imageFinale, NomPage(nomDocument, i)));
-            }
-
-            var confianceMoyenne = confiancesPages.Count > 0 ? confiancesPages.Average() : 0f;
-            Console.WriteLine(
-                $"{nomDocument}: orientation {orientation}° essayée, confiance OCR moyenne {confianceMoyenne} ({chrono.ElapsedMilliseconds} ms)");
-
-            if (confianceMoyenne > meilleureConfiance)
-            {
-                meilleureConfiance = confianceMoyenne;
-                meilleureOrientation = orientation;
-                meilleurTexte = resultat.ToString();
-
-                if (meilleuresImages != null)
-                {
-                    foreach (var (image, _) in meilleuresImages) image.Dispose();
-                }
-
-                meilleuresImages = imagesFinales;
-            }
-            else
-            {
-                foreach (var (image, _) in imagesFinales) image.Dispose();
-            }
-        }
-
-        Console.WriteLine(
-            $"{nomDocument}: orientation {meilleureOrientation}° retenue par confiance OCR ({meilleureConfiance})");
-
-        // L'image finale, juste avant l'envoi à l'OCR, dans le même dossier que la pipeline
-        // normale : un run peut mélanger des documents traités par les deux chemins.
-        Directory.CreateDirectory("debug-images-after");
-        foreach (var (image, nomPage) in meilleuresImages!)
-        {
-            image.Save(Path.Combine("debug-images-after", nomPage), ImageFormat.Png);
-            image.Dispose();
-        }
-
-        return meilleurTexte;
-    }
-
-    /// <summary>
-    /// Redresse, déskew si activé, OCRise une page, et rend un clone de l'image telle qu'envoyée
-    /// à l'OCR : appelant responsable de disposer ce clone.
-    /// </summary>
-    private (string Texte, float Confiance, Pix ImageFinale) TraiterPage(byte[] pngPage, int orientation)
+    /// <remarks>
+    /// Le try/finally couvre toute la chaîne, pas seulement l'OCR : le deskew lève lui aussi, et
+    /// un Pix porte une image pleine page en mémoire non managée, que le ramasse-miettes ne
+    /// récupérera pas. Le benchmark enchaîne les documents après une exception, une fuite ici
+    /// se cumulerait sur tout le run et fausserait justement les relevés mémoire.
+    /// </remarks>
+    private (string Texte, float Confiance) TraiterPage(byte[] pngPage, int orientation, string nomPage)
     {
         using var img = Pix.LoadFromMemory(pngPage);
         img.XRes = Dpi;
         img.YRes = Dpi;
 
-        var pixTourne = orientation != 0 ? PreprocessImage.ApplyRotation(img, orientation) : null;
-        var pixAvantDeskew = pixTourne ?? img;
+        Pix? pixTourne = null;
+        Pix? pixDeskewed = null;
+        try
+        {
+            pixTourne = orientation != 0 ? PreprocessImage.ApplyRotation(img, orientation) : null;
+            var pixAvantDeskew = pixTourne ?? img;
 
-        var pixDeskewed = _options.Deskew ? pixAvantDeskew.Deskew(out _) : null;
-        var pixAProcess = pixDeskewed ?? pixAvantDeskew;
+            if (_options.Deskew)
+            {
+                pixDeskewed = pixAvantDeskew.Deskew(out var scew);
+                Console.WriteLine(
+                    $"{nomPage}: orientation {orientation}°, deskew {scew.Angle}° avec une confiance de {scew.Confidence}");
+            }
 
-        using var page = _moteur.Process(pixAProcess);
-        var texte = page.GetText();
-        var confiance = page.GetMeanConfidence();
-        var imageFinale = pixAProcess.Clone();
-
-        pixDeskewed?.Dispose();
-        pixTourne?.Dispose();
-
-        return (texte, confiance, imageFinale);
+            using var page = _moteur.Process(pixDeskewed ?? pixAvantDeskew);
+            return (page.GetText(), page.GetMeanConfidence());
+        }
+        finally
+        {
+            pixDeskewed?.Dispose();
+            pixTourne?.Dispose();
+        }
     }
 
     private static string NomPage(string nomDocument, int index) => $"{nomDocument}-p{index}.png";
-
-    private float ProcessImageToText(StringBuilder resultat, Pix img)
-    {
-        using var page = _moteur.Process(img);
-        resultat.Append(page.GetText()).Append(' ');
-        return page.GetMeanConfidence();
-    }
 
     public void Dispose()
     {
