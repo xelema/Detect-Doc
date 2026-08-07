@@ -68,10 +68,12 @@ public class TesseractOcrEngine : ITextExtractionEngine, IDisposable
             File.WriteAllBytes(Path.Combine("debug-images-before", NomPage(nomDocument, i)), pages[i]);
         }
 
-        // Orientation globale basée sur la page ayant le meilleur score OSD
-        var orientationDocument = _detecteurOrientation != null
-            ? DeciderOrientationDocument(nomDocument, pages)
-            : 0;
+        // Une orientation par page, pas une pour tout le document : un recto-verso retourné
+        // tête-bêche (au lieu de tourné comme une page de livre) donne des pages à 180° l'une de
+        // l'autre, une seule orientation partagée serait fausse sur l'une des deux.
+        var orientationsParPage = _detecteurOrientation != null
+            ? DeciderOrientationsParPage(nomDocument, pages)
+            : new int[pages.Count];
 
         for (var i = 0; i < pages.Count; i++)
         {
@@ -80,7 +82,8 @@ public class TesseractOcrEngine : ITextExtractionEngine, IDisposable
             img.XRes = Dpi;
             img.YRes = Dpi;
 
-            var pixTourne = orientationDocument != 0 ? PreprocessImage.ApplyRotation(img, orientationDocument) : null;
+            var orientation = orientationsParPage[i];
+            var pixTourne = orientation != 0 ? PreprocessImage.ApplyRotation(img, orientation) : null;
             var pixAvantDeskew = pixTourne ?? img;
 
             // Corrige le biais résiduel de quelques degrés qu'aucune
@@ -113,12 +116,13 @@ public class TesseractOcrEngine : ITextExtractionEngine, IDisposable
         return resultat.ToString();
     }
 
-    // N'applique aucune rotation : ne fait que consulter l'OSD page par page pour choisir
-    // l'orientation qui vaudra pour tout le document.
-    private int DeciderOrientationDocument(string nomDocument, List<byte[]> pages)
+    // Analyse l'OSD page par page sans appliquer de rotation.
+    // Une page sous le seuil de confiance hérite de l'orientation la plus
+    // confiante du document ; une page au-dessus conserve la sienne.
+    private int[] DeciderOrientationsParPage(string nomDocument, List<byte[]> pages)
     {
-        var orientationDocument = 0;
-        var meilleureConfiance = 0f;
+        var orientationsDetectees = new int[pages.Count];
+        var confiancesDetectees = new float[pages.Count];
 
         for (var i = 0; i < pages.Count; i++)
         {
@@ -147,26 +151,45 @@ public class TesseractOcrEngine : ITextExtractionEngine, IDisposable
             }
 
             Console.WriteLine($"{nomPage}: orientation : {orientationDegree}° avec une confiance de {confiance}");
-            if (orientationDegree != 0 && confiance > meilleureConfiance)
-            {
-                meilleureConfiance = confiance;
-                orientationDocument = orientationDegree;
-            }
+            orientationsDetectees[i] = orientationDegree;
+            // La confiance compte même quand l'angle détecté est 0° : c'est une détection tout
+            // aussi valide qu'un quart de tour, une page confiante à 0° doit pouvoir servir de
+            // référence à une page voisine moins sûre d'elle.
+            confiancesDetectees[i] = confiance;
         }
 
-        if (meilleureConfiance < SeuilConfianceOsd)
+        var indexMeilleur = 0;
+        for (var i = 1; i < pages.Count; i++)
         {
-            if (orientationDocument != 0)
-            {
-                Console.WriteLine(
-                    $"{nomDocument}: orientation ignorée, confiance {meilleureConfiance} sous le seuil de {SeuilConfianceOsd}");
-            }
-
-            return 0;
+            if (confiancesDetectees[i] > confiancesDetectees[indexMeilleur]) indexMeilleur = i;
         }
 
-        Console.WriteLine($"{nomDocument}: orientation retenue pour le document : {orientationDocument}° (confiance {meilleureConfiance})");
-        return orientationDocument;
+        var meilleureConfianceDocument = confiancesDetectees[indexMeilleur];
+        var meilleureOrientationDocument = orientationsDetectees[indexMeilleur];
+
+        var orientationsRetenues = new int[pages.Count];
+        for (var i = 0; i < pages.Count; i++)
+        {
+            var nomPage = NomPage(nomDocument, i);
+            if (confiancesDetectees[i] >= SeuilConfianceOsd)
+            {
+                orientationsRetenues[i] = orientationsDetectees[i];
+            }
+            else if (meilleureConfianceDocument >= SeuilConfianceOsd)
+            {
+                orientationsRetenues[i] = meilleureOrientationDocument;
+                Console.WriteLine(
+                    $"{nomPage}: confiance propre {confiancesDetectees[i]} sous le seuil de {SeuilConfianceOsd}, emprunte {meilleureOrientationDocument}° au reste du document (confiance {meilleureConfianceDocument})");
+            }
+            else
+            {
+                orientationsRetenues[i] = 0;
+                Console.WriteLine(
+                    $"{nomPage}: orientation ignorée, aucune page du document n'atteint le seuil de {SeuilConfianceOsd}");
+            }
+        }
+
+        return orientationsRetenues;
     }
 
     private static readonly int[] OrientationsPossibles = [0, 90, 180, 270];
@@ -174,9 +197,7 @@ public class TesseractOcrEngine : ITextExtractionEngine, IDisposable
     /// <summary>
     /// Repli pour un document dont le score en aval s'avère mauvais malgré la pipeline normale :
     /// OCRise le document dans les quatre orientations et garde celle dont la confiance moyenne
-    /// de l'OCR (<see cref="Page.GetMeanConfidence"/>) est la plus haute. Ne regarde jamais le
-    /// texte attendu, seulement ce que Tesseract lui-même pense avoir reconnu, pour rester
-    /// utilisable sur un document dont on ne connaît pas le contenu à l'avance. Coûte quatre OCR
+    /// de l'OCR (<see cref="Page.GetMeanConfidence"/>) est la plus haute. Coûte quatre OCR
     /// complets au lieu d'un, donc réservé à ce repli, jamais au chemin par défaut.
     /// </summary>
     public string ExtractMeilleureOrientation(string pdfPath)
