@@ -25,7 +25,7 @@ public class TesseractOcrEngine : ITextExtractionEngine, IDisposable
 
     public string Name => "Tesseract";
     public string Version => _moteur.Version;
-    
+
     public IReadOnlyDictionary<string, object> Parametres => new Dictionary<string, object>
     {
         ["langue"] = Langue,
@@ -36,9 +36,10 @@ public class TesseractOcrEngine : ITextExtractionEngine, IDisposable
         ["deskew"] = _options.Deskew
     };
 
-    public TesseractOcrEngine(OptionsPretraitement? optionsPretraitement){
+    public TesseractOcrEngine(OptionsPretraitement? optionsPretraitement)
+    {
         _options = optionsPretraitement ?? new OptionsPretraitement();
-        _detecteurOrientation ??= _options.Redresser ? new DetectOrientationTesseract(_orientationEngine) : null;
+        _detecteurOrientation = _options.Redresser ? new DetectOrientationTesseract(_orientationEngine) : null;
     }
 
     public string Extract(string pdfPath)
@@ -72,7 +73,7 @@ public class TesseractOcrEngine : ITextExtractionEngine, IDisposable
         // tête-bêche (au lieu de tourné comme une page de livre) donne des pages à 180° l'une de
         // l'autre, une seule orientation partagée serait fausse sur l'une des deux.
         var orientationsParPage = _detecteurOrientation != null
-            ? DeciderOrientationsParPage(nomDocument, pages)
+            ? DeciderOrientationsParPage(_detecteurOrientation, nomDocument, pages)
             : new int[pages.Count];
 
         for (var i = 0; i < pages.Count; i++)
@@ -119,10 +120,12 @@ public class TesseractOcrEngine : ITextExtractionEngine, IDisposable
     // Analyse l'OSD page par page sans appliquer de rotation.
     // Une page sous le seuil de confiance hérite de l'orientation la plus
     // confiante du document ; une page au-dessus conserve la sienne.
-    private int[] DeciderOrientationsParPage(string nomDocument, List<byte[]> pages)
+    private int[] DeciderOrientationsParPage(
+        DetectOrientationTesseract detecteurOrientation,
+        string nomDocument,
+        List<byte[]> pages)
     {
-        var orientationsDetectees = new int[pages.Count];
-        var confiancesDetectees = new float[pages.Count];
+        var detections = new (int Orientation, float Confiance)[pages.Count];
 
         for (var i = 0; i < pages.Count; i++)
         {
@@ -143,7 +146,7 @@ public class TesseractOcrEngine : ITextExtractionEngine, IDisposable
             var confiance = 0f;
             try
             {
-                orientationDegree = _detecteurOrientation!.DetectOrientation(pixPourOsd, out confiance);
+                orientationDegree = detecteurOrientation.DetectOrientation(pixPourOsd, out confiance);
             }
             catch (TesseractException ex)
             {
@@ -151,35 +154,36 @@ public class TesseractOcrEngine : ITextExtractionEngine, IDisposable
             }
 
             Console.WriteLine($"{nomPage}: orientation : {orientationDegree}° avec une confiance de {confiance}");
-            orientationsDetectees[i] = orientationDegree;
             // La confiance compte même quand l'angle détecté est 0° : c'est une détection tout
             // aussi valide qu'un quart de tour, une page confiante à 0° doit pouvoir servir de
             // référence à une page voisine moins sûre d'elle.
-            confiancesDetectees[i] = confiance;
+            detections[i] = (orientationDegree, confiance);
         }
 
-        var indexMeilleur = 0;
+        var meilleureDetection = detections[0];
         for (var i = 1; i < pages.Count; i++)
         {
-            if (confiancesDetectees[i] > confiancesDetectees[indexMeilleur]) indexMeilleur = i;
+            if (detections[i].Confiance > meilleureDetection.Confiance)
+            {
+                meilleureDetection = detections[i];
+            }
         }
-
-        var meilleureConfianceDocument = confiancesDetectees[indexMeilleur];
-        var meilleureOrientationDocument = orientationsDetectees[indexMeilleur];
 
         var orientationsRetenues = new int[pages.Count];
         for (var i = 0; i < pages.Count; i++)
         {
             var nomPage = NomPage(nomDocument, i);
-            if (confiancesDetectees[i] >= SeuilConfianceOsd)
+            var detection = detections[i];
+
+            if (detection.Confiance >= SeuilConfianceOsd)
             {
-                orientationsRetenues[i] = orientationsDetectees[i];
+                orientationsRetenues[i] = detection.Orientation;
             }
-            else if (meilleureConfianceDocument >= SeuilConfianceOsd)
+            else if (meilleureDetection.Confiance >= SeuilConfianceOsd)
             {
-                orientationsRetenues[i] = meilleureOrientationDocument;
+                orientationsRetenues[i] = meilleureDetection.Orientation;
                 Console.WriteLine(
-                    $"{nomPage}: confiance propre {confiancesDetectees[i]} sous le seuil de {SeuilConfianceOsd}, emprunte {meilleureOrientationDocument}° au reste du document (confiance {meilleureConfianceDocument})");
+                    $"{nomPage}: confiance propre {detection.Confiance} sous le seuil de {SeuilConfianceOsd}, emprunte {meilleureDetection.Orientation}° au reste du document (confiance {meilleureDetection.Confiance})");
             }
             else
             {
