@@ -19,9 +19,9 @@ public sealed record ResultatDocument
     public string? TexteReference { get; init; }
     public string? TexteExtrait { get; init; }
     public required double DureeMs { get; init; } // temps écoulé
-    public required double CpuMs {  get; init; } // temps processus consommé
-    public required long PicMemoireOctets { get; init; } // pic du processus
-    public required long MemoireOctets { get; init; } // mémoire au moment de la lecture
+    public required double CpuMs {  get; init; } // temps processeur consommé pendant l'extraction
+    public required long PicMemoireOctets { get; init; } // plus haut working set observé pendant l'extraction
+    public required long MemoireAvantOctets { get; init; } // working set juste avant, référence du coût propre
 }
 
 public enum Statut

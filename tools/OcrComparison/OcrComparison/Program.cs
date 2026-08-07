@@ -122,8 +122,7 @@ static string ConstruireRapport(string runId, RunMetadata metadata, List<Resulta
     rapport.AppendLine($"| Levenshtein | {parType.Average(t => t.MoyenneLevenshtein):F4} |");
     rapport.AppendLine();
 
-    var durees = resultats.Select(r => r.DureeMs).OrderBy(d => d).ToList();
-    var dureeMediane = durees.Count == 0 ? 0 : durees[durees.Count / 2];
+    const double Mo = 1024 * 1024;
 
     rapport.AppendLine("## Coût");
     rapport.AppendLine();
@@ -131,8 +130,26 @@ static string ConstruireRapport(string runId, RunMetadata metadata, List<Resulta
     rapport.AppendLine("|---|---|");
     rapport.AppendLine($"| Documents mesurés | {resultats.Count} |");
     rapport.AppendLine($"| Temps total | {resultats.Sum(r => r.DureeMs) / 1000:F1} s |");
-    rapport.AppendLine($"| Temps médian par document | {dureeMediane:F0} ms |");
-    rapport.AppendLine($"| Pic mémoire (max sur le run) | {resultats.Max(r => r.PicMemoireOctets) / 1024 / 1024} Mo |");
+    rapport.AppendLine($"| Temps médian par document | {Mediane(resultats.Select(r => r.DureeMs)):F0} ms |");
+    rapport.AppendLine($"| CPU total | {resultats.Sum(r => r.CpuMs) / 1000:F1} s |");
+    rapport.AppendLine($"| CPU médian par document | {Mediane(resultats.Select(r => r.CpuMs)):F0} ms |");
+    rapport.AppendLine(
+        $"| Pic mémoire médian par document | {Mediane(resultats.Select(r => r.PicMemoireOctets / Mo)):F0} Mo |");
+    rapport.AppendLine(
+        $"| Pic mémoire, pire document | {resultats.Max(r => r.PicMemoireOctets) / Mo:F0} Mo |");
+
+    // Ce que le document a fait monter à lui seul, le pic absolu portant aussi tout ce que le
+    // processus occupait déjà. C'est la part comparable d'un moteur à l'autre à conditions égales.
+    rapport.AppendLine(
+        $"| Mémoire propre au document, pire cas | {resultats.Max(r => r.PicMemoireOctets - r.MemoireAvantOctets) / Mo:F0} Mo |");
 
     return rapport.ToString();
+}
+
+// Médiane basse : sur un effectif pair, la valeur inférieure du couple central plutôt que leur
+// moyenne, pour que le chiffre publié soit toujours celui d'un document réel du run.
+static double Mediane(IEnumerable<double> valeurs)
+{
+    var triees = valeurs.OrderBy(v => v).ToList();
+    return triees.Count == 0 ? 0 : triees[(triees.Count - 1) / 2];
 }

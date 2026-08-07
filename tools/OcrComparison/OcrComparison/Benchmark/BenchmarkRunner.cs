@@ -36,6 +36,7 @@ public sealed class BenchmarkRunner(ITextExtractionEngine moteur, string cheminC
 
         var cpuAvant = Processus.TotalProcessorTime;
         var horodatage = Stopwatch.GetTimestamp();
+        using var sondeMemoire = new SondeMemoire();
 
         string? texteExtrait = null;
         string? erreur = null;
@@ -86,10 +87,13 @@ public sealed class BenchmarkRunner(ITextExtractionEngine moteur, string cheminC
         }
 
         var duree = Stopwatch.GetElapsedTime(horodatage);
+
+        // `TotalProcessorTime` interroge l'OS à chaque lecture, contrairement aux compteurs mémoire
+        // de `Process` : l'écart sur l'intervalle est le temps processeur réellement consommé par ce
+        // document, threads non managés de Tesseract compris, sans avoir à rafraîchir quoi que ce soit.
         var cpu = Processus.TotalProcessorTime - cpuAvant;
-        Processus.Refresh();
         var ressources = new Ressources(duree.TotalMilliseconds, cpu.TotalMilliseconds,
-            Processus.PeakWorkingSet64, Processus.WorkingSet64);
+            sondeMemoire.Arreter(), sondeMemoire.Depart);
 
         // Une extraction qui échoue ou qui ne rend rien garde ses ressources : le temps passé
         // avant l'échec fait partie de ce que coûte le moteur sur ce corpus.
@@ -148,13 +152,13 @@ public sealed class BenchmarkRunner(ITextExtractionEngine moteur, string cheminC
             DureeMs = ressources.DureeMs,
             CpuMs = ressources.CpuMs,
             PicMemoireOctets = ressources.PicMemoireOctets,
-            MemoireOctets = ressources.MemoireOctets
+            MemoireAvantOctets = ressources.MemoireAvantOctets
         };
     }
 
     /// <summary>Ressources relevées autour d'une extraction.</summary>
     private readonly record struct Ressources(
-        double DureeMs, double CpuMs, long PicMemoireOctets, long MemoireOctets)
+        double DureeMs, double CpuMs, long PicMemoireOctets, long MemoireAvantOctets)
     {
         /// <summary>Aucune extraction lancée, donc rien à relever.</summary>
         public static readonly Ressources Aucune = new(0, 0, 0, 0);
