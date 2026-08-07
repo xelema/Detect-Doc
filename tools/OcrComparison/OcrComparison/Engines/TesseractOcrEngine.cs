@@ -102,9 +102,11 @@ public class TesseractOcrEngine : ITextExtractionEngine, IDisposable
     /// Repli pour un document dont la confiance OCR reste basse malgré la pipeline normale :
     /// OCRise le document dans les quatre orientations et garde celle dont la confiance moyenne
     /// de l'OCR (<see cref="Page.GetMeanConfidence"/>) est la plus haute. Coûte quatre OCR
-    /// complets au lieu d'un, donc réservé à ce repli, jamais au chemin par défaut.
+    /// complets au lieu d'un, donc réservé à ce repli, jamais au chemin par défaut. Rend aussi
+    /// la confiance retenue : l'appelant en a besoin pour arbitrer entre ce texte et le sien,
+    /// ce chemin n'ayant ni OSD ni détourage il peut très bien faire moins bien.
     /// </summary>
-    public string ExtractMeilleureOrientation(string pdfPath)
+    public (string Texte, float ConfianceMoyenne) ExtractMeilleureOrientation(string pdfPath)
     {
         var pages = ConvertirEnPages(pdfPath);
         var nomDocument = Path.GetFileNameWithoutExtension(pdfPath);
@@ -141,7 +143,7 @@ public class TesseractOcrEngine : ITextExtractionEngine, IDisposable
         Console.WriteLine(
             $"{nomDocument}: orientation {meilleureOrientation}° retenue par confiance OCR ({meilleureConfiance})");
 
-        return meilleurTexte;
+        return (meilleurTexte, meilleureConfiance);
     }
 
     /// <remarks>

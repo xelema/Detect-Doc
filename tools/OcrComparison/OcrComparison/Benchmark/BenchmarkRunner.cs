@@ -62,7 +62,17 @@ public sealed class BenchmarkRunner(ITextExtractionEngine moteur, string cheminC
                     Console.WriteLine(
                         $"{manifestEntry.Id}: confiance OCR {confiance:F4} sous le seuil de {TesseractOcrEngine.SeuilConfianceExtraction}, tentative des quatre orientations");
                     repliDeclenche = true;
-                    texteExtrait = moteurTesseract.ExtractMeilleureOrientation(cheminDocument);
+
+                    var (texteRepli, confianceRepli) = moteurTesseract.ExtractMeilleureOrientation(cheminDocument);
+
+                    // Le repli ne passe ni par l'OSD ni par le détourage : il peut rendre moins
+                    // bien que la pipeline normale. Ne garder son texte que s'il est plus sûr,
+                    // sinon il dégraderait le document qu'il devait sauver.
+                    if (confianceRepli > confiance)
+                    {
+                        texteExtrait = texteRepli;
+                        confianceOcr = confianceRepli;
+                    }
                 }
             }
             else
