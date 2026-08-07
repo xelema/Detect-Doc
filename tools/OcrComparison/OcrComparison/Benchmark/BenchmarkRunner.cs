@@ -18,7 +18,11 @@ public sealed class BenchmarkRunner(ITextExtractionEngine moteur, string cheminC
 
     private ResultatDocument Mesurer(ManifestEntry manifestEntry)
     {
-        var texteReferenceNormalise = TexteNormalise.NormaliserPourScore(manifestEntry.TexteReference);
+        // Le manifest vient d'un outil externe : rien ne garantit que chaque ligne porte la clé
+        // texte_reference, et une entrée sans référence doit sortir en ReferenceAbsente, pas
+        // faire tomber le run entier depuis un point qu'aucun try/catch ne couvre.
+        var texteReferenceNormalise =
+            TexteNormalise.NormaliserPourScore(manifestEntry.TexteReference ?? string.Empty);
 
         // Sans référence, il n'y a rien à comparer : l'extraction n'est pas lancée, donc aucune
         // ressource n'est relevée. Le document reste dans le résultat pour que le corpus mesuré
