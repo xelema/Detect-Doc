@@ -5,17 +5,16 @@ using OcrComparison.Engines;
 using OcrComparison.Manifest;
 using OcrComparison.Preprocessing;
 
-if (args.Length != 2)
+if (args.Length is < 2 or > 3)
 {
-    Console.WriteLine("Usage: OcrComparison <chemin-du-corpus> <chemin-du-manifest>");
+    Console.WriteLine("Usage: OcrComparison <chemin-du-corpus> <chemin-du-manifest> [tesseract|pdfpig]");
     return;
 }
 
 const string split = "dev";
 var (cheminCorpus, cheminManifest) = (args[0], args[1]);
 
-var optionsPretraitement = new OptionsPretraitement(Redresser: true, DetourerAvantOsd: true, Deskew: true);
-using var moteur = new TesseractOcrEngine(optionsPretraitement);
+using var moteur = CreerMoteur(args.Length == 3 ? args[2] : "tesseract");
 
 var titre = ConstruireTitre(moteur.Parametres);
 var runId = $"{DateTime.Now:yyyy-MM-dd_HH-mm-ss}_{moteur.Name.ToLowerInvariant()}_{titre}";
@@ -49,6 +48,14 @@ using (var writer = new ResultWriter(Path.Combine(dossierRun, "resultats.jsonl")
 
 File.WriteAllText(Path.Combine(dossierRun, "score.md"), ConstruireRapport(runId, metadata, resultats));
 return;
+
+static ITextExtractionEngine CreerMoteur(string nom) => nom.ToLowerInvariant() switch
+{
+    "tesseract" => new TesseractOcrEngine(
+        new OptionsPretraitement(Redresser: true, DetourerAvantOsd: true, Deskew: true)),
+    "pdfpig" => new PdfPigNativeTextEngine(),
+    _ => throw new ArgumentException($"Moteur inconnu : {nom}. Attendu : tesseract ou pdfpig.")
+};
 
 // Ne garde que les réglages actifs (booléens à true) : un run "brut" (rien activé) donne
 // simplement "brut", un run avec tout activé "redressement-detourage_avant_osd-deskew". Les

@@ -17,10 +17,14 @@ public class PdfPigNativeTextEngine : ITextExtractionEngine
     public string Version => VersionAssembly;
     public IReadOnlyDictionary<string, object> Parametres => ParametresMoteur;
 
-    public string Extract(string pdfPath)
+    public ResultatExtraction Extract(string cheminDocument)
     {
-        using var document = PdfDocument.Open(pdfPath);
+        using var document = PdfDocument.Open(cheminDocument);
         var mots = document.GetPages().SelectMany(page => page.GetWords()).Select(mot => mot.Text);
-        return string.Join(" ", mots);
+        return new ResultatExtraction(string.Join(" ", mots), Confiance: null, RepliDeclenche: false);
+    }
+
+    public void Dispose()
+    {
     }
 }

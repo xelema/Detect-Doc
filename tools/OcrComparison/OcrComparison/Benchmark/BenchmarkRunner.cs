@@ -45,41 +45,10 @@ public sealed class BenchmarkRunner(ITextExtractionEngine moteur, string cheminC
 
         try
         {
-            var cheminDocument = Path.Combine(cheminCorpus, manifestEntry.Fichier);
-
-            // Repli à 4 orientations réservé à Tesseract. PdfPig lit le texte natif.
-            if (moteur is TesseractOcrEngine moteurTesseract)
-            {
-                var (texte, confiance) = moteurTesseract.ExtraireAvecConfiance(cheminDocument);
-                texteExtrait = texte;
-                confianceOcr = confiance;
-
-                // Un texte vide vaut un repli au même titre qu'un texte peu sûr : c'est le
-                // symptôme le plus franc d'une page à l'envers, et il n'a justement aucune
-                // confiance à confronter au seuil.
-                if (string.IsNullOrWhiteSpace(texteExtrait)
-                    || confiance < TesseractOcrEngine.SeuilConfianceExtraction)
-                {
-                    Console.WriteLine(
-                        $"{manifestEntry.Id}: confiance OCR {confiance:F4} sous le seuil de {TesseractOcrEngine.SeuilConfianceExtraction}, tentative des quatre orientations");
-                    repliDeclenche = true;
-
-                    var (texteRepli, confianceRepli) = moteurTesseract.ExtractMeilleureOrientation(cheminDocument);
-
-                    // Le repli ne passe ni par l'OSD ni par le détourage : il peut rendre moins
-                    // bien que la pipeline normale. Ne garder son texte que s'il est plus sûr,
-                    // sinon il dégraderait le document qu'il devait sauver.
-                    if (confianceRepli > confiance)
-                    {
-                        texteExtrait = texteRepli;
-                        confianceOcr = confianceRepli;
-                    }
-                }
-            }
-            else
-            {
-                texteExtrait = moteur.Extract(cheminDocument);
-            }
+            var extraction = moteur.Extract(Path.Combine(cheminCorpus, manifestEntry.Fichier));
+            texteExtrait = extraction.Texte;
+            confianceOcr = extraction.Confiance;
+            repliDeclenche = extraction.RepliDeclenche;
         }
         catch (Exception ex)
         {

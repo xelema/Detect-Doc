@@ -1,15 +1,12 @@
 using System.Diagnostics;
 using System.Text;
 using OcrComparison.Preprocessing;
-using PDFtoImage;
-using SkiaSharp;
 using Tesseract;
 
 namespace OcrComparison.Engines;
 
-public class TesseractOcrEngine : ITextExtractionEngine, IDisposable
+public class TesseractOcrEngine : ITextExtractionEngine
 {
-    private const int Dpi = 300;
     private const string Langue = "fra";
     private const EngineMode Mode = EngineMode.Default;
 
@@ -22,7 +19,7 @@ public class TesseractOcrEngine : ITextExtractionEngine, IDisposable
     // mesuré le 07/08/2026 sur 67 documents
     // permet de remesurer l'OCR sur les 4 orientations (0°, 90°, 180°, 270°) si la confiance sur le TEXTE
     // est INFERIEURE à SeuilConfianceExtraction
-    public const float SeuilConfianceExtraction = 0.80f;
+    private const float SeuilConfianceExtraction = 0.80f;
 
     private static readonly int[] OrientationsPossibles = [0, 90, 180, 270];
 
@@ -54,7 +51,7 @@ public class TesseractOcrEngine : ITextExtractionEngine, IDisposable
         _parametres = new Dictionary<string, object>
         {
             ["langue"] = Langue,
-            ["dpi"] = Dpi,
+            ["dpi"] = RenduPdf.Dpi,
             ["engine_mode"] = Mode.ToString(),
             ["redressement"] = _options.Redresser,
             ["detourage_avant_osd"] = _options.DetourerAvantOsd,
@@ -64,17 +61,40 @@ public class TesseractOcrEngine : ITextExtractionEngine, IDisposable
         };
     }
 
-    public string Extract(string pdfPath) => ExtraireAvecConfiance(pdfPath).Texte;
-
     /// <summary>
-    /// Même pipeline que <see cref="Extract"/>, mais expose aussi la confiance OCR moyenne du
-    /// document (moyenne des <see cref="Page.GetMeanConfidence"/> de chaque page), pour décider
-    /// d'un repli sans avoir besoin d'un texte de référence : sur un document réel, il n'y en a
-    /// pas, contrairement au jaccard utilisé pendant le développement sur le corpus du POC.
+    /// OCRise le document, puis rejoue les quatre orientations si le résultat n'inspire pas
+    /// confiance.
     /// </summary>
-    public (string Texte, float ConfianceMoyenne) ExtraireAvecConfiance(string pdfPath)
+    /// <remarks>
+    /// Le déclenchement se fait sur la confiance OCR du document (moyenne des
+    /// <see cref="Page.GetMeanConfidence"/> de chaque page) et jamais sur un écart au texte
+    /// attendu : sur un document réel, il n'y a pas de texte attendu.
+    /// </remarks>
+    public ResultatExtraction Extract(string cheminDocument)
     {
-        var pages = ConvertirEnPages(pdfPath);
+        var (texte, confiance) = Ocriser(cheminDocument);
+
+        if (!string.IsNullOrWhiteSpace(texte) && confiance >= SeuilConfianceExtraction)
+        {
+            return new ResultatExtraction(texte, confiance, RepliDeclenche: false);
+        }
+
+        var nom = Path.GetFileNameWithoutExtension(cheminDocument);
+        Console.WriteLine(
+            $"{nom}: confiance OCR {confiance:F4} sous le seuil de {SeuilConfianceExtraction}, tentative des quatre orientations");
+
+        var (texteRepli, confianceRepli) = OcriserToutesOrientations(cheminDocument);
+
+        // Le repli ne passe ni par l'OSD ni par le détourage : il peut rendre moins bien que la
+        // pipeline normale, auquel cas son texte est jeté plutôt que de dégrader le document.
+        return confianceRepli > confiance
+            ? new ResultatExtraction(texteRepli, confianceRepli, RepliDeclenche: true)
+            : new ResultatExtraction(texte, confiance, RepliDeclenche: true);
+    }
+
+    private (string Texte, float ConfianceMoyenne) Ocriser(string pdfPath)
+    {
+        var pages = RenduPdf.EnPngs(pdfPath);
         var nomDocument = Path.GetFileNameWithoutExtension(pdfPath);
 
         // Une orientation par page, pas une pour tout le document : un recto-verso retourné
@@ -99,16 +119,12 @@ public class TesseractOcrEngine : ITextExtractionEngine, IDisposable
     }
 
     /// <summary>
-    /// Repli pour un document dont la confiance OCR reste basse malgré la pipeline normale :
-    /// OCRise le document dans les quatre orientations et garde celle dont la confiance moyenne
-    /// de l'OCR (<see cref="Page.GetMeanConfidence"/>) est la plus haute. Coûte quatre OCR
-    /// complets au lieu d'un, donc réservé à ce repli, jamais au chemin par défaut. Rend aussi
-    /// la confiance retenue : l'appelant en a besoin pour arbitrer entre ce texte et le sien,
-    /// ce chemin n'ayant ni OSD ni détourage il peut très bien faire moins bien.
+    /// OCRise le document dans les quatre orientations et garde la plus confiante. Coûte quatre
+    /// OCR complets, donc réservé au repli.
     /// </summary>
-    public (string Texte, float ConfianceMoyenne) ExtractMeilleureOrientation(string pdfPath)
+    private (string Texte, float ConfianceMoyenne) OcriserToutesOrientations(string pdfPath)
     {
-        var pages = ConvertirEnPages(pdfPath);
+        var pages = RenduPdf.EnPngs(pdfPath);
         var nomDocument = Path.GetFileNameWithoutExtension(pdfPath);
 
         var meilleurTexte = string.Empty;
@@ -146,28 +162,6 @@ public class TesseractOcrEngine : ITextExtractionEngine, IDisposable
         return (meilleurTexte, meilleureConfiance);
     }
 
-    /// <remarks>
-    /// Tesseract ne lit pas le PDF : chaque page est rendue une fois en PNG, en mémoire, et la
-    /// liste est réutilisée par toutes les passes qui suivent (détection d'orientation, OCR,
-    /// repli). Rendre à nouveau coûterait plus cher que garder les octets.
-    /// </remarks>
-    private static List<byte[]> ConvertirEnPages(string pdfPath)
-    {
-        var documentBytes = File.ReadAllBytes(pdfPath);
-        var pages = new List<byte[]>();
-
-        foreach (var imagePage in Conversion.ToImages(documentBytes, options: new RenderOptions(Dpi: Dpi)))
-        {
-            using (imagePage)
-            using (var pngPage = imagePage.Encode(SKEncodedImageFormat.Png, 100))
-            {
-                pages.Add(pngPage.ToArray());
-            }
-        }
-
-        return pages;
-    }
-
     // Analyse l'OSD page par page sans appliquer de rotation.
     // Une page sous le seuil de confiance hérite de l'orientation la plus
     // confiante du document ; une page au-dessus conserve la sienne.
@@ -192,8 +186,8 @@ public class TesseractOcrEngine : ITextExtractionEngine, IDisposable
                 : pages[i];
 
             using var pixPourOsd = Pix.LoadFromMemory(octetsPourOsd);
-            pixPourOsd.XRes = Dpi;
-            pixPourOsd.YRes = Dpi;
+            pixPourOsd.XRes = RenduPdf.Dpi;
+            pixPourOsd.YRes = RenduPdf.Dpi;
 
             var orientationDegree = 0;
             var confiance = 0f;
@@ -249,21 +243,16 @@ public class TesseractOcrEngine : ITextExtractionEngine, IDisposable
         return orientationsRetenues;
     }
 
-    /// <summary>
-    /// Applique le quart de tour demandé, corrige le biais résiduel de quelques degrés qu'aucune
-    /// détection par quart de tour ne peut voir, puis OCRise la page.
-    /// </summary>
     /// <remarks>
-    /// Le try/finally couvre toute la chaîne, pas seulement l'OCR : le deskew lève lui aussi, et
-    /// un Pix porte une image pleine page en mémoire non managée, que le ramasse-miettes ne
-    /// récupérera pas. Le benchmark enchaîne les documents après une exception, une fuite ici
-    /// se cumulerait sur tout le run et fausserait justement les relevés mémoire.
+    /// Le try/finally couvre le deskew autant que l'OCR : un Pix porte une image pleine page en
+    /// mémoire non managée, et le benchmark enchaîne les documents après une exception, donc une
+    /// fuite ici se cumulerait sur tout le run et fausserait ses relevés mémoire.
     /// </remarks>
     private (string Texte, float Confiance) TraiterPage(byte[] pngPage, int orientation, string nomPage)
     {
         using var img = Pix.LoadFromMemory(pngPage);
-        img.XRes = Dpi;
-        img.YRes = Dpi;
+        img.XRes = RenduPdf.Dpi;
+        img.YRes = RenduPdf.Dpi;
 
         Pix? pixTourne = null;
         Pix? pixDeskewed = null;
