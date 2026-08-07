@@ -7,7 +7,9 @@ using OcrComparison.Preprocessing;
 
 if (args.Length is < 2 or > 3)
 {
-    Console.WriteLine("Usage: OcrComparison <chemin-du-corpus> <chemin-du-manifest> [tesseract|pdfpig]");
+    Console.WriteLine(
+        "Usage: OcrComparison <chemin-du-corpus> <chemin-du-manifest> " +
+        "[tesseract|pdfpig|ppocr-tiny|ppocr-small|ppocr-medium]");
     return;
 }
 
@@ -77,7 +79,11 @@ static ITextExtractionEngine CreerMoteur(string nom) => nom.ToLowerInvariant() s
     "tesseract" => new TesseractOcrEngine(
         new OptionsPretraitement(Redresser: true, DetourerAvantOsd: true, Deskew: true)),
     "pdfpig" => new PdfPigNativeTextEngine(),
-    _ => throw new ArgumentException($"Moteur inconnu : {nom}. Attendu : tesseract ou pdfpig.")
+    "ppocr-tiny" => new PpOcrEngine("tiny"),
+    "ppocr-small" => new PpOcrEngine("small"),
+    "ppocr-medium" => new PpOcrEngine("medium"),
+    _ => throw new ArgumentException(
+        $"Moteur inconnu : {nom}. Attendu : tesseract, pdfpig, ppocr-tiny, ppocr-small ou ppocr-medium.")
 };
 
 // Ne garde que les réglages actifs (booléens à true) : un run "brut" (rien activé) donne
