@@ -42,9 +42,18 @@ public class TesseractOcrEngine : ITextExtractionEngine, IDisposable
         _detecteurOrientation = _options.Redresser ? new DetectOrientationTesseract(_orientationEngine) : null;
     }
 
-    public string Extract(string pdfPath)
+    public string Extract(string pdfPath) => ExtraireAvecConfiance(pdfPath).Texte;
+
+    /// <summary>
+    /// Même pipeline que <see cref="Extract"/>, mais expose aussi la confiance OCR moyenne du
+    /// document (moyenne des <see cref="Page.GetMeanConfidence"/> de chaque page), pour décider
+    /// d'un repli sans avoir besoin d'un texte de référence : sur un document réel, il n'y en a
+    /// pas, contrairement au jaccard utilisé pendant le développement sur le corpus du POC.
+    /// </summary>
+    public (string Texte, float ConfianceMoyenne) ExtraireAvecConfiance(string pdfPath)
     {
         var resultat = new StringBuilder();
+        var confiances = new List<float>();
         var documentBytes = File.ReadAllBytes(pdfPath);
         var nomDocument = Path.GetFileNameWithoutExtension(pdfPath);
 
@@ -103,7 +112,7 @@ public class TesseractOcrEngine : ITextExtractionEngine, IDisposable
 
             try
             {
-                ProcessImageToText(resultat, pixAProcess);
+                confiances.Add(ProcessImageToText(resultat, pixAProcess));
 
                 pixAProcess.Save(Path.Combine("debug-images-after", nomPage), ImageFormat.Png);
             }
@@ -114,7 +123,8 @@ public class TesseractOcrEngine : ITextExtractionEngine, IDisposable
             }
         }
 
-        return resultat.ToString();
+        var confianceMoyenne = confiances.Count > 0 ? confiances.Average() : 0f;
+        return (resultat.ToString(), confianceMoyenne);
     }
 
     // Analyse l'OSD page par page sans appliquer de rotation.
@@ -306,10 +316,11 @@ public class TesseractOcrEngine : ITextExtractionEngine, IDisposable
 
     private static string NomPage(string nomDocument, int index) => $"{nomDocument}-p{index}.png";
 
-    private void ProcessImageToText(StringBuilder resultat, Pix img)
+    private float ProcessImageToText(StringBuilder resultat, Pix img)
     {
         using var page = _moteur.Process(img);
         resultat.Append(page.GetText()).Append(' ');
+        return page.GetMeanConfidence();
     }
 
     public void Dispose()

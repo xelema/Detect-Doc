@@ -8,11 +8,12 @@ namespace OcrComparison.Benchmark;
 
 public sealed class BenchmarkRunner(ITextExtractionEngine moteur, string cheminCorpus)
 {
-    // En dessous, la pipeline normale est considérée en échec plutôt que simplement imparfaite :
-    // c'est le repli à quatre orientations qui prend le relais, pas un réglage plus fin du même
-    // chemin. Valeur proposée par Florian le 06/08/2026, à ajuster si mesurée trop permissive ou
-    // trop stricte sur un corpus plus large.
-    private const double SeuilJaccardOrientation = 0.10;
+    // Déclenche le repli à quatre orientations sans avoir besoin d'un texte de référence, qui
+    // n'existe pas sur un document réel. Mesuré le 07/08/2026 (Page.GetMeanConfidence, sans
+    // rapport avec le jaccard) sur neuf documents du split dev : les six à bon score tombent
+    // entre 0,85 et 0,935, les trois à mauvais score entre 0,43 et 0,72. Un vide net entre 0,72
+    // et 0,85 sépare les deux groupes, 0,80 s'y place avec de la marge des deux côtés.
+    private const float SeuilConfianceExtraction = 0.80f;
 
     private static readonly Process Processus = Process.GetCurrentProcess();
     private readonly NormalizedLevenshtein _levenshtein = new();
@@ -45,21 +46,26 @@ public sealed class BenchmarkRunner(ITextExtractionEngine moteur, string cheminC
         try
         {
             var cheminDocument = Path.Combine(cheminCorpus, manifestEntry.Fichier);
-            texteExtrait = moteur.Extract(cheminDocument);
 
-            // Repli à quatre orientations : seulement sur Tesseract, seul moteur dont l'image
-            // d'entrée peut être mal orientée. PdfPig lit le texte natif du PDF, l'orientation
-            // ne le concerne pas, un jaccard bas y signale autre chose qu'une mauvaise rotation.
-            if (moteur is TesseractOcrEngine moteurTesseract && !string.IsNullOrWhiteSpace(texteExtrait))
+            // Repli à 4 orientations réservé à Tesseract. PdfPig lit le texte natif.
+            if (moteur is TesseractOcrEngine moteurTesseract)
             {
-                var jaccard = SimilariteMots.Jaccard(texteReferenceNormalise,
-                    TexteNormalise.NormaliserPourScore(texteExtrait));
-                if (jaccard < SeuilJaccardOrientation)
+                var (texte, confiance) = moteurTesseract.ExtraireAvecConfiance(cheminDocument);
+                texteExtrait = texte;
+
+                if (!string.IsNullOrWhiteSpace(texteExtrait) && confiance < SeuilConfianceExtraction)
                 {
+                    // Jaccard calculé uniquement pour logging/contrôle POC (aucun impact sur la décision).
+                    var jaccardAvant = SimilariteMots.Jaccard(texteReferenceNormalise,
+                        TexteNormalise.NormaliserPourScore(texteExtrait));
                     Console.WriteLine(
-                        $"{manifestEntry.Id}: jaccard {jaccard:F4} sous le seuil de {SeuilJaccardOrientation}, tentative des quatre orientations");
+                        $"{manifestEntry.Id}: confiance OCR {confiance:F4} sous le seuil de {SeuilConfianceExtraction}, tentative des quatre orientations (jaccard avant repli : {jaccardAvant:F4})");
                     texteExtrait = moteurTesseract.ExtractMeilleureOrientation(cheminDocument);
                 }
+            }
+            else
+            {
+                texteExtrait = moteur.Extract(cheminDocument);
             }
         }
         catch (Exception ex)
