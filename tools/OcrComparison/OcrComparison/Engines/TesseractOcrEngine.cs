@@ -16,6 +16,11 @@ public class TesseractOcrEngine : ITextExtractionEngine, IDisposable
     // à changer si trop d'erreurs
     private const float SeuilConfianceOsd = 1.0f;
 
+    // Déclenche le repli à quatre orientations (BenchmarkRunner). Mesuré le 07/08/2026 sur 67 documents
+    // du split dev : sépare net les bons documents (confiance 0,85 à 0,94) des vraiment mauvais (0,43 à 0,72)
+    // Public pour apparaître dans run.json.
+    public const float SeuilConfianceExtraction = 0.80f;
+
     private readonly DetectOrientationTesseract? _detecteurOrientation;
     private readonly OptionsPretraitement _options;
 
@@ -33,7 +38,9 @@ public class TesseractOcrEngine : ITextExtractionEngine, IDisposable
         ["engine_mode"] = Mode.ToString(),
         ["redressement"] = _options.Redresser,
         ["detourage_avant_osd"] = _options.DetourerAvantOsd,
-        ["deskew"] = _options.Deskew
+        ["deskew"] = _options.Deskew,
+        ["seuil_confiance_osd"] = SeuilConfianceOsd,
+        ["seuil_confiance_extraction"] = SeuilConfianceExtraction
     };
 
     public TesseractOcrEngine(OptionsPretraitement? optionsPretraitement)

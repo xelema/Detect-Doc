@@ -8,13 +8,6 @@ namespace OcrComparison.Benchmark;
 
 public sealed class BenchmarkRunner(ITextExtractionEngine moteur, string cheminCorpus)
 {
-    // Déclenche le repli à quatre orientations sans avoir besoin d'un texte de référence, qui
-    // n'existe pas sur un document réel. Mesuré le 07/08/2026 (Page.GetMeanConfidence, sans
-    // rapport avec le jaccard) sur neuf documents du split dev : les six à bon score tombent
-    // entre 0,85 et 0,935, les trois à mauvais score entre 0,43 et 0,72. Un vide net entre 0,72
-    // et 0,85 sépare les deux groupes, 0,80 s'y place avec de la marge des deux côtés.
-    private const float SeuilConfianceExtraction = 0.80f;
-
     private static readonly Process Processus = Process.GetCurrentProcess();
     private readonly NormalizedLevenshtein _levenshtein = new();
 
@@ -42,6 +35,8 @@ public sealed class BenchmarkRunner(ITextExtractionEngine moteur, string cheminC
 
         string? texteExtrait = null;
         string? erreur = null;
+        float? confianceOcr = null;
+        var repliDeclenche = false;
 
         try
         {
@@ -52,14 +47,16 @@ public sealed class BenchmarkRunner(ITextExtractionEngine moteur, string cheminC
             {
                 var (texte, confiance) = moteurTesseract.ExtraireAvecConfiance(cheminDocument);
                 texteExtrait = texte;
+                confianceOcr = confiance;
 
-                if (!string.IsNullOrWhiteSpace(texteExtrait) && confiance < SeuilConfianceExtraction)
+                if (!string.IsNullOrWhiteSpace(texteExtrait) && confiance < TesseractOcrEngine.SeuilConfianceExtraction)
                 {
                     // Jaccard calculé uniquement pour logging/contrôle POC (aucun impact sur la décision).
                     var jaccardAvant = SimilariteMots.Jaccard(texteReferenceNormalise,
                         TexteNormalise.NormaliserPourScore(texteExtrait));
                     Console.WriteLine(
-                        $"{manifestEntry.Id}: confiance OCR {confiance:F4} sous le seuil de {SeuilConfianceExtraction}, tentative des quatre orientations (jaccard avant repli : {jaccardAvant:F4})");
+                        $"{manifestEntry.Id}: confiance OCR {confiance:F4} sous le seuil de {TesseractOcrEngine.SeuilConfianceExtraction}, tentative des quatre orientations (jaccard avant repli : {jaccardAvant:F4})");
+                    repliDeclenche = true;
                     texteExtrait = moteurTesseract.ExtractMeilleureOrientation(cheminDocument);
                 }
             }
@@ -88,7 +85,8 @@ public sealed class BenchmarkRunner(ITextExtractionEngine moteur, string cheminC
 
         if (string.IsNullOrWhiteSpace(texteExtrait))
         {
-            return Creer(manifestEntry, Statut.TexteVide, nbMotsReference, ressources, texteExtrait: texteExtrait);
+            return Creer(manifestEntry, Statut.TexteVide, nbMotsReference, ressources, texteExtrait: texteExtrait,
+                confianceOcr: confianceOcr, repliDeclenche: repliDeclenche);
         }
 
         var texteExtraitNormalise = TexteNormalise.NormaliserPourScore(texteExtrait);
@@ -97,7 +95,8 @@ public sealed class BenchmarkRunner(ITextExtractionEngine moteur, string cheminC
             nbMotsExtrait: SimilariteMots.NombreDeMots(texteExtraitNormalise),
             texteExtrait: texteExtrait,
             scoreLevenshtein: 1 - _levenshtein.Distance(texteReferenceNormalise, texteExtraitNormalise),
-            scoreJaccard: SimilariteMots.Jaccard(texteReferenceNormalise, texteExtraitNormalise));
+            scoreJaccard: SimilariteMots.Jaccard(texteReferenceNormalise, texteExtraitNormalise),
+            confianceOcr: confianceOcr, repliDeclenche: repliDeclenche);
     }
 
     /// <summary>
@@ -109,7 +108,8 @@ public sealed class BenchmarkRunner(ITextExtractionEngine moteur, string cheminC
     /// </summary>
     private ResultatDocument Creer(ManifestEntry manifestEntry, Statut statut, int nbMotsReference,
         Ressources ressources, int nbMotsExtrait = 0, string? texteExtrait = null, double scoreLevenshtein = 0,
-        double scoreJaccard = 0, string? messageErreur = null)
+        double scoreJaccard = 0, string? messageErreur = null, float? confianceOcr = null,
+        bool repliDeclenche = false)
     {
         return new ResultatDocument
         {
@@ -120,6 +120,8 @@ public sealed class BenchmarkRunner(ITextExtractionEngine moteur, string cheminC
             ScoreJaccard = scoreJaccard,
             Statut = statut,
             MessageErreur = messageErreur,
+            ConfianceOcr = confianceOcr,
+            RepliDeclenche = repliDeclenche,
             Regime = manifestEntry.Regime,
             Split = manifestEntry.Split,
             Pages = manifestEntry.Pages,

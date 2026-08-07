@@ -9,6 +9,8 @@ public sealed record ResultatDocument
     public required double ScoreJaccard { get; init; }
     public required Statut Statut { get; init; }
     public string? MessageErreur { get; init; }
+    public float? ConfianceOcr { get; init; } // uniquement Tesseract, nul sinon (ex. PdfPig)
+    public bool RepliDeclenche { get; init; } // passé par les quatre orientations, D49
     public required string Regime { get; init; }
     public required string Split { get; init; }
     public required int Pages { get; init; }
