@@ -25,10 +25,7 @@ File.WriteAllText(Path.Combine(dossierRun, "run.json"),
     JsonSerializer.Serialize(metadata, JsonRun.OptionsIndentees));
 
 var entrees = ManifestReader.ReadManifest(cheminManifest)
-    .Where(e => string.Equals(e.Split, split, StringComparison.OrdinalIgnoreCase)
-                && ((e.Variante?.AngleDeg ?? 0) != 0
-                    || (e.Variante?.RotationPageDeg ?? 0) != 0
-                    || (e.DegradationParameters?.Contains("Geometric") ?? false)))
+    .Where(e => string.Equals(e.Split, split))
     .ToList();
 
 var resultats = new List<ResultatDocument>();
