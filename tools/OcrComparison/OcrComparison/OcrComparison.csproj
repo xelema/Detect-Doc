@@ -13,8 +13,20 @@
       <PackageReference Include="OpenCvSharp5.runtime.win.slim" Version="5.0.0.20260730" />
       <PackageReference Include="PdfPig" Version="0.1.15" />
       <PackageReference Include="PDFtoImage" Version="5.3.0" />
+      <PackageReference Include="RapidOcrNet" Version="3.0.0" />
       <PackageReference Include="Tesseract" Version="5.2.0" />
       <None Include="tessdata\**" CopyToOutputDirectory="PreserveNewest" />
+      <None Include="models\**" CopyToOutputDirectory="PreserveNewest" />
     </ItemGroup>
+
+    <!--
+      RapidOcrNet livre le classifieur d'orientation sous models\v5, et son jeu de modèles v6
+      attend le même fichier dans models\v6. Chaîné sur la cible du paquet plutôt que sur Build,
+      les deux copies s'exécutant sinon dans un ordre non garanti.
+    -->
+    <Target Name="CopierClassifieurOrientationVersV6" AfterTargets="CopyModelsBuild">
+        <Copy SourceFiles="$(TargetDir)models\v5\ch_PP-LCNet_x0_25_textline_ori_cls_mobile.onnx"
+              DestinationFolder="$(TargetDir)models\v6\" SkipUnchangedFiles="true" />
+    </Target>
 
 </Project>

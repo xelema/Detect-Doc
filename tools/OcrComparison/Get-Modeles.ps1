@@ -61,12 +61,10 @@ $modeles = @(
         Url         = 'https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.9.2/paddle/PP-OCRv6/rec/PP-OCRv6_rec_small/ppocrv6_dict.txt'
         Sha256      = 'B5F2BFE2BDD9448429E3E82B51C789775D9B42F2403D082B00662EB77E401C5D'
     }
-    @{
-        Destination = 'models\v6\PP-LCNet_x0_25_textline_ori.onnx'
-        Url         = 'https://huggingface.co/PaddlePaddle/PP-LCNet_x0_25_textline_ori_onnx/resolve/main/inference.onnx'
-        Sha256      = '94A6A0A0425F2B5F08B5DF72086F2D72ABE40F1D22F6D12D2CD83674F11F2FF3'
-    }
 )
+
+# Le classifieur d'orientation n'est pas ici : RapidOcrNet le livre dans son paquet NuGet, et le
+# projet le recopie vers models\v6 au build.
 
 $racine = Join-Path $PSScriptRoot 'OcrComparison'
 $installes = 0
