@@ -99,7 +99,7 @@ static string ConstruireRapport(string runId, RunMetadata metadata, List<Resulta
 
     rapport.AppendLine("## Scores par type");
     rapport.AppendLine();
-    rapport.AppendLine("| Type | n | Jaccard moyen | Pire cas | Levenshtein moyen | Repli 4 orientations |");
+    rapport.AppendLine("| Type | n | Jaccard moyen | Pire Jaccard | Levenshtein moyen | Repli 4 orientations |");
     rapport.AppendLine("|---|---|---|---|---|---|");
     foreach (var t in parType)
     {
@@ -110,7 +110,7 @@ static string ConstruireRapport(string runId, RunMetadata metadata, List<Resulta
 
     // Macro-moyenne : chaque type pèse pareil, quel que soit son effectif, pour qu'un type
     // surreprésenté au corpus ne dicte pas le score global du moteur.
-    rapport.AppendLine("## Moyenne globale (macro par type)");
+    rapport.AppendLine("## Moyenne globale");
     rapport.AppendLine();
     rapport.AppendLine("| Métrique | Valeur |");
     rapport.AppendLine("|---|---|");

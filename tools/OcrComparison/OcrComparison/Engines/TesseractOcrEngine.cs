@@ -13,12 +13,14 @@ public class TesseractOcrEngine : ITextExtractionEngine, IDisposable
     private const EngineMode Mode = EngineMode.Default;
 
     // mesuré le 06/08/2026 sur les cinq documents qui échouaient à l'OSD
-    // à changer si trop d'erreurs
+    // permet à une page de garder son orientation si la confiance sur la ROTATION
+    // est SUPERIEURE à SeuilConfianceOsd
+    // sinon prend celle du reste du document
     private const float SeuilConfianceOsd = 1.0f;
 
-    // Déclenche le repli à quatre orientations (BenchmarkRunner). Mesuré le 07/08/2026 sur 67 documents
-    // du split dev : sépare net les bons documents (confiance 0,85 à 0,94) des vraiment mauvais (0,43 à 0,72)
-    // Public pour apparaître dans run.json.
+    // mesuré le 07/08/2026 sur 67 documents
+    // permet de remesurer l'OCR sur les 4 orientations (0°, 90°, 180°, 270°) si la confiance sur le TEXTE
+    // est INFERIEURE à SeuilConfianceExtraction
     public const float SeuilConfianceExtraction = 0.80f;
 
     private readonly DetectOrientationTesseract? _detecteurOrientation;
