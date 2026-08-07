@@ -32,8 +32,9 @@ var entrees = ManifestReader.ReadManifest(cheminManifest)
     .ToList();
 
 var resultats = new List<ResultatDocument>();
+var cheminResultats = Path.Combine(dossierRun, "resultats.jsonl");
 
-using (var writer = new ResultWriter(Path.Combine(dossierRun, "resultats.jsonl")))
+using (var writer = new ResultWriter(cheminResultats))
 {
     foreach (var resultat in new BenchmarkRunner(moteur, cheminCorpus).Executer(entrees))
     {
@@ -47,7 +48,32 @@ using (var writer = new ResultWriter(Path.Combine(dossierRun, "resultats.jsonl")
 }
 
 File.WriteAllText(Path.Combine(dossierRun, "score.md"), ConstruireRapport(runId, metadata, resultats));
+
+// Relu depuis le jsonl plutôt que gardé en mémoire : les textes intégraux ne doivent pas séjourner
+// dans le processus pendant que le run relève ses pics mémoire.
+using (var flux = File.Create(Path.Combine(dossierRun, "textes.json")))
+{
+    var textes = File.ReadLines(cheminResultats)
+        .Select(ligne => JsonSerializer.Deserialize<ResultatDocument>(ligne, JsonRun.Options)!)
+        .Select(r => new
+        {
+            r.Id,
+            r.ScoreJaccard,
+            TexteReference = DecouperEnLignes(r.TexteReference),
+            TexteExtrait = DecouperEnLignes(r.TexteExtrait)
+        });
+
+    JsonSerializer.Serialize(flux, textes, JsonRun.OptionsIndentees);
+}
+
 return;
+
+static string[] DecouperEnLignes(string? texte) =>
+    (texte ?? string.Empty)
+        .Split('\n')
+        .Select(ligne => ligne.Trim())
+        .Where(ligne => ligne.Length > 0)
+        .ToArray();
 
 static ITextExtractionEngine CreerMoteur(string nom) => nom.ToLowerInvariant() switch
 {
