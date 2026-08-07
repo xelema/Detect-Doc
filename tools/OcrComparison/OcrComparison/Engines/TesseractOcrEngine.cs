@@ -25,30 +25,40 @@ public class TesseractOcrEngine : ITextExtractionEngine, IDisposable
 
     private readonly DetectOrientationTesseract? _detecteurOrientation;
     private readonly OptionsPretraitement _options;
+    private readonly IReadOnlyDictionary<string, object> _parametres;
 
     private static readonly string TesseractDataPath = Path.Combine(AppContext.BaseDirectory, "tessdata");
     private readonly TesseractEngine _moteur = new(TesseractDataPath, Langue, Mode);
-    private readonly TesseractEngine _orientationEngine = new TesseractEngine(TesseractDataPath, "osd", Mode);
+    private readonly TesseractEngine? _orientationEngine;
 
     public string Name => "Tesseract";
     public string Version => _moteur.Version;
 
-    public IReadOnlyDictionary<string, object> Parametres => new Dictionary<string, object>
-    {
-        ["langue"] = Langue,
-        ["dpi"] = Dpi,
-        ["engine_mode"] = Mode.ToString(),
-        ["redressement"] = _options.Redresser,
-        ["detourage_avant_osd"] = _options.DetourerAvantOsd,
-        ["deskew"] = _options.Deskew,
-        ["seuil_confiance_osd"] = SeuilConfianceOsd,
-        ["seuil_confiance_extraction"] = SeuilConfianceExtraction
-    };
+    public IReadOnlyDictionary<string, object> Parametres => _parametres;
 
     public TesseractOcrEngine(OptionsPretraitement? optionsPretraitement)
     {
         _options = optionsPretraitement ?? new OptionsPretraitement();
-        _detecteurOrientation = _options.Redresser ? new DetectOrientationTesseract(_orientationEngine) : null;
+
+        // Le modèle « osd » pèse une dizaine de mégaoctets et doit être présent dans tessdata :
+        // ne le charger que si le redressement est demandé, sinon rien ne s'en sert.
+        if (_options.Redresser)
+        {
+            _orientationEngine = new TesseractEngine(TesseractDataPath, "osd", Mode);
+            _detecteurOrientation = new DetectOrientationTesseract(_orientationEngine);
+        }
+
+        _parametres = new Dictionary<string, object>
+        {
+            ["langue"] = Langue,
+            ["dpi"] = Dpi,
+            ["engine_mode"] = Mode.ToString(),
+            ["redressement"] = _options.Redresser,
+            ["detourage_avant_osd"] = _options.DetourerAvantOsd,
+            ["deskew"] = _options.Deskew,
+            ["seuil_confiance_osd"] = SeuilConfianceOsd,
+            ["seuil_confiance_extraction"] = SeuilConfianceExtraction
+        };
     }
 
     public string Extract(string pdfPath) => ExtraireAvecConfiance(pdfPath).Texte;
@@ -340,7 +350,7 @@ public class TesseractOcrEngine : ITextExtractionEngine, IDisposable
 
     public void Dispose()
     {
-        _orientationEngine.Dispose();
+        _orientationEngine?.Dispose();
         _moteur.Dispose();
         GC.SuppressFinalize(this);
     }
