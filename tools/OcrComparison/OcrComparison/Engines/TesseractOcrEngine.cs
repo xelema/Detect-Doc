@@ -144,6 +144,12 @@ public class TesseractOcrEngine : ITextExtractionEngine, IDisposable
         string nomDocument,
         List<byte[]> pages)
     {
+        // Un PDF qui ne rend aucune page n'a pas de « page la plus confiante » à désigner.
+        if (pages.Count == 0)
+        {
+            return [];
+        }
+
         var detections = new (int Orientation, float Confiance)[pages.Count];
 
         for (var i = 0; i < pages.Count; i++)
