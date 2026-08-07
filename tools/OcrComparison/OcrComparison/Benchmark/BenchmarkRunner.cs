@@ -53,13 +53,14 @@ public sealed class BenchmarkRunner(ITextExtractionEngine moteur, string cheminC
                 texteExtrait = texte;
                 confianceOcr = confiance;
 
-                if (!string.IsNullOrWhiteSpace(texteExtrait) && confiance < TesseractOcrEngine.SeuilConfianceExtraction)
+                // Un texte vide vaut un repli au même titre qu'un texte peu sûr : c'est le
+                // symptôme le plus franc d'une page à l'envers, et il n'a justement aucune
+                // confiance à confronter au seuil.
+                if (string.IsNullOrWhiteSpace(texteExtrait)
+                    || confiance < TesseractOcrEngine.SeuilConfianceExtraction)
                 {
-                    // Jaccard calculé uniquement pour logging/contrôle POC (aucun impact sur la décision).
-                    var jaccardAvant = SimilariteMots.Jaccard(texteReferenceNormalise,
-                        TexteNormalise.NormaliserPourScore(texteExtrait));
                     Console.WriteLine(
-                        $"{manifestEntry.Id}: confiance OCR {confiance:F4} sous le seuil de {TesseractOcrEngine.SeuilConfianceExtraction}, tentative des quatre orientations (jaccard avant repli : {jaccardAvant:F4})");
+                        $"{manifestEntry.Id}: confiance OCR {confiance:F4} sous le seuil de {TesseractOcrEngine.SeuilConfianceExtraction}, tentative des quatre orientations");
                     repliDeclenche = true;
                     texteExtrait = moteurTesseract.ExtractMeilleureOrientation(cheminDocument);
                 }
