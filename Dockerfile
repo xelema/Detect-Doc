@@ -10,7 +10,7 @@ COPY ["tests/DetectDoc.Tests/DetectDoc.Tests.csproj", "tests/DetectDoc.Tests/"]
 RUN dotnet restore DetectDoc.slnx
 
 COPY . .
-RUN dotnet test DetectDoc.slnx --no-restore
+RUN dotnet test DetectDoc.slnx --no-restore --filter "Category!=Corpus"
 RUN dotnet publish src/DetectDoc.Api/DetectDoc.Api.csproj --configuration Release --no-restore --output /app/publish /p:UseAppHost=false
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0.10-noble AS final

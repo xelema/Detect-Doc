@@ -103,4 +103,35 @@ public class PdfPigNativeTextEngineTests
         Assert.Throws<OperationCanceledException>(
             () => engine.Extract(stream, new CancellationToken(canceled: true)));
     }
+
+    [Fact]
+    [Trait("Category", "Corpus")]
+    public void Extract_ExtraitLeTexteDUnDevisNatifDuCorpus()
+    {
+        var cheminPdf = Path.Combine(ObtenirRacineProjet(), "corpus", "raw", "dev-0003.pdf");
+
+        using var stream = File.OpenRead(cheminPdf);
+        using var engine = new PdfPigNativeTextEngine();
+
+        var resultat = engine.Extract(stream);
+
+        var page = Assert.Single(resultat);
+        Assert.Equal(1, page.NumeroPage);
+        Assert.False(string.IsNullOrWhiteSpace(page.Texte));
+        Assert.Contains("DEVIS", page.Texte);
+        Assert.Null(page.Confiance);
+    }
+
+    private static string ObtenirRacineProjet()
+    {
+        for (var dossier = new DirectoryInfo(AppContext.BaseDirectory); dossier is not null; dossier = dossier.Parent)
+        {
+            if (File.Exists(Path.Combine(dossier.FullName, "DetectDoc.slnx")))
+            {
+                return dossier.FullName;
+            }
+        }
+
+        throw new DirectoryNotFoundException("La racine du projet Detect-Doc est introuvable.");
+    }
 }
