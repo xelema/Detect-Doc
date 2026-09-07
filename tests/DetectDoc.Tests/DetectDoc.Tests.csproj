@@ -17,5 +17,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/DetectDoc.Api/DetectDoc.Api.csproj" />
+    <ProjectReference Include="../../src/DetectDoc.Core/DetectDoc.Core.csproj" />
+    <ProjectReference Include="../../src/DetectDoc.Infrastructure/DetectDoc.Infrastructure.csproj" />
   </ItemGroup>
 </Project>
