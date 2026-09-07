@@ -26,9 +26,20 @@ public class PdfPigNativeTextEngineTests
         var resultat = engine.Extract(stream);
 
         // Assert
-        Assert.Contains("Bonjour le monde", resultat.Texte);
-        Assert.Contains("Facture 12345", resultat.Texte);
-        Assert.Null(resultat.Confiance);
+        Assert.Collection(
+            resultat,
+            page =>
+            {
+                Assert.Equal(1, page.NumeroPage);
+                Assert.Contains("Bonjour le monde", page.Texte);
+                Assert.Null(page.Confiance);
+            },
+            page =>
+            {
+                Assert.Equal(2, page.NumeroPage);
+                Assert.Contains("Facture 12345", page.Texte);
+                Assert.Null(page.Confiance);
+            });
         Assert.Equal("PdfPig", engine.Name);
     }
 
@@ -47,7 +58,49 @@ public class PdfPigNativeTextEngineTests
         var resultat = engine.Extract(stream);
 
         // Assert
-        Assert.Equal(string.Empty, resultat.Texte);
-        Assert.Null(resultat.Confiance);
+        var page = Assert.Single(resultat);
+        Assert.Equal(1, page.NumeroPage);
+        Assert.Equal(string.Empty, page.Texte);
+        Assert.Null(page.Confiance);
+    }
+
+    [Fact]
+    public void Extract_RefuseUnFluxSansSignaturePdf()
+    {
+        using var stream = new MemoryStream("pas un PDF"u8.ToArray());
+        using var engine = new PdfPigNativeTextEngine();
+
+        var exception = Assert.Throws<InvalidDataException>(() => engine.Extract(stream));
+
+        Assert.Contains("signature PDF", exception.Message);
+    }
+
+    [Fact]
+    public void Extract_RefusePlusDeVingtPages()
+    {
+        var builder = new PdfDocumentBuilder();
+        for (var numeroPage = 0; numeroPage < 21; numeroPage++)
+        {
+            builder.AddPage(UglyToad.PdfPig.Content.PageSize.A4);
+        }
+
+        using var stream = new MemoryStream(builder.Build());
+        using var engine = new PdfPigNativeTextEngine();
+
+        var exception = Assert.Throws<InvalidDataException>(() => engine.Extract(stream));
+
+        Assert.Contains("entre 1 et 20 pages", exception.Message);
+    }
+
+    [Fact]
+    public void Extract_RespecteUneAnnulationDejaDemandee()
+    {
+        var builder = new PdfDocumentBuilder();
+        builder.AddPage(UglyToad.PdfPig.Content.PageSize.A4);
+        using var stream = new MemoryStream(builder.Build());
+        using var engine = new PdfPigNativeTextEngine();
+
+        Assert.Throws<OperationCanceledException>(
+            () => engine.Extract(stream, new CancellationToken(canceled: true)));
     }
 }
