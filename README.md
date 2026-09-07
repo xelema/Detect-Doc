@@ -22,6 +22,7 @@ dotnet run --project src/DetectDoc.Api -- --environment Development --urls http:
 | Route | Réponse | Disponibilité |
 |---|---|---|
 | [/health](http://localhost:5080/health) | HTTP 200, `{"statut":"ok"}` | Tous les environnements |
+| `POST /api/dev/extract/pdfpig` | Texte extrait page par page | Development |
 | [/openapi/v1.json](http://localhost:5080/openapi/v1.json) | Description OpenAPI des routes | Development |
 | [/swagger](http://localhost:5080/swagger) | Interface interactive des routes | Development |
 
