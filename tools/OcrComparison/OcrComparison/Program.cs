@@ -93,6 +93,7 @@ static string ConstruireTitre(IReadOnlyDictionary<string, object> parametres)
 {
     var actifs = parametres.Where(p => p.Value is true).Select(p => p.Key);
     var titre = string.Join('-', actifs);
+    // titre += "-1thread";
     return titre.Length == 0 ? "brut" : titre;
 }
 
@@ -169,6 +170,12 @@ static string ConstruireRapport(string runId, RunMetadata metadata, List<Resulta
     rapport.AppendLine($"| Temps médian par document | {Mediane(resultats.Select(r => r.DureeMs)):F0} ms |");
     rapport.AppendLine($"| CPU total | {resultats.Sum(r => r.CpuMs) / 1000:F1} s |");
     rapport.AppendLine($"| CPU médian par document | {Mediane(resultats.Select(r => r.CpuMs)):F0} ms |");
+    if (resultats.Any(r => r.DureeRenduPdfMs.HasValue))
+    {
+        rapport.AppendLine($"| Rendu PDF vers PNG | {resultats.Sum(r => r.DureeRenduPdfMs ?? 0) / 1000:F1} s |");
+        rapport.AppendLine($"| Décodage PNG | {resultats.Sum(r => r.DureeDecodagePngMs ?? 0) / 1000:F1} s |");
+        rapport.AppendLine($"| Détection OCR | {resultats.Sum(r => r.DureeDetectMs ?? 0) / 1000:F1} s |");
+    }
     rapport.AppendLine(
         $"| Pic mémoire médian par document | {Mediane(resultats.Select(r => r.PicMemoireOctets / Mo)):F0} Mo |");
     rapport.AppendLine(

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using RapidOcrNet;
 using SkiaSharp;
@@ -73,11 +74,27 @@ public sealed class PpOcrEngine : ITextExtractionEngine
     {
         var texte = new StringBuilder();
         var confiances = new List<float>();
+        var pageNumber = 0;
 
-        foreach (var png in RenduPdf.EnPngs(cheminDocument))
+        var horodatageRendu = Stopwatch.GetTimestamp();
+        var listePngs = RenduPdf.EnPngs(cheminDocument);
+        var dureeRenduPdf = Stopwatch.GetElapsedTime(horodatageRendu);
+        var dureeDecodagePng = TimeSpan.Zero;
+        var dureeDetect = TimeSpan.Zero;
+
+        foreach (var png in listePngs)
         {
+            pageNumber++;
+            Console.WriteLine("Extraction du texte de : " + cheminDocument + " (page " + pageNumber + "/" + listePngs.Count + ")");
+
+            var horodatageDecodage = Stopwatch.GetTimestamp();
             using var image = SKBitmap.Decode(png);
+
+            dureeDecodagePng += Stopwatch.GetElapsedTime(horodatageDecodage);
+
+            var horodatageDetect = Stopwatch.GetTimestamp();
             var resultat = _ocr.Detect(image, _optionsOcr);
+            dureeDetect += Stopwatch.GetElapsedTime(horodatageDetect);
 
             foreach (var bloc in OrdonnerParLecture(resultat.TextBlocks))
             {
@@ -93,7 +110,10 @@ public sealed class PpOcrEngine : ITextExtractionEngine
         return new ResultatExtraction(
             texte.ToString(),
             confiances.Count > 0 ? confiances.Average() : 0f,
-            RepliDeclenche: false);
+            RepliDeclenche: false,
+            DureeRenduPdfMs: dureeRenduPdf.TotalMilliseconds,
+            DureeDecodagePngMs: dureeDecodagePng.TotalMilliseconds,
+            DureeDetectMs: dureeDetect.TotalMilliseconds);
     }
 
     /// <remarks>

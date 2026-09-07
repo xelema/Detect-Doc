@@ -20,6 +20,9 @@ public sealed record ResultatDocument
     public string? TexteExtrait { get; init; }
     public required double DureeMs { get; init; } // temps écoulé
     public required double CpuMs {  get; init; } // temps processeur consommé pendant l'extraction
+    public double? DureeRenduPdfMs { get; init; }
+    public double? DureeDecodagePngMs { get; init; }
+    public double? DureeDetectMs { get; init; }
     public required long PicMemoireOctets { get; init; } // plus haut working set observé pendant l'extraction
     public required long MemoireAvantOctets { get; init; } // working set juste avant, référence du coût propre
 }

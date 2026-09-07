@@ -16,4 +16,10 @@ public interface ITextExtractionEngine : IDisposable
 /// Le moteur a dû passer par un chemin de rattrapage plus coûteux que sa pipeline normale. Le
 /// benchmark l'enregistre sans savoir de quoi il s'agit, chaque moteur ayant les siens.
 /// </param>
-public readonly record struct ResultatExtraction(string Texte, float? Confiance, bool RepliDeclenche);
+public readonly record struct ResultatExtraction(
+    string Texte,
+    float? Confiance,
+    bool RepliDeclenche,
+    double? DureeRenduPdfMs = null,
+    double? DureeDecodagePngMs = null,
+    double? DureeDetectMs = null);

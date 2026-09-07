@@ -42,6 +42,9 @@ public sealed class BenchmarkRunner(ITextExtractionEngine moteur, string cheminC
         string? erreur = null;
         float? confianceOcr = null;
         var repliDeclenche = false;
+        double? dureeRenduPdfMs = null;
+        double? dureeDecodagePngMs = null;
+        double? dureeDetectMs = null;
 
         try
         {
@@ -49,6 +52,9 @@ public sealed class BenchmarkRunner(ITextExtractionEngine moteur, string cheminC
             texteExtrait = extraction.Texte;
             confianceOcr = extraction.Confiance;
             repliDeclenche = extraction.RepliDeclenche;
+            dureeRenduPdfMs = extraction.DureeRenduPdfMs;
+            dureeDecodagePngMs = extraction.DureeDecodagePngMs;
+            dureeDetectMs = extraction.DureeDetectMs;
         }
         catch (Exception ex)
         {
@@ -69,13 +75,15 @@ public sealed class BenchmarkRunner(ITextExtractionEngine moteur, string cheminC
         if (erreur != null)
         {
             return Creer(manifestEntry, Statut.Erreur, nbMotsReference, ressources, messageErreur: erreur,
-                confianceOcr: confianceOcr, repliDeclenche: repliDeclenche);
+                confianceOcr: confianceOcr, repliDeclenche: repliDeclenche, dureeRenduPdfMs: dureeRenduPdfMs,
+                dureeDecodagePngMs: dureeDecodagePngMs, dureeDetectMs: dureeDetectMs);
         }
 
         if (string.IsNullOrWhiteSpace(texteExtrait))
         {
             return Creer(manifestEntry, Statut.TexteVide, nbMotsReference, ressources, texteExtrait: texteExtrait,
-                confianceOcr: confianceOcr, repliDeclenche: repliDeclenche);
+                confianceOcr: confianceOcr, repliDeclenche: repliDeclenche, dureeRenduPdfMs: dureeRenduPdfMs,
+                dureeDecodagePngMs: dureeDecodagePngMs, dureeDetectMs: dureeDetectMs);
         }
 
         var texteExtraitNormalise = TexteNormalise.NormaliserPourScore(texteExtrait);
@@ -85,7 +93,8 @@ public sealed class BenchmarkRunner(ITextExtractionEngine moteur, string cheminC
             texteExtrait: texteExtrait,
             scoreLevenshtein: 1 - _levenshtein.Distance(texteReferenceNormalise, texteExtraitNormalise),
             scoreJaccard: SimilariteMots.Jaccard(texteReferenceNormalise, texteExtraitNormalise),
-            confianceOcr: confianceOcr, repliDeclenche: repliDeclenche);
+            confianceOcr: confianceOcr, repliDeclenche: repliDeclenche, dureeRenduPdfMs: dureeRenduPdfMs,
+            dureeDecodagePngMs: dureeDecodagePngMs, dureeDetectMs: dureeDetectMs);
     }
 
     /// <summary>
@@ -98,7 +107,8 @@ public sealed class BenchmarkRunner(ITextExtractionEngine moteur, string cheminC
     private ResultatDocument Creer(ManifestEntry manifestEntry, Statut statut, int nbMotsReference,
         Ressources ressources, int nbMotsExtrait = 0, string? texteExtrait = null, double scoreLevenshtein = 0,
         double scoreJaccard = 0, string? messageErreur = null, float? confianceOcr = null,
-        bool repliDeclenche = false)
+        bool repliDeclenche = false, double? dureeRenduPdfMs = null, double? dureeDecodagePngMs = null,
+        double? dureeDetectMs = null)
     {
         return new ResultatDocument
         {
@@ -120,6 +130,9 @@ public sealed class BenchmarkRunner(ITextExtractionEngine moteur, string cheminC
             TexteExtrait = texteExtrait,
             DureeMs = ressources.DureeMs,
             CpuMs = ressources.CpuMs,
+            DureeRenduPdfMs = dureeRenduPdfMs,
+            DureeDecodagePngMs = dureeDecodagePngMs,
+            DureeDetectMs = dureeDetectMs,
             PicMemoireOctets = ressources.PicMemoireOctets,
             MemoireAvantOctets = ressources.MemoireAvantOctets
         };
