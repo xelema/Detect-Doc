@@ -46,6 +46,16 @@ $modeles = @(
         Sha256      = '9CF5D576FCC47564F11265841E5CA839001E7E6F38FF7F7AACF46D15A96B00FF'
     }
     @{
+        Destination = 'models\v6\PP-OCRv6_det_medium.onnx'
+        Url         = 'https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.9.2/onnx/PP-OCRv6/det/PP-OCRv6_det_medium.onnx'
+        Sha256      = '92078B7355007CCFFFCD4C8CD441A3AFD4538904D06881B29A155E1E679907C2'
+    }
+    @{
+        Destination = 'models\v6\PP-OCRv6_rec_medium.onnx'
+        Url         = 'https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.9.2/onnx/PP-OCRv6/rec/PP-OCRv6_rec_medium.onnx'
+        Sha256      = 'EEF444829DBBE18D7FEA59A3F6EB75647518D2B3A9568D27C92E42940204894B'
+    }
+    @{
         Destination = 'models\v6\PP-OCRv6_det_small.onnx'
         Url         = 'https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.9.2/onnx/PP-OCRv6/det/PP-OCRv6_det_small.onnx'
         Sha256      = '090F04ABCD9D9A7498BC4EBF677E4CB9BDCE1FE4197DDB7E529F1EF44E1FF94F'
