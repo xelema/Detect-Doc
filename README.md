@@ -29,14 +29,30 @@ dotnet run --project src/DetectDoc.Api -- --environment Development --urls http:
 
 `src/DetectDoc.Api/Program.cs` assemble l'application et expose les routes avec les Minimal APIs d'ASP.NET Core. `tests/DetectDoc.Tests` démarre un serveur en mémoire et vérifie les réponses HTTP en Development et en Production.
 
+## Conteneur Docker
+
+Le `Dockerfile` à la racine utilise le SDK Linux .NET 10.0.302 pour construire l'application et le runtime Linux .NET 10.0.10 pour l'exécuter. La phase de build exécute les tests, puis l'image finale ne contient que l'API et s'exécute avec un utilisateur non privilégié.
+
+```powershell
+docker build --tag detect-doc:local .
+docker run --rm --publish 8080:8080 detect-doc:local
+Invoke-RestMethod http://localhost:8080/health
+```
+
+La dernière commande retourne `statut : ok`. Arrêter le conteneur avec `Ctrl+C`.
+
 ## Arborescence
 
 ```
 Detect-Doc/
+├── Dockerfile               image Linux de l'API
+├── .dockerignore            contexte de build minimal
 ├── DetectDoc.slnx          solution de l'API et de ses tests
 ├── global.json            version du SDK .NET
 ├── src/
-│   └── DetectDoc.Api/      démarrage et routes HTTP
+│   ├── DetectDoc.Api/      démarrage et routes HTTP
+│   ├── DetectDoc.Core/     contrat d'extraction
+│   └── DetectDoc.Infrastructure/ extraction PdfPig
 ├── tests/
 │   └── DetectDoc.Tests/    tests HTTP avec serveur en mémoire
 ├── corpus/
