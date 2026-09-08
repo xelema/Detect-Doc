@@ -41,8 +41,8 @@ $env:Flowise__FlowId = "votre-flow-id"
 
 Pour un test local contre un certificat HTTPS interne non reconnu, définir aussi `Flowise__AllowInvalidTls=true` et lancer l’API en Development. Cette option est refusée dans les autres environnements et reste désactivée par défaut.
 
-`POST /api/documents/classify` est un formulaire multipart avec `file`, `types` et `engine`. `types` accepte un tableau JSON, par exemple `["RIB","FEUILLE_EMAR"]`, ou la liste séparée par des virgules envoyée par Swagger, par exemple `RIB,FEUILLE_EMAR`. `engine` vaut `pdfpig` ou `ppocr-tiny`.
-La réponse porte aussi `extractionMs`, `classificationMs`, `totalMs` et l’`executionId` retourné par Flowise lorsqu’il est disponible.
+`POST /api/documents/classify` est un formulaire multipart avec `file`, `types` et `engine`. `types` accepte un tableau JSON, par exemple `["RIB","FEUILLE_EMAR"]`, ou la liste séparée par des virgules envoyée par Swagger, par exemple `RIB,FEUILLE_EMAR`. `engine` est optionnel et vaut `auto` par défaut : l’API extrait une fois avec PdfPig, puis utilise PP-OCR tiny si au moins une page ne contient pas de texte natif. `pdfpig` et `ppocr-tiny` conservent un choix explicite pour un essai reproductible.
+La réponse porte aussi le moteur effectivement utilisé, `extractionMs`, `classificationMs`, `totalMs` et l’`executionId` retourné par Flowise lorsqu’il est disponible.
 
 `src/DetectDoc.Api/Program.cs` assemble l'application et expose les routes avec les Minimal APIs d'ASP.NET Core. `tests/DetectDoc.Tests` démarre un serveur en mémoire et vérifie les réponses HTTP en Development et en Production.
 

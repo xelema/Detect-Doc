@@ -28,6 +28,9 @@ builder.Services.AddSingleton(_ => new PpOcrEngine(
     "tiny",
     repertoireModelesPpOcr,
     reconnaissancesParallelesPpOcr));
+builder.Services.AddSingleton(services => new ExtractionAutomatique(
+    services.GetRequiredService<PdfPigNativeTextEngine>(),
+    services.GetRequiredService<PpOcrEngine>()));
 builder.Services.AddSingleton(new FlowiseOptions(
     builder.Configuration["Flowise:BaseUrl"],
     builder.Configuration["Flowise:FlowId"]));
@@ -85,15 +88,29 @@ app.MapPost("/api/documents/classify", async Task<IResult> (
 
     try
     {
-        ITextExtractionEngine extracteur = engine?.ToLowerInvariant() switch
-        {
-            "pdfpig" => pdfPig,
-            "ppocr-tiny" => services.GetRequiredService<PpOcrEngine>(),
-            _ => throw new ArgumentException("Le moteur doit être pdfpig ou ppocr-tiny.", nameof(engine))
-        };
         using var flux = file.OpenReadStream();
         var extraction = Stopwatch.StartNew();
-        var pages = extracteur.Extract(flux, cancellationToken);
+        IReadOnlyList<ResultatExtractionPage> pages;
+        string moteurEffectif;
+        switch (engine?.ToLowerInvariant())
+        {
+            case null or "" or "auto":
+                var extractionAutomatique = services.GetRequiredService<ExtractionAutomatique>()
+                    .Extract(flux, cancellationToken);
+                pages = extractionAutomatique.Pages;
+                moteurEffectif = extractionAutomatique.Moteur;
+                break;
+            case "pdfpig":
+                pages = pdfPig.Extract(flux, cancellationToken);
+                moteurEffectif = "pdfpig";
+                break;
+            case "ppocr-tiny":
+                pages = services.GetRequiredService<PpOcrEngine>().Extract(flux, cancellationToken);
+                moteurEffectif = "ppocr-tiny";
+                break;
+            default:
+                throw new ArgumentException("Le moteur doit être auto, pdfpig ou ppocr-tiny.", nameof(engine));
+        }
         extraction.Stop();
         var texte = string.Join(Environment.NewLine, pages.Select(page => page.Texte));
         if (string.IsNullOrWhiteSpace(texte))
@@ -108,7 +125,7 @@ app.MapPost("/api/documents/classify", async Task<IResult> (
         return Results.Ok(new ResultatClassificationDocumentHttp(
             resultat.Type,
             resultat.Confiance,
-            engine,
+            moteurEffectif,
             pages.Count,
             extraction.ElapsedMilliseconds,
             classification.ElapsedMilliseconds,
