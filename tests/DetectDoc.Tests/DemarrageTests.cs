@@ -165,6 +165,21 @@ public class DemarrageTests
     }
 
     [Fact]
+    public async Task RefuseUnFichierDePlusDeVingtMio()
+    {
+        await using var application = CreerApplication("Development");
+        using var client = application.CreateClient();
+        using var contenu = new MultipartFormDataContent();
+        contenu.Add(new ByteArrayContent(new byte[20 * 1024 * 1024 + 1]), "file", "document.pdf");
+        contenu.Add(new StringContent("RIB"), "types");
+        contenu.Add(new StringContent("pdfpig"), "engine");
+
+        using var response = await client.PostAsync("/api/documents/classify", contenu);
+
+        Assert.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
+    }
+
+    [Fact]
     public async Task NExposePasLaRouteDExtractionEnProduction()
     {
         await using var application = CreerApplication("Production");

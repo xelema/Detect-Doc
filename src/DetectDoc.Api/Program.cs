@@ -8,6 +8,8 @@ using System.Text.Json;
 using UglyToad.PdfPig.Core;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.WebHost.ConfigureKestrel(options =>
+    options.Limits.MaxRequestBodySize = LimitesDocuments.TailleRequeteMax);
 builder.Services.AddOpenApi();
 var repertoireModelesPpOcr = builder.Configuration["PpOcr:ModelsDirectory"]
     ?? Path.Combine(AppContext.BaseDirectory, "models");
@@ -58,6 +60,10 @@ app.MapPost("/api/documents/classify", async Task<IResult> (
     if (file is null || file.Length == 0 || string.IsNullOrWhiteSpace(types))
     {
         return Results.Problem(title: "Requête invalide.", detail: "Un fichier et une liste de types sont requis.", statusCode: 400);
+    }
+    if (file.Length > LimitesDocuments.TailleFichierMax)
+    {
+        return Results.Problem(title: "Fichier trop volumineux.", detail: "Le fichier ne doit pas dépasser 20 Mio.", statusCode: 413);
     }
 
     string[]? typesDocumentaires;
@@ -143,6 +149,7 @@ app.MapPost("/api/documents/classify", async Task<IResult> (
     .WithSummary("Extrait puis classe un PDF avec le moteur choisi.")
     .Produces<ResultatClassificationDocumentHttp>()
     .ProducesProblem(400)
+    .ProducesProblem(413)
     .ProducesProblem(422)
     .ProducesProblem(502)
     .ProducesProblem(503);
@@ -215,6 +222,13 @@ if (app.Environment.IsDevelopment())
                 title: "Fichier invalide.",
                 detail: "Un fichier PDF non vide est requis.",
                 statusCode: StatusCodes.Status400BadRequest);
+        }
+        if (file.Length > LimitesDocuments.TailleFichierMax)
+        {
+            return Results.Problem(
+                title: "Fichier trop volumineux.",
+                detail: "Le fichier ne doit pas dépasser 20 Mio.",
+                statusCode: StatusCodes.Status413PayloadTooLarge);
         }
 
         try
@@ -296,3 +310,9 @@ public sealed record ResultatClassificationDocumentHttp(
     long ClassificationMs,
     long TotalMs,
     string? ExecutionId);
+
+internal static class LimitesDocuments
+{
+    public const long TailleFichierMax = 20L * 1024 * 1024;
+    public const long TailleRequeteMax = 21L * 1024 * 1024;
+}
