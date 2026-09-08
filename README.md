@@ -24,6 +24,7 @@ dotnet run --project src/DetectDoc.Api -- --environment Development --urls http:
 | [/health](http://localhost:5080/health) | HTTP 200, `{"statut":"ok"}` | Tous les environnements |
 | `POST /api/dev/extract/{engine}` | Texte extrait page par page | Development |
 | `POST /api/dev/classify` | Classification d'un texte par Flowise | Development |
+| `POST /api/documents/classify` | Extraction puis classification d'un PDF | Tous les environnements |
 | [/openapi/v1.json](http://localhost:5080/openapi/v1.json) | Description OpenAPI des routes | Development |
 | [/swagger](http://localhost:5080/swagger) | Interface interactive des routes | Development |
 
@@ -37,6 +38,9 @@ La route `POST /api/dev/classify` attend `{"texte":"...","types":["RIB","FEUILLE
 $env:Flowise__BaseUrl = "https://votre-hote-flowise"
 $env:Flowise__FlowId = "votre-flow-id"
 ```
+
+`POST /api/documents/classify` est un formulaire multipart avec `file`, `types` et `engine`. `types` contient un tableau JSON, par exemple `["RIB","FEUILLE_EMAR"]`, et `engine` vaut `pdfpig` ou `ppocr-tiny`.
+La réponse porte aussi `extractionMs`, `classificationMs`, `totalMs` et l’`executionId` retourné par Flowise lorsqu’il est disponible.
 
 `src/DetectDoc.Api/Program.cs` assemble l'application et expose les routes avec les Minimal APIs d'ASP.NET Core. `tests/DetectDoc.Tests` démarre un serveur en mémoire et vérifie les réponses HTTP en Development et en Production.
 

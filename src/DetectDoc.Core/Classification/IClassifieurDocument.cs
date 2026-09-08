@@ -1,6 +1,6 @@
 namespace DetectDoc.Core.Classification;
 
-public sealed record ResultatClassification(string Type, double Confiance);
+public sealed record ResultatClassification(string Type, double Confiance, string? ExecutionId = null);
 
 public interface IClassifieurDocument
 {

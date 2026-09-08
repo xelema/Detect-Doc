@@ -2,6 +2,8 @@ using DetectDoc.Core.Classification;
 using DetectDoc.Core.Engines;
 using DetectDoc.Infrastructure.Classification;
 using DetectDoc.Infrastructure.Engines;
+using System.Diagnostics;
+using System.Text.Json;
 using UglyToad.PdfPig.Core;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -29,6 +31,98 @@ var app = builder.Build();
 
 app.MapGet("/health", () => TypedResults.Ok(new { statut = "ok" }))
     .WithSummary("Vérifie que le service répond.");
+
+app.MapPost("/api/documents/classify", async Task<IResult> (
+    IFormFile? file,
+    string? types,
+    string engine,
+    PdfPigNativeTextEngine pdfPig,
+    IServiceProvider services,
+    IClassifieurDocument classifieur,
+    CancellationToken cancellationToken) =>
+{
+    var total = Stopwatch.StartNew();
+    if (file is null || file.Length == 0 || string.IsNullOrWhiteSpace(types))
+    {
+        return Results.Problem(title: "Requête invalide.", detail: "Un fichier et une liste de types sont requis.", statusCode: 400);
+    }
+
+    string[]? typesDocumentaires;
+    try
+    {
+        typesDocumentaires = JsonSerializer.Deserialize<string[]>(types);
+    }
+    catch (JsonException)
+    {
+        return Results.Problem(title: "Requête invalide.", detail: "Le champ types doit être un tableau JSON.", statusCode: 400);
+    }
+
+    var typesValides = typesDocumentaires?
+        .Select(type => type.Trim())
+        .Where(type => type.Length > 0)
+        .Distinct(StringComparer.Ordinal)
+        .ToArray();
+    if (typesValides is null || typesValides.Length == 0 || typesValides.Length != typesDocumentaires!.Length)
+    {
+        return Results.Problem(title: "Requête invalide.", detail: "Les types doivent être non vides et uniques.", statusCode: 400);
+    }
+
+    try
+    {
+        ITextExtractionEngine extracteur = engine.ToLowerInvariant() switch
+        {
+            "pdfpig" => pdfPig,
+            "ppocr-tiny" => services.GetRequiredService<PpOcrEngine>(),
+            _ => throw new ArgumentException("Le moteur doit être pdfpig ou ppocr-tiny.", nameof(engine))
+        };
+        using var flux = file.OpenReadStream();
+        var extraction = Stopwatch.StartNew();
+        var pages = extracteur.Extract(flux, cancellationToken);
+        extraction.Stop();
+        var texte = string.Join(Environment.NewLine, pages.Select(page => page.Texte));
+        if (string.IsNullOrWhiteSpace(texte))
+        {
+            return Results.Problem(title: "Texte inexploitable.", detail: "L'extraction ne retourne aucun texte.", statusCode: 422);
+        }
+
+        var classification = Stopwatch.StartNew();
+        var resultat = await classifieur.ClasserAsync(texte, typesValides, cancellationToken);
+        classification.Stop();
+        total.Stop();
+        return Results.Ok(new ResultatClassificationDocumentHttp(
+            resultat.Type,
+            resultat.Confiance,
+            engine,
+            pages.Count,
+            extraction.ElapsedMilliseconds,
+            classification.ElapsedMilliseconds,
+            total.ElapsedMilliseconds,
+            resultat.ExecutionId));
+    }
+    catch (ArgumentException exception)
+    {
+        return Results.Problem(title: "Requête invalide.", detail: exception.Message, statusCode: 400);
+    }
+    catch (InvalidDataException exception)
+    {
+        return Results.Problem(title: "Réponse Flowise invalide.", detail: exception.Message, statusCode: 502);
+    }
+    catch (HttpRequestException exception)
+    {
+        return Results.Problem(title: "Flowise indisponible.", detail: exception.Message, statusCode: 503);
+    }
+    catch (InvalidOperationException exception)
+    {
+        return Results.Problem(title: "Service indisponible.", detail: exception.Message, statusCode: 503);
+    }
+})
+    .DisableAntiforgery()
+    .WithSummary("Extrait puis classe un PDF avec le moteur choisi.")
+    .Produces<ResultatClassificationDocumentHttp>()
+    .ProducesProblem(400)
+    .ProducesProblem(422)
+    .ProducesProblem(502)
+    .ProducesProblem(503);
 
 if (app.Environment.IsDevelopment())
 {
@@ -169,3 +263,13 @@ public sealed record ResultatExtractionPageHttp(
     float? ConfianceOcr);
 
 public sealed record RequeteClassificationHttp(string Texte, string[] Types);
+
+public sealed record ResultatClassificationDocumentHttp(
+    string Type,
+    double Confiance,
+    string Moteur,
+    int PagesTraitees,
+    long ExtractionMs,
+    long ClassificationMs,
+    long TotalMs,
+    string? ExecutionId);

@@ -51,8 +51,8 @@ public sealed class FlowiseDocumentClassifier(HttpClient httpClient, FlowiseOpti
             throw new InvalidDataException("La réponse de classification Flowise est invalide.");
         }
 
-        return resultat;
+        return resultat with { ExecutionId = enveloppe.ExecutionId };
     }
 
-    private sealed record ReponseFlowise(string? Text);
+    private sealed record ReponseFlowise(string? Text, string? ExecutionId);
 }
