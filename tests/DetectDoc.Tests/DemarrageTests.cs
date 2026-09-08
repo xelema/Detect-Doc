@@ -127,9 +127,9 @@ public class DemarrageTests
     }
 
     [Theory]
-    [InlineData(typeof(TaskCanceledException), HttpStatusCode.GatewayTimeout)]
-    [InlineData(typeof(InvalidDataException), HttpStatusCode.BadGateway)]
-    public async Task SignaleLesEchecsFlowise(Type typeException, HttpStatusCode statutAttendu)
+    [InlineData("[\"RIB\"]", typeof(TaskCanceledException), HttpStatusCode.GatewayTimeout)]
+    [InlineData("DEVIS,FACTURE,RIB,FEUILLE_EMAR", typeof(InvalidDataException), HttpStatusCode.BadGateway)]
+    public async Task SignaleLesEchecsFlowise(string types, Type typeException, HttpStatusCode statutAttendu)
     {
         var exception = (Exception)Activator.CreateInstance(typeException)!;
         await using var application = new WebApplicationFactory<Program>()
@@ -141,7 +141,7 @@ public class DemarrageTests
             });
         using var client = application.CreateClient();
         using var contenu = CreerPdfMultipart("contenu");
-        contenu.Add(new StringContent("[\"RIB\"]"), "types");
+        contenu.Add(new StringContent(types), "types");
         contenu.Add(new StringContent("pdfpig"), "engine");
 
         using var response = await client.PostAsync("/api/documents/classify", contenu);

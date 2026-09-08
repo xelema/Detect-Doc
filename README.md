@@ -39,14 +39,14 @@ $env:Flowise__BaseUrl = "https://votre-hote-flowise"
 $env:Flowise__FlowId = "votre-flow-id"
 ```
 
-`POST /api/documents/classify` est un formulaire multipart avec `file`, `types` et `engine`. `types` contient un tableau JSON, par exemple `["RIB","FEUILLE_EMAR"]`, et `engine` vaut `pdfpig` ou `ppocr-tiny`.
+`POST /api/documents/classify` est un formulaire multipart avec `file`, `types` et `engine`. `types` accepte un tableau JSON, par exemple `["RIB","FEUILLE_EMAR"]`, ou la liste séparée par des virgules envoyée par Swagger, par exemple `RIB,FEUILLE_EMAR`. `engine` vaut `pdfpig` ou `ppocr-tiny`.
 La réponse porte aussi `extractionMs`, `classificationMs`, `totalMs` et l’`executionId` retourné par Flowise lorsqu’il est disponible.
 
 `src/DetectDoc.Api/Program.cs` assemble l'application et expose les routes avec les Minimal APIs d'ASP.NET Core. `tests/DetectDoc.Tests` démarre un serveur en mémoire et vérifie les réponses HTTP en Development et en Production.
 
 ## Conteneur Docker
 
-Le `Dockerfile` à la racine utilise le SDK Linux .NET 10.0.302 pour construire l'application et le runtime Linux .NET 10.0.10 pour l'exécuter. La phase de build exécute les tests, puis l'image finale ne contient que l'API et s'exécute avec un utilisateur non privilégié.
+Le `Dockerfile` à la racine utilise le SDK Linux .NET 10.0.302 pour construire l'application et le runtime Linux .NET 10.0.10 pour l'exécuter. La phase de build exécute les tests, télécharge les trois fichiers du modèle PP-OCRv6 tiny et vérifie leur empreinte SHA-256. L'image finale contient l'API, ce modèle et s'exécute avec un utilisateur non privilégié.
 
 ```powershell
 docker build --tag detect-doc:local .

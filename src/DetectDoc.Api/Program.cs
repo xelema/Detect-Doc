@@ -53,9 +53,13 @@ app.MapPost("/api/documents/classify", async Task<IResult> (
     {
         typesDocumentaires = JsonSerializer.Deserialize<string[]>(types);
     }
+    catch (JsonException) when (!types.TrimStart().StartsWith('['))
+    {
+        typesDocumentaires = types.Split(',', StringSplitOptions.TrimEntries);
+    }
     catch (JsonException)
     {
-        return Results.Problem(title: "Requête invalide.", detail: "Le champ types doit être un tableau JSON.", statusCode: 400);
+        return Results.Problem(title: "Requête invalide.", detail: "Le champ types doit être un tableau JSON ou une liste séparée par des virgules.", statusCode: 400);
     }
 
     var typesValides = typesDocumentaires?
