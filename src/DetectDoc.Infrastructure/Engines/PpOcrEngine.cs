@@ -7,8 +7,6 @@ namespace DetectDoc.Infrastructure.Engines;
 
 public sealed class PpOcrEngine : ITextExtractionEngine
 {
-    private const int NombrePagesMaximum = 20;
-    private const long NombrePixelsMaximum = 25_000_000;
     private const int Dpi = 300;
     private const int NombreThreadsOnnx = 1;
 
@@ -62,11 +60,6 @@ public sealed class PpOcrEngine : ITextExtractionEngine
             nombrePages = document.NumberOfPages;
         }
 
-        if (nombrePages is < 1 or > NombrePagesMaximum)
-        {
-            throw new InvalidDataException($"Le PDF doit contenir entre 1 et {NombrePagesMaximum} pages.");
-        }
-
         var pages = new List<ResultatExtractionPage>(nombrePages);
         for (var numeroPage = 0; numeroPage < nombrePages; numeroPage++)
         {
@@ -79,11 +72,6 @@ public sealed class PpOcrEngine : ITextExtractionEngine
                 leaveOpen: true,
                 password: null,
                 options: new RenderOptions(Dpi: Dpi));
-            if ((long)image.Width * image.Height > NombrePixelsMaximum)
-            {
-                throw new InvalidDataException($"La page {numeroPage + 1} dépasse {NombrePixelsMaximum} pixels.");
-            }
-
             var resultat = _ocr.Detect(image, _optionsOcr);
             var blocs = resultat.TextBlocks;
             var confiances = blocs

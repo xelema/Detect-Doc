@@ -5,8 +5,6 @@ namespace DetectDoc.Infrastructure.Engines;
 
 public class PdfPigNativeTextEngine : ITextExtractionEngine
 {
-    private const int NombrePagesMaximum = 20;
-
     private static readonly IReadOnlyDictionary<string, object> ParametresMoteur =
         new Dictionary<string, object>
         {
@@ -34,11 +32,6 @@ public class PdfPigNativeTextEngine : ITextExtractionEngine
         ValiderSignature(fluxDocument);
 
         using var document = PdfDocument.Open(fluxDocument);
-        if (document.NumberOfPages is < 1 or > NombrePagesMaximum)
-        {
-            throw new InvalidDataException($"Le PDF doit contenir entre 1 et {NombrePagesMaximum} pages.");
-        }
-
         var resultats = new List<ResultatExtractionPage>(document.NumberOfPages);
         foreach (var page in document.GetPages())
         {

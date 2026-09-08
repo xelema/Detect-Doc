@@ -44,8 +44,6 @@ Pour un test local contre un certificat HTTPS interne non reconnu, définir auss
 `POST /api/documents/classify` est un formulaire multipart avec `file`, `types` et `engine`. `types` accepte un tableau JSON, par exemple `["RIB","FEUILLE_EMAR"]`, ou la liste séparée par des virgules envoyée par Swagger, par exemple `RIB,FEUILLE_EMAR`. `engine` vaut `pdfpig` ou `ppocr-tiny`.
 La réponse porte aussi `extractionMs`, `classificationMs`, `totalMs` et l’`executionId` retourné par Flowise lorsqu’il est disponible.
 
-Les fichiers font au plus 20 Mio, la requête multipart au plus 21 Mio. Les PDF sont limités à 20 pages, et PP-OCR refuse une page rendue de plus de 25 millions de pixels.
-
 `src/DetectDoc.Api/Program.cs` assemble l'application et expose les routes avec les Minimal APIs d'ASP.NET Core. `tests/DetectDoc.Tests` démarre un serveur en mémoire et vérifie les réponses HTTP en Development et en Production.
 
 ## Conteneur Docker

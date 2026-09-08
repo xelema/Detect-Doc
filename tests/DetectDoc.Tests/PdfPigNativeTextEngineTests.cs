@@ -76,23 +76,6 @@ public class PdfPigNativeTextEngineTests
     }
 
     [Fact]
-    public void Extract_RefusePlusDeVingtPages()
-    {
-        var builder = new PdfDocumentBuilder();
-        for (var numeroPage = 0; numeroPage < 21; numeroPage++)
-        {
-            builder.AddPage(UglyToad.PdfPig.Content.PageSize.A4);
-        }
-
-        using var stream = new MemoryStream(builder.Build());
-        using var engine = new PdfPigNativeTextEngine();
-
-        var exception = Assert.Throws<InvalidDataException>(() => engine.Extract(stream));
-
-        Assert.Contains("entre 1 et 20 pages", exception.Message);
-    }
-
-    [Fact]
     public void Extract_RespecteUneAnnulationDejaDemandee()
     {
         var builder = new PdfDocumentBuilder();
