@@ -22,11 +22,13 @@ dotnet run --project src/DetectDoc.Api -- --environment Development --urls http:
 | Route | Réponse | Disponibilité |
 |---|---|---|
 | [/health](http://localhost:5080/health) | HTTP 200, `{"statut":"ok"}` | Tous les environnements |
-| `POST /api/dev/extract/pdfpig` | Texte extrait page par page | Development |
+| `POST /api/dev/extract/{engine}` | Texte extrait page par page | Development |
 | [/openapi/v1.json](http://localhost:5080/openapi/v1.json) | Description OpenAPI des routes | Development |
 | [/swagger](http://localhost:5080/swagger) | Interface interactive des routes | Development |
 
-`/health` indique que l'application répond. Le démarrage fonctionne sans secret ni service externe. Arrêter le serveur avec `Ctrl+C`.
+`/health` indique que l'application répond. En Development, Swagger permet d'envoyer un PDF à la route d'extraction avec `pdfpig` ou `ppocr-tiny`. Le démarrage fonctionne sans secret ni service externe. Arrêter le serveur avec `Ctrl+C`.
+
+PP-OCRv6 tiny demande ses modèles sous `models/v6/`. Pour utiliser un autre répertoire en développement, définir `PpOcr__ModelsDirectory` sur le dossier qui contient `v6/`, puis lancer l'API. Le modèle d'orientation fourni par RapidOcrNet reste copié à côté du binaire. `PpOcr__ReconnaissancesParalleles` vaut `1` par défaut et règle le nombre de lignes reconnues simultanément.
 
 `src/DetectDoc.Api/Program.cs` assemble l'application et expose les routes avec les Minimal APIs d'ASP.NET Core. `tests/DetectDoc.Tests` démarre un serveur en mémoire et vérifie les réponses HTTP en Development et en Production.
 

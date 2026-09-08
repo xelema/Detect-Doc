@@ -4,7 +4,19 @@ using UglyToad.PdfPig.Core;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddOpenApi();
-builder.Services.AddSingleton<ITextExtractionEngine, PdfPigNativeTextEngine>();
+var repertoireModelesPpOcr = builder.Configuration["PpOcr:ModelsDirectory"]
+    ?? Path.Combine(AppContext.BaseDirectory, "models");
+var reconnaissancesParallelesPpOcr = int.TryParse(
+    builder.Configuration["PpOcr:ReconnaissancesParalleles"],
+    out var valeurConfiguree)
+    && valeurConfiguree > 0
+    ? valeurConfiguree
+    : 1;
+builder.Services.AddSingleton<PdfPigNativeTextEngine>();
+builder.Services.AddSingleton(_ => new PpOcrEngine(
+    "tiny",
+    repertoireModelesPpOcr,
+    reconnaissancesParallelesPpOcr));
 
 var app = builder.Build();
 
@@ -16,17 +28,10 @@ if (app.Environment.IsDevelopment())
     app.MapPost("/api/dev/extract/{engine}", IResult (
         string engine,
         IFormFile? file,
-        ITextExtractionEngine extracteur,
+        PdfPigNativeTextEngine pdfPig,
+        IServiceProvider services,
         CancellationToken cancellationToken) =>
     {
-        if (!string.Equals(engine, "pdfpig", StringComparison.OrdinalIgnoreCase))
-        {
-            return Results.Problem(
-                title: "Moteur inconnu.",
-                detail: "Le moteur doit être pdfpig.",
-                statusCode: StatusCodes.Status400BadRequest);
-        }
-
         if (file is null || file.Length == 0)
         {
             return Results.Problem(
@@ -37,6 +42,12 @@ if (app.Environment.IsDevelopment())
 
         try
         {
+            ITextExtractionEngine extracteur = engine.ToLowerInvariant() switch
+            {
+                "pdfpig" => pdfPig,
+                "ppocr-tiny" => services.GetRequiredService<PpOcrEngine>(),
+                _ => throw new ArgumentException("Le moteur doit être pdfpig ou ppocr-tiny.", nameof(engine))
+            };
             using var flux = file.OpenReadStream();
             var pages = extracteur.Extract(flux, cancellationToken)
                 .Select(page => new ResultatExtractionPageHttp(
@@ -60,12 +71,27 @@ if (app.Environment.IsDevelopment())
                 detail: "Le fichier ne contient pas un PDF lisible.",
                 statusCode: StatusCodes.Status422UnprocessableEntity);
         }
+        catch (ArgumentException exception)
+        {
+            return Results.Problem(
+                title: "Moteur inconnu.",
+                detail: exception.Message,
+                statusCode: StatusCodes.Status400BadRequest);
+        }
+        catch (InvalidOperationException exception)
+        {
+            return Results.Problem(
+                title: "Moteur indisponible.",
+                detail: exception.Message,
+                statusCode: StatusCodes.Status503ServiceUnavailable);
+        }
     })
         .DisableAntiforgery()
-        .WithSummary("Extrait le texte d'un PDF avec PdfPig.")
+        .WithSummary("Extrait le texte d'un PDF avec le moteur choisi.")
         .Produces<IEnumerable<ResultatExtractionPageHttp>>()
         .ProducesProblem(StatusCodes.Status400BadRequest)
-        .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
+        .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+        .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
 
     app.MapOpenApi();
     app.UseSwaggerUI(options =>

@@ -12,6 +12,8 @@
 
   <ItemGroup>
     <PackageReference Include="PdfPig" Version="0.1.15" />
+    <PackageReference Include="PDFtoImage" Version="5.3.0" />
+    <PackageReference Include="RapidOcrNet" Version="4.1.0" />
   </ItemGroup>
 
 </Project>
