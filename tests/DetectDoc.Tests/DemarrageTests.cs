@@ -1,8 +1,11 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
+using DetectDoc.Core.Classification;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using UglyToad.PdfPig.Writer;
 using Xunit;
 
@@ -123,6 +126,44 @@ public class DemarrageTests
         Assert.Equal("PDF invalide.", probleme.RootElement.GetProperty("title").GetString());
     }
 
+    [Theory]
+    [InlineData(typeof(TaskCanceledException), HttpStatusCode.GatewayTimeout)]
+    [InlineData(typeof(InvalidDataException), HttpStatusCode.BadGateway)]
+    public async Task SignaleLesEchecsFlowise(Type typeException, HttpStatusCode statutAttendu)
+    {
+        var exception = (Exception)Activator.CreateInstance(typeException)!;
+        await using var application = new WebApplicationFactory<Program>()
+            .WithWebHostBuilder(builder =>
+            {
+                builder.ConfigureServices(services =>
+                    services.AddSingleton<IClassifieurDocument>(new ClassifieurEnEchec(exception)));
+                builder.ConfigureLogging(logging => logging.ClearProviders());
+            });
+        using var client = application.CreateClient();
+        using var contenu = CreerPdfMultipart("contenu");
+        contenu.Add(new StringContent("[\"RIB\"]"), "types");
+        contenu.Add(new StringContent("pdfpig"), "engine");
+
+        using var response = await client.PostAsync("/api/documents/classify", contenu);
+
+        Assert.Equal(statutAttendu, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+    }
+
+    [Fact]
+    public async Task RefuseUnPdfSansTexteAvantDAppelerFlowise()
+    {
+        await using var application = CreerApplication("Development");
+        using var client = application.CreateClient();
+        using var contenu = CreerPdfMultipart(string.Empty);
+        contenu.Add(new StringContent("[\"RIB\"]"), "types");
+        contenu.Add(new StringContent("pdfpig"), "engine");
+
+        using var response = await client.PostAsync("/api/documents/classify", contenu);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
     [Fact]
     public async Task NExposePasLaRouteDExtractionEnProduction()
     {
@@ -137,22 +178,37 @@ public class DemarrageTests
 
     private static WebApplicationFactory<Program> CreerApplication(string environnement) =>
         new WebApplicationFactory<Program>()
-            .WithWebHostBuilder(builder => builder.UseEnvironment(environnement));
+            .WithWebHostBuilder(builder =>
+            {
+                builder.UseEnvironment(environnement);
+                builder.ConfigureLogging(logging => logging.ClearProviders());
+            });
 
     private static MultipartFormDataContent CreerPdfMultipart(string texte)
     {
         var builder = new PdfDocumentBuilder();
         var page = builder.AddPage(UglyToad.PdfPig.Content.PageSize.A4);
-        page.AddText(
-            texte,
-            12,
-            new UglyToad.PdfPig.Core.PdfPoint(50, 700),
-            builder.AddStandard14Font(UglyToad.PdfPig.Fonts.Standard14Fonts.Standard14Font.Helvetica));
+        if (texte.Length > 0)
+        {
+            page.AddText(
+                texte,
+                12,
+                new UglyToad.PdfPig.Core.PdfPoint(50, 700),
+                builder.AddStandard14Font(UglyToad.PdfPig.Fonts.Standard14Fonts.Standard14Font.Helvetica));
+        }
 
         var fichier = new ByteArrayContent(builder.Build());
         fichier.Headers.ContentType = new MediaTypeHeaderValue("application/pdf");
         var contenu = new MultipartFormDataContent();
         contenu.Add(fichier, "file", "document.pdf");
         return contenu;
+    }
+
+    private sealed class ClassifieurEnEchec(Exception exception) : IClassifieurDocument
+    {
+        public Task<ResultatClassification> ClasserAsync(
+            string texte,
+            IReadOnlyCollection<string> types,
+            CancellationToken cancellationToken = default) => Task.FromException<ResultatClassification>(exception);
     }
 }
