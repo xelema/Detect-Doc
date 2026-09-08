@@ -1,4 +1,6 @@
+using DetectDoc.Core.Classification;
 using DetectDoc.Core.Engines;
+using DetectDoc.Infrastructure.Classification;
 using DetectDoc.Infrastructure.Engines;
 using UglyToad.PdfPig.Core;
 
@@ -17,6 +19,11 @@ builder.Services.AddSingleton(_ => new PpOcrEngine(
     "tiny",
     repertoireModelesPpOcr,
     reconnaissancesParallelesPpOcr));
+builder.Services.AddSingleton(new FlowiseOptions(
+    builder.Configuration["Flowise:BaseUrl"],
+    builder.Configuration["Flowise:FlowId"]));
+builder.Services.AddHttpClient<IClassifieurDocument, FlowiseDocumentClassifier>(client =>
+    client.Timeout = TimeSpan.FromSeconds(60));
 
 var app = builder.Build();
 
@@ -25,6 +32,59 @@ app.MapGet("/health", () => TypedResults.Ok(new { statut = "ok" }))
 
 if (app.Environment.IsDevelopment())
 {
+    app.MapPost("/api/dev/classify", async Task<IResult> (
+        RequeteClassificationHttp? requete,
+        IClassifieurDocument classifieur,
+        CancellationToken cancellationToken) =>
+    {
+        var types = requete?.Types?
+            .Select(type => type.Trim())
+            .Where(type => type.Length > 0)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (string.IsNullOrWhiteSpace(requete?.Texte)
+            || types is null
+            || types.Length == 0
+            || types.Length != requete.Types!.Length)
+        {
+            return Results.Problem(
+                title: "Requête invalide.",
+                detail: "Un texte et une liste de types non vides et sans doublon sont requis.",
+                statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        try
+        {
+            return Results.Ok(await classifieur.ClasserAsync(requete.Texte, types, cancellationToken));
+        }
+        catch (InvalidDataException exception)
+        {
+            return Results.Problem(
+                title: "Réponse Flowise invalide.",
+                detail: exception.Message,
+                statusCode: StatusCodes.Status502BadGateway);
+        }
+        catch (HttpRequestException exception)
+        {
+            return Results.Problem(
+                title: "Flowise indisponible.",
+                detail: exception.Message,
+                statusCode: StatusCodes.Status503ServiceUnavailable);
+        }
+        catch (InvalidOperationException exception)
+        {
+            return Results.Problem(
+                title: "Flowise non configuré.",
+                detail: exception.Message,
+                statusCode: StatusCodes.Status503ServiceUnavailable);
+        }
+    })
+        .WithSummary("Classifie un texte avec Flowise.")
+        .Produces<ResultatClassification>()
+        .ProducesProblem(StatusCodes.Status400BadRequest)
+        .ProducesProblem(StatusCodes.Status502BadGateway)
+        .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
+
     app.MapPost("/api/dev/extract/{engine}", IResult (
         string engine,
         IFormFile? file,
@@ -107,3 +167,5 @@ public sealed record ResultatExtractionPageHttp(
     int NumeroPage,
     string Texte,
     float? ConfianceOcr);
+
+public sealed record RequeteClassificationHttp(string Texte, string[] Types);
