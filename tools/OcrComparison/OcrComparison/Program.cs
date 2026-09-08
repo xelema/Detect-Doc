@@ -5,18 +5,21 @@ using OcrComparison.Engines;
 using OcrComparison.Manifest;
 using OcrComparison.Preprocessing;
 
-if (args.Length is < 2 or > 3)
+if (args.Length is < 2 or > 4)
 {
     Console.WriteLine(
         "Usage: OcrComparison <chemin-du-corpus> <chemin-du-manifest> " +
-        "[tesseract|pdfpig|ppocr-tiny|ppocr-small|ppocr-medium]");
+        "[tesseract|pdfpig|ppocr-tiny|ppocr-small|ppocr-medium] [reconnaissances-paralleles]");
     return;
 }
 
 const string split = "dev";
 var (cheminCorpus, cheminManifest) = (args[0], args[1]);
 
-using var moteur = CreerMoteur(args.Length == 3 ? args[2] : "tesseract");
+var reconnaissancesParalleles = args.Length == 4
+    ? int.Parse(args[3])
+    : 1;
+using var moteur = CreerMoteur(args.Length >= 3 ? args[2] : "tesseract", reconnaissancesParalleles);
 
 var titre = ConstruireTitre(moteur.Parametres);
 var runId = $"{DateTime.Now:yyyy-MM-dd_HH-mm-ss}_{moteur.Name.ToLowerInvariant()}_{titre}";
@@ -74,14 +77,14 @@ static string[] DecouperEnLignes(string? texte) =>
         .Where(ligne => ligne.Length > 0)
         .ToArray();
 
-static ITextExtractionEngine CreerMoteur(string nom) => nom.ToLowerInvariant() switch
+static ITextExtractionEngine CreerMoteur(string nom, int reconnaissancesParalleles) => nom.ToLowerInvariant() switch
 {
     "tesseract" => new TesseractOcrEngine(
         new OptionsPretraitement(Redresser: true, DetourerAvantOsd: true, Deskew: true)),
     "pdfpig" => new PdfPigNativeTextEngine(),
-    "ppocr-tiny" => new PpOcrEngine("tiny"),
-    "ppocr-small" => new PpOcrEngine("small"),
-    "ppocr-medium" => new PpOcrEngine("medium"),
+    "ppocr-tiny" => new PpOcrEngine("tiny", reconnaissancesParalleles),
+    "ppocr-small" => new PpOcrEngine("small", reconnaissancesParalleles),
+    "ppocr-medium" => new PpOcrEngine("medium", reconnaissancesParalleles),
     _ => throw new ArgumentException(
         $"Moteur inconnu : {nom}. Attendu : tesseract, pdfpig, ppocr-tiny, ppocr-small ou ppocr-medium.")
 };

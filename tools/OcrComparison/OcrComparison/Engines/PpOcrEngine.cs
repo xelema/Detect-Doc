@@ -13,25 +13,30 @@ public sealed class PpOcrEngine : ITextExtractionEngine
     // Tesseract est mono-thread. ONNX Runtime prendrait tous les cœurs par défaut, ce qui rendrait
     // les temps écoulés des deux moteurs incomparables : un thread ici, pour que l'écart mesuré
     // soit celui des algorithmes et pas celui du parallélisme.
-    private const int NbThreads = 1;
+    private const int NbThreadsOnnx = 1;
 
     private static readonly string VersionAssembly =
         typeof(RapidOcr).Assembly.GetName().Version?.ToString() ?? string.Empty;
 
     private readonly RapidOcr _ocr = new();
-    private readonly RapidOcrOptions _optionsOcr = RapidOcrOptions.PPOCRv6;
+    private readonly RapidOcrOptions _optionsOcr;
     private readonly string _taille;
 
-    public PpOcrEngine(string taille)
+    public PpOcrEngine(string taille, int reconnaissancesParalleles = 1)
     {
         _taille = taille;
-        _ocr.InitModels(JeuDeModeles(taille), NbThreads);
+        _optionsOcr = RapidOcrOptions.PPOCRv6 with
+        {
+            RecMaxDegreeOfParallelism = reconnaissancesParalleles
+        };
+        _ocr.InitModels(JeuDeModeles(taille), NbThreadsOnnx);
 
         Parametres = new Dictionary<string, object>
         {
             ["taille"] = taille,
             ["dpi"] = RenduPdf.Dpi,
-            ["threads"] = NbThreads,
+            ["threads_onnx"] = NbThreadsOnnx,
+            ["reconnaissances_paralleles"] = reconnaissancesParalleles,
             ["classifieur_orientation"] = _optionsOcr.DoAngle,
             ["seuil_texte"] = _optionsOcr.TextScore,
             ["limit_side_len"] = _optionsOcr.LimitSideLen
@@ -96,7 +101,7 @@ public sealed class PpOcrEngine : ITextExtractionEngine
             var resultat = _ocr.Detect(image, _optionsOcr);
             dureeDetect += Stopwatch.GetElapsedTime(horodatageDetect);
 
-            foreach (var bloc in OrdonnerParLecture(resultat.TextBlocks))
+            foreach (var bloc in resultat.TextBlocks)
             {
                 texte.Append(bloc.Text).Append(' ');
 
@@ -115,17 +120,6 @@ public sealed class PpOcrEngine : ITextExtractionEngine
             DureeDecodagePngMs: dureeDecodagePng.TotalMilliseconds,
             DureeDetectMs: dureeDetect.TotalMilliseconds);
     }
-
-    /// <remarks>
-    /// Le détecteur rend des lignes, pas un document : leur ordre est celui de la détection, qui
-    /// n'est pas garanti être celui de la lecture. Le jaccard n'y verrait rien, le Levenshtein
-    /// s'effondrerait sur un texte pourtant bien reconnu. Tri par coin haut-gauche, comme le fait
-    /// l'analyse de mise en page de Tesseract en amont de sa propre sortie.
-    /// </remarks>
-    private static IEnumerable<TextBlock> OrdonnerParLecture(IEnumerable<TextBlock> blocs) =>
-        blocs
-            .OrderBy(b => b.BoxPoints.Min(p => p.Y))
-            .ThenBy(b => b.BoxPoints.Min(p => p.X));
 
     public void Dispose() => _ocr.Dispose();
 }
