@@ -15,4 +15,10 @@
     <PackageReference Include="RapidOcrNet" Version="4.1.0" />
     <PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" Version="10.2.3" />
   </ItemGroup>
+  <ItemGroup>
+    <Content Include="..\..\models\v6\**">
+      <Link>models\v6\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
 </Project>

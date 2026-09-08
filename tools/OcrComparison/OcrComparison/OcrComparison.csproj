@@ -15,8 +15,14 @@
       <PackageReference Include="PDFtoImage" Version="5.3.0" />
       <PackageReference Include="RapidOcrNet" Version="4.1.0" />
       <PackageReference Include="Tesseract" Version="5.2.0" />
-      <None Include="tessdata\**" CopyToOutputDirectory="PreserveNewest" />
-      <None Include="models\**" CopyToOutputDirectory="PreserveNewest" />
+      <Content Include="..\..\..\models\tessdata\**">
+        <Link>tessdata\%(RecursiveDir)%(Filename)%(Extension)</Link>
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </Content>
+      <Content Include="..\..\..\models\v6\**">
+        <Link>models\v6\%(RecursiveDir)%(Filename)%(Extension)</Link>
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </Content>
     </ItemGroup>
 
 </Project>

@@ -30,7 +30,7 @@ dotnet run --project src/DetectDoc.Api -- --environment Development --urls http:
 
 `/health` indique que l'application répond. En Development, Swagger permet d'envoyer un PDF à la route d'extraction avec `pdfpig` ou `ppocr-tiny`. Le démarrage fonctionne sans secret ni service externe. Arrêter le serveur avec `Ctrl+C`.
 
-PP-OCRv6 tiny demande ses modèles sous `models/v6/`. Pour utiliser un autre répertoire en développement, définir `PpOcr__ModelsDirectory` sur le dossier qui contient `v6/`, puis lancer l'API. Le modèle d'orientation fourni par RapidOcrNet reste copié à côté du binaire. `PpOcr__ReconnaissancesParalleles` vaut `1` par défaut et règle le nombre de lignes reconnues simultanément.
+Avant le premier lancement local, exécuter `./Get-Modeles.ps1` depuis la racine du dépôt. Le script installe les modèles dans `models/`, vérifie leurs empreintes SHA-256, puis le build copie PP-OCRv6 tiny vers le dossier de sortie de l’API. Pour utiliser un autre répertoire en développement, définir `PpOcr__ModelsDirectory` sur le dossier qui contient `v6/`, puis lancer l'API. Le modèle d'orientation fourni par RapidOcrNet reste copié à côté du binaire. `PpOcr__ReconnaissancesParalleles` vaut `1` par défaut et règle le nombre de lignes reconnues simultanément.
 
 La route `POST /api/dev/classify` attend `{"texte":"...","types":["RIB","FEUILLE_EMAR"]}`. Elle appelle le flow configuré par `Flowise__BaseUrl` et `Flowise__FlowId`, sans authentification dans cet essai. Par exemple :
 

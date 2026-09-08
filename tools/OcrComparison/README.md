@@ -7,13 +7,13 @@ Compare des moteurs d'extraction de texte sur le corpus de `Detect-Doc`, work it
 Les modèles ne sont pas dans le dépôt. Avant le premier run :
 
 ```powershell
-.\Get-Modeles.ps1
+..\..\Get-Modeles.ps1
 ```
 
 Le script télécharge chaque fichier et rejette celui dont l'empreinte sha256 ne correspond pas à celle qu'il épingle. Sans réseau vers GitHub ou ModelScope, pointer une copie locale ou un partage :
 
 ```powershell
-.\Get-Modeles.ps1 -Source \\serveur\partage\modeles-ocr
+..\..\Get-Modeles.ps1 -Source \\serveur\partage\modeles-ocr
 ```
 
 Le script installe Tesseract (`fra`, `osd`) et PP-OCRv6 en tailles `tiny` et `small`. La taille `medium` pèse 138 Mo à elle seule et n'est pas installée par défaut : ajouter ses trois entrées à la table du script pour la mesurer.
