@@ -90,9 +90,6 @@ $modeles = @(
     }
 )
 
-# Le classifieur d'orientation n'est pas ici : RapidOcrNet le livre dans son paquet NuGet, et le
-# projet le recopie vers models\v6 au build.
-
 $racine = Join-Path $PSScriptRoot 'OcrComparison'
 $installes = 0
 

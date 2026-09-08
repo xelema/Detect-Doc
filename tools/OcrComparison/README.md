@@ -18,7 +18,7 @@ Le script télécharge chaque fichier et rejette celui dont l'empreinte sha256 n
 
 Le script installe Tesseract (`fra`, `osd`) et PP-OCRv6 en tailles `tiny` et `small`. La taille `medium` pèse 138 Mo à elle seule et n'est pas installée par défaut : ajouter ses trois entrées à la table du script pour la mesurer.
 
-Le classifieur d'orientation n'y figure pas, RapidOcrNet le livre dans son paquet et le projet le recopie vers `models\v6` au build.
+Le classifieur d'orientation n'y figure pas, RapidOcrNet le livre dans son paquet sous `models\v5`. PP-OCRv6 le réutilise directement.
 
 **Pourquoi pas dans le dépôt.** Les huit fichiers pèsent 48 Mo, et le triple avec `medium`. Un binaire commité reste dans l'historique pour toujours, y compris quand le modèle sera remplacé. C'est la règle déjà retenue pour le corpus : versionner l'identité, pas les octets. `Get-Modeles.ps1` tient lieu de manifest.
 
@@ -27,13 +27,16 @@ Le classifieur d'orientation n'y figure pas, RapidOcrNet le livre dans son paque
 ## Lancer un run
 
 ```powershell
-dotnet run -c Release -- <chemin-du-corpus> <chemin-du-manifest> [moteur]
+dotnet run -c Release -- <chemin-du-corpus> <chemin-du-manifest> [moteur] [reconnaissances-paralleles]
 ```
 
 Moteurs disponibles : `tesseract` (défaut), `pdfpig`, `ppocr-tiny`, `ppocr-small`, `ppocr-medium`. Le corpus est le dossier qui contient `raw/`, le manifest est `corpus/manifest.jsonl`.
 
+Le dernier argument règle le nombre de lignes reconnues en parallèle par RapidOcrNet 4.1.0. Sa valeur par défaut est `1`, pour préserver la ligne de base. Il ne s'applique qu'aux moteurs PP-OCR.
+
 ```powershell
 dotnet run -c Release -- ..\..\corpus ..\..\corpus\manifest.jsonl tesseract
+dotnet run -c Release -- ..\..\corpus ..\..\corpus\manifest.jsonl ppocr-small 8
 ```
 
 Le split mesuré est `dev`. Le jeu `test` ne s'ouvre qu'au moment de produire une mesure destinée au rapport.
