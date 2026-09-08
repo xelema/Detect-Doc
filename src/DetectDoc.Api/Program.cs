@@ -2,6 +2,7 @@ using DetectDoc.Core.Classification;
 using DetectDoc.Core.Engines;
 using DetectDoc.Infrastructure.Classification;
 using DetectDoc.Infrastructure.Engines;
+using Microsoft.AspNetCore.Mvc;
 using System.Diagnostics;
 using System.Text.Json;
 using UglyToad.PdfPig.Core;
@@ -34,8 +35,8 @@ app.MapGet("/health", () => TypedResults.Ok(new { statut = "ok" }))
 
 app.MapPost("/api/documents/classify", async Task<IResult> (
     IFormFile? file,
-    string? types,
-    string engine,
+    [FromForm] string? types,
+    [FromForm] string? engine,
     PdfPigNativeTextEngine pdfPig,
     IServiceProvider services,
     IClassifieurDocument classifieur,
@@ -69,7 +70,7 @@ app.MapPost("/api/documents/classify", async Task<IResult> (
 
     try
     {
-        ITextExtractionEngine extracteur = engine.ToLowerInvariant() switch
+        ITextExtractionEngine extracteur = engine?.ToLowerInvariant() switch
         {
             "pdfpig" => pdfPig,
             "ppocr-tiny" => services.GetRequiredService<PpOcrEngine>(),
@@ -110,6 +111,12 @@ app.MapPost("/api/documents/classify", async Task<IResult> (
     catch (HttpRequestException exception)
     {
         return Results.Problem(title: "Flowise indisponible.", detail: exception.Message, statusCode: 503);
+    }
+    catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
+    {
+        return Results.Problem(
+            title: "Flowise a dépassé le délai d'appel.",
+            statusCode: StatusCodes.Status504GatewayTimeout);
     }
     catch (InvalidOperationException exception)
     {
