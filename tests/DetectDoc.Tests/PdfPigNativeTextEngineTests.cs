@@ -105,6 +105,13 @@ public class PdfPigNativeTextEngineTests
     }
 
     [Fact]
+    public void PpOcr_RefuseZeroReconnaissanceParallele()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => new PpOcrEngine("tiny", "modeles", reconnaissancesParalleles: 0));
+    }
+
+    [Fact]
     [Trait("Category", "Corpus")]
     public void Extract_ExtraitLeTexteDUnDevisNatifDuCorpus()
     {

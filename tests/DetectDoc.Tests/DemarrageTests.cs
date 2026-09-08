@@ -76,6 +76,19 @@ public class DemarrageTests
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
     }
 
+    [Fact]
+    public async Task SignalePpOcrQuandSesModelesSontAbsents()
+    {
+        await using var application = CreerApplication("Development");
+        using var client = application.CreateClient();
+        using var contenu = CreerPdfMultipart("contenu");
+
+        using var response = await client.PostAsync("/api/dev/extract/ppocr-tiny", contenu);
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
