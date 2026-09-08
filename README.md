@@ -39,6 +39,8 @@ $env:Flowise__BaseUrl = "https://votre-hote-flowise"
 $env:Flowise__FlowId = "votre-flow-id"
 ```
 
+Pour un test local contre un certificat HTTPS interne non reconnu, définir aussi `Flowise__AllowInvalidTls=true` et lancer l’API en Development. Cette option est refusée dans les autres environnements et reste désactivée par défaut.
+
 `POST /api/documents/classify` est un formulaire multipart avec `file`, `types` et `engine`. `types` accepte un tableau JSON, par exemple `["RIB","FEUILLE_EMAR"]`, ou la liste séparée par des virgules envoyée par Swagger, par exemple `RIB,FEUILLE_EMAR`. `engine` vaut `pdfpig` ou `ppocr-tiny`.
 La réponse porte aussi `extractionMs`, `classificationMs`, `totalMs` et l’`executionId` retourné par Flowise lorsqu’il est disponible.
 

@@ -17,6 +17,12 @@ var reconnaissancesParallelesPpOcr = int.TryParse(
     && valeurConfiguree > 0
     ? valeurConfiguree
     : 1;
+var accepterCertificatFlowiseInvalide = builder.Configuration.GetValue<bool>("Flowise:AllowInvalidTls");
+if (accepterCertificatFlowiseInvalide && !builder.Environment.IsDevelopment())
+{
+    throw new InvalidOperationException("Flowise:AllowInvalidTls est réservé à Development.");
+}
+
 builder.Services.AddSingleton<PdfPigNativeTextEngine>();
 builder.Services.AddSingleton(_ => new PpOcrEngine(
     "tiny",
@@ -26,7 +32,13 @@ builder.Services.AddSingleton(new FlowiseOptions(
     builder.Configuration["Flowise:BaseUrl"],
     builder.Configuration["Flowise:FlowId"]));
 builder.Services.AddHttpClient<IClassifieurDocument, FlowiseDocumentClassifier>(client =>
-    client.Timeout = TimeSpan.FromSeconds(60));
+        client.Timeout = TimeSpan.FromSeconds(60))
+    .ConfigurePrimaryHttpMessageHandler(() => accepterCertificatFlowiseInvalide
+        ? new HttpClientHandler
+        {
+            ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+        }
+        : new HttpClientHandler());
 
 var app = builder.Build();
 
