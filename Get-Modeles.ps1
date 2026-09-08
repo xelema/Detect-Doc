@@ -1,7 +1,7 @@
 ﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
-    Installe les modèles OCR d'OcrComparison et vérifie leur empreinte.
+    Installe les modèles OCR et vérifie leur empreinte.
 
 .DESCRIPTION
     Les modèles ne sont pas versionnés : ils pèsent des dizaines de mégaoctets et se refabriquent
@@ -36,12 +36,12 @@ $ProgressPreference = 'SilentlyContinue'
 
 $modeles = @(
     @{
-        Destination = 'tessdata\fra.traineddata'
+        Destination = 'models\tessdata\fra.traineddata'
         Url         = 'https://github.com/tesseract-ocr/tessdata_fast/raw/87416418657359cb625c412a48b6e1d6d41c29bd/fra.traineddata'
         Sha256      = 'CED037562E8C80C13122DECE28DD477D399AF80911A28791A66A63AC1E3445CA'
     }
     @{
-        Destination = 'tessdata\osd.traineddata'
+        Destination = 'models\tessdata\osd.traineddata'
         Url         = 'https://github.com/tesseract-ocr/tessdata_fast/raw/87416418657359cb625c412a48b6e1d6d41c29bd/osd.traineddata'
         Sha256      = '9CF5D576FCC47564F11265841E5CA839001E7E6F38FF7F7AACF46D15A96B00FF'
     }
@@ -90,7 +90,7 @@ $modeles = @(
     }
 )
 
-$racine = Join-Path $PSScriptRoot 'OcrComparison'
+$racine = $PSScriptRoot
 $installes = 0
 
 foreach ($modele in $modeles) {
