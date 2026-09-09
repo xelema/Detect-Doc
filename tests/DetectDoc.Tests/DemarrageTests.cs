@@ -340,7 +340,9 @@ public class DemarrageTests
     private sealed class ClassifieurDeTest(
         Func<int, IReadOnlyCollection<string>, ResultatClassification> resultFactory) : IClassifieurDocument
     {
-        public int Appels { get; private set; }
+        private int _appels;
+
+        public int Appels => _appels;
 
         public IReadOnlyCollection<string>? DerniersTypes { get; private set; }
 
@@ -350,7 +352,9 @@ public class DemarrageTests
             CancellationToken cancellationToken = default)
         {
             DerniersTypes = types;
-            return Task.FromResult(resultFactory(++Appels, types));
+            // Les tests envoient des requêtes concurrentes sur la même instance : sans incrément
+            // atomique, un appel se perd et le compteur devient intermittent.
+            return Task.FromResult(resultFactory(Interlocked.Increment(ref _appels), types));
         }
     }
 }
