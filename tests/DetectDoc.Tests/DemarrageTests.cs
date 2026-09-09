@@ -152,7 +152,8 @@ public class DemarrageTests
     [Fact]
     public async Task RefuseUnPdfSansTexteAvantDAppelerFlowise()
     {
-        await using var application = CreerApplication("Development");
+        var classifieur = new ClassifieurDeTest((_, _) => new ResultatClassification("RIB", 0.5));
+        await using var application = CreerApplication("Development", classifieur);
         using var client = application.CreateClient();
         using var contenu = CreerPdfMultipart(string.Empty);
         contenu.Add(new StringContent("[\"RIB\"]"), "types");
@@ -161,6 +162,55 @@ public class DemarrageTests
         using var response = await client.PostAsync("/api/documents/classify", contenu);
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        Assert.Equal(0, classifieur.Appels);
+    }
+
+    [Fact]
+    public async Task ClassifieUnPdfAvecUnScoreFaibleEtDesTypesDynamiques()
+    {
+        var classifieur = new ClassifieurDeTest((_, _) => new ResultatClassification("DEVIS", 0.12, "run-123"));
+        await using var application = CreerApplication("Development", classifieur);
+        using var client = application.CreateClient();
+        using var contenu = CreerPdfMultipart("Demande de devis");
+        contenu.Add(new StringContent("RIB, DEVIS"), "types");
+        contenu.Add(new StringContent("pdfpig"), "engine");
+
+        using var response = await client.PostAsync("/api/documents/classify", contenu);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var resultat = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("DEVIS", resultat.RootElement.GetProperty("type").GetString());
+        Assert.Equal(0.12, resultat.RootElement.GetProperty("confiance").GetDouble());
+        Assert.Equal("run-123", resultat.RootElement.GetProperty("executionId").GetString());
+        Assert.Equal(["RIB", "DEVIS"], classifieur.DerniersTypes);
+    }
+
+    [Fact]
+    public async Task ReprendApresUneErreurFlowiseEtAccepteDeuxRequetes()
+    {
+        var classifieur = new ClassifieurDeTest((appel, _) => appel == 1
+            ? throw new HttpRequestException("Flowise indisponible.")
+            : new ResultatClassification("RIB", 0.9));
+        await using var application = CreerApplication("Development", classifieur);
+        using var client = application.CreateClient();
+
+        using var premierContenu = CreerPdfMultipart("premier document");
+        premierContenu.Add(new StringContent("[\"RIB\"]"), "types");
+        premierContenu.Add(new StringContent("pdfpig"), "engine");
+        using var premier = await client.PostAsync("/api/documents/classify", premierContenu);
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, premier.StatusCode);
+
+        var second = EnvoyerClassificationAsync(client, "second document");
+        var troisieme = EnvoyerClassificationAsync(client, "troisième document");
+        var reponses = await Task.WhenAll(second, troisieme);
+
+        Assert.All(reponses, response =>
+        {
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            response.Dispose();
+        });
+        Assert.Equal(3, classifieur.Appels);
     }
 
     [Fact]
@@ -175,13 +225,27 @@ public class DemarrageTests
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
-    private static WebApplicationFactory<Program> CreerApplication(string environnement) =>
+    private static WebApplicationFactory<Program> CreerApplication(
+        string environnement,
+        IClassifieurDocument? classifieur = null) =>
         new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder =>
             {
                 builder.UseEnvironment(environnement);
+                if (classifieur is not null)
+                {
+                    builder.ConfigureServices(services => services.AddSingleton(classifieur));
+                }
                 builder.ConfigureLogging(logging => logging.ClearProviders());
             });
+
+    private static async Task<HttpResponseMessage> EnvoyerClassificationAsync(HttpClient client, string texte)
+    {
+        using var contenu = CreerPdfMultipart(texte);
+        contenu.Add(new StringContent("[\"RIB\"]"), "types");
+        contenu.Add(new StringContent("pdfpig"), "engine");
+        return await client.PostAsync("/api/documents/classify", contenu);
+    }
 
     private static MultipartFormDataContent CreerPdfMultipart(string texte)
     {
@@ -198,5 +262,22 @@ public class DemarrageTests
             string texte,
             IReadOnlyCollection<string> types,
             CancellationToken cancellationToken = default) => Task.FromException<ResultatClassification>(exception);
+    }
+
+    private sealed class ClassifieurDeTest(
+        Func<int, IReadOnlyCollection<string>, ResultatClassification> resultFactory) : IClassifieurDocument
+    {
+        public int Appels { get; private set; }
+
+        public IReadOnlyCollection<string>? DerniersTypes { get; private set; }
+
+        public Task<ResultatClassification> ClasserAsync(
+            string texte,
+            IReadOnlyCollection<string> types,
+            CancellationToken cancellationToken = default)
+        {
+            DerniersTypes = types;
+            return Task.FromResult(resultFactory(++Appels, types));
+        }
     }
 }
