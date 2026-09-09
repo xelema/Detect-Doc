@@ -28,7 +28,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(_ => new PpOcrEngine("tiny", repertoireModeles, reconnaissancesParalleles));
         services.AddSingleton(fournisseur => new ExtractionAutomatique(
             fournisseur.GetRequiredService<PdfPigNativeTextEngine>(),
-            fournisseur.GetRequiredService<PpOcrEngine>()));
+            () => fournisseur.GetRequiredService<PpOcrEngine>()));
         services.AddSingleton(new FlowiseOptions(
             configuration["Flowise:BaseUrl"],
             configuration["Flowise:FlowId"]));

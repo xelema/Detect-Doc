@@ -206,6 +206,23 @@ public class DemarrageTests
     }
 
     [Fact]
+    public async Task ClassifieEnAutoSansLesModelesOcr()
+    {
+        var classifieur = new ClassifieurDeTest((_, _) => new ResultatClassification("RIB", 0.9));
+        await using var application = CreerApplication("Development", classifieur);
+        using var client = application.CreateClient();
+        using var contenu = CreerPdfMultipart("Texte natif lisible");
+        contenu.Add(new StringContent("[\"RIB\"]"), "types");
+        contenu.Add(new StringContent("auto"), "engine");
+
+        using var response = await client.PostAsync("/api/documents/classify", contenu);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var resultat = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("PdfPig", resultat.RootElement.GetProperty("moteur").GetString());
+    }
+
+    [Fact]
     public async Task RefuseUnPdfSansTexteAvantDAppelerFlowise()
     {
         var classifieur = new ClassifieurDeTest((_, _) => new ResultatClassification("RIB", 0.5));
