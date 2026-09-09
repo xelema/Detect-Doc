@@ -33,15 +33,26 @@ public sealed class FlowiseDocumentClassifier(HttpClient httpClient, FlowiseOpti
             cancellationToken);
         response.EnsureSuccessStatusCode();
 
-        var enveloppe = await response.Content.ReadFromJsonAsync<ReponseFlowise>(cancellationToken);
-        if (string.IsNullOrWhiteSpace(enveloppe?.Text))
+        ReponseFlowise? enveloppe;
+        ResultatClassification? resultat;
+        try
         {
-            throw new InvalidDataException("La réponse Flowise ne contient pas de champ text.");
-        }
+            enveloppe = await response.Content.ReadFromJsonAsync<ReponseFlowise>(cancellationToken);
+            if (string.IsNullOrWhiteSpace(enveloppe?.Text))
+            {
+                throw new InvalidDataException("La réponse Flowise ne contient pas de champ text.");
+            }
 
-        var resultat = JsonSerializer.Deserialize<ResultatClassification>(
-            enveloppe.Text,
-            JsonSerializerOptions.Web);
+            resultat = JsonSerializer.Deserialize<ResultatClassification>(
+                enveloppe.Text,
+                JsonSerializerOptions.Web);
+        }
+        catch (JsonException exception)
+        {
+            // Le flux peut répondre en langage naturel au lieu du JSON attendu : c'est une panne
+            // amont, pas une erreur de l'appelant, et le contrat HTTP la traduit en 502.
+            throw new InvalidDataException("La réponse Flowise n'est pas un JSON exploitable.", exception);
+        }
         if (resultat is null
             || string.IsNullOrWhiteSpace(resultat.Type)
             || !double.IsFinite(resultat.Confiance)
