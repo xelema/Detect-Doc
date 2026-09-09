@@ -149,6 +149,23 @@ public class DemarrageTests
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
     }
 
+    [Theory]
+    [InlineData("[null]")]
+    [InlineData("[\"RIB\", null]")]
+    public async Task RefuseUnTypeNullDansLaListe(string types)
+    {
+        await using var application = CreerApplication("Development");
+        using var client = application.CreateClient();
+        using var contenu = CreerPdfMultipart("contenu");
+        contenu.Add(new StringContent(types), "types");
+        contenu.Add(new StringContent("pdfpig"), "engine");
+
+        using var response = await client.PostAsync("/api/documents/classify", contenu);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+    }
+
     [Fact]
     public async Task RefuseUnPdfSansTexteAvantDAppelerFlowise()
     {
