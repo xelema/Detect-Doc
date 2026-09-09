@@ -186,6 +186,26 @@ public class DemarrageTests
     }
 
     [Fact]
+    public async Task SignaleUnPdfTronqueSurLaRouteDeClassification()
+    {
+        var classifieur = new ClassifieurDeTest((_, _) => new ResultatClassification("RIB", 0.9));
+        await using var application = CreerApplication("Development", classifieur);
+        using var client = application.CreateClient();
+        using var contenu = new MultipartFormDataContent();
+        // L'en-tête reste intact : seule la structure du document est coupée.
+        contenu.Add(new ByteArrayContent(PdfDeTest.Construire("contenu")[..64]), "file", "document.pdf");
+        contenu.Add(new StringContent("[\"RIB\"]"), "types");
+        contenu.Add(new StringContent("pdfpig"), "engine");
+
+        using var response = await client.PostAsync("/api/documents/classify", contenu);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        using var probleme = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("PDF invalide.", probleme.RootElement.GetProperty("title").GetString());
+        Assert.Equal(0, classifieur.Appels);
+    }
+
+    [Fact]
     public async Task RefuseUnPdfSansTexteAvantDAppelerFlowise()
     {
         var classifieur = new ClassifieurDeTest((_, _) => new ResultatClassification("RIB", 0.5));

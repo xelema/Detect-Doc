@@ -4,6 +4,7 @@ using DetectDoc.Core.Classification;
 using DetectDoc.Core.Engines;
 using DetectDoc.Infrastructure.Engines;
 using Microsoft.AspNetCore.Mvc;
+using UglyToad.PdfPig.Core;
 
 namespace DetectDoc.Api.Endpoints;
 
@@ -92,6 +93,15 @@ public static class ClassificationEndpoints
                 return Results.Problem(
                     title: "PDF invalide.",
                     detail: exception.Message,
+                    statusCode: StatusCodes.Status422UnprocessableEntity);
+            }
+            catch (PdfDocumentFormatException)
+            {
+                // PdfPig accepte l'en-tête puis échoue sur la structure : la signature validée en
+                // amont ne garantit pas un document ouvrable.
+                return Results.Problem(
+                    title: "PDF invalide.",
+                    detail: "Le fichier ne contient pas un PDF lisible.",
                     statusCode: StatusCodes.Status422UnprocessableEntity);
             }
             catch (ArgumentException exception)
