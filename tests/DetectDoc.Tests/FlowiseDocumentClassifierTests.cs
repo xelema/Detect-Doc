@@ -16,7 +16,7 @@ public class FlowiseDocumentClassifierTests
             client,
             new FlowiseOptions("https://flowise.test", "flow-test"));
 
-        var resultat = await classifieur.ClasserAsync(
+        var resultat = await classifieur.ClassifyAsync(
             "RELEVÉ D’IDENTITÉ BANCAIRE",
             ["RIB", "FEUILLE_EMAR"]);
 
@@ -35,7 +35,7 @@ public class FlowiseDocumentClassifierTests
             new FlowiseOptions("https://flowise.test", "flow-test"));
 
         await Assert.ThrowsAsync<InvalidDataException>(
-            () => classifieur.ClasserAsync("un texte", ["RIB"]));
+            () => classifieur.ClassifyAsync("un texte", ["RIB"]));
     }
 
     private sealed class ReponseFixeHandler(string corps) : HttpMessageHandler

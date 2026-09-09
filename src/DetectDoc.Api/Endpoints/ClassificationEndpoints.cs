@@ -17,7 +17,7 @@ public static class ClassificationEndpoints
             [FromForm] string? engine,
             PdfPigNativeTextEngine pdfPig,
             IServiceProvider services,
-            IClassifieurDocument classifieur,
+            IDocumentClassifier classifieur,
             CancellationToken cancellationToken) =>
         {
             var total = Stopwatch.StartNew();
@@ -63,7 +63,7 @@ public static class ClassificationEndpoints
             // L'extraction et l'appel à Flowise échouent pour des raisons distinctes : un PDF
             // illisible est une erreur de l'appelant, une réponse Flowise absente est une panne
             // amont. Les deux blocs restent séparés pour que chaque cause garde son statut.
-            IReadOnlyList<ResultatExtractionPage> pages;
+            IReadOnlyList<PageExtractionResult> pages;
             string moteurEffectif;
             var extraction = Stopwatch.StartNew();
             try
@@ -72,7 +72,7 @@ public static class ClassificationEndpoints
                 switch (engine?.ToLowerInvariant())
                 {
                     case null or "" or "auto":
-                        var extractionAutomatique = services.GetRequiredService<ExtractionAutomatique>()
+                        var extractionAutomatique = services.GetRequiredService<AutomaticExtraction>()
                             .Extract(flux, cancellationToken);
                         pages = extractionAutomatique.Pages;
                         moteurEffectif = extractionAutomatique.Moteur;
@@ -90,7 +90,7 @@ public static class ClassificationEndpoints
                         throw new ArgumentException("Le moteur doit être auto, pdfpig ou ppocr-tiny.", nameof(engine));
                 }
             }
-            catch (Exception exception) when (ProblemesHttp.PourExtraction(exception) is { } probleme)
+            catch (Exception exception) when (HttpProblems.ForExtraction(exception) is { } probleme)
             {
                 return probleme;
             }
@@ -107,12 +107,12 @@ public static class ClassificationEndpoints
             }
 
             var classification = Stopwatch.StartNew();
-            ResultatClassification resultat;
+            ClassificationResult resultat;
             try
             {
-                resultat = await classifieur.ClasserAsync(texte, typesValides, cancellationToken);
+                resultat = await classifieur.ClassifyAsync(texte, typesValides, cancellationToken);
             }
-            catch (Exception exception) when (ProblemesHttp.PourFlowise(exception, cancellationToken) is { } probleme)
+            catch (Exception exception) when (HttpProblems.ForFlowise(exception, cancellationToken) is { } probleme)
             {
                 return probleme;
             }

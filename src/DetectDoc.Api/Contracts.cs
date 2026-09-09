@@ -5,7 +5,7 @@ public sealed record ResultatExtractionPageHttp(
     string Texte,
     float? ConfianceOcr);
 
-public sealed record RequeteClassificationHttp(string Texte, string[] Types);
+public sealed record ClassificationHttpRequest(string Texte, string[] Types);
 
 public sealed record ResultatClassificationDocumentHttp(
     string Type,

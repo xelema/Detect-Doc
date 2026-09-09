@@ -5,11 +5,11 @@ namespace DetectDoc.Api.Endpoints;
 // Les routes de classification et d'extraction rencontrent les mêmes exceptions : le mapping vit
 // ici pour qu'une route ajoutée ou modifiée garde le contrat HTTP des autres. Chaque fabrique
 // retourne null quand elle ne reconnaît pas l'exception, ce qui la laisse remonter au framework.
-internal static class ProblemesHttp
+internal static class HttpProblems
 {
     // Échecs des moteurs d'extraction : ils décrivent une entrée que l'appelant contrôle, sauf le
     // moteur dont les modèles manquent, qui est un défaut de déploiement.
-    public static IResult? PourExtraction(Exception exception) => exception switch
+    public static IResult? ForExtraction(Exception exception) => exception switch
     {
         InvalidDataException => Results.Problem(
             title: "PDF invalide.",
@@ -34,7 +34,7 @@ internal static class ProblemesHttp
 
     // Échecs de l'appel à Flowise. Une annulation demandée par le client n'en fait pas partie :
     // elle remonte telle quelle plutôt que de se faire passer pour un dépassement de délai.
-    public static IResult? PourFlowise(Exception exception, CancellationToken cancellationToken) => exception switch
+    public static IResult? ForFlowise(Exception exception, CancellationToken cancellationToken) => exception switch
     {
         InvalidDataException => Results.Problem(
             title: "Réponse Flowise invalide.",

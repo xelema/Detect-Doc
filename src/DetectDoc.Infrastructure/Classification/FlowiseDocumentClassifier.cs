@@ -7,9 +7,9 @@ namespace DetectDoc.Infrastructure.Classification;
 public sealed record FlowiseOptions(string? BaseUrl, string? FlowId);
 
 public sealed class FlowiseDocumentClassifier(HttpClient httpClient, FlowiseOptions options)
-    : IClassifieurDocument
+    : IDocumentClassifier
 {
-    public async Task<ResultatClassification> ClasserAsync(
+    public async Task<ClassificationResult> ClassifyAsync(
         string texte,
         IReadOnlyCollection<string> types,
         CancellationToken cancellationToken = default)
@@ -33,17 +33,17 @@ public sealed class FlowiseDocumentClassifier(HttpClient httpClient, FlowiseOpti
             cancellationToken);
         response.EnsureSuccessStatusCode();
 
-        ReponseFlowise? enveloppe;
-        ResultatClassification? resultat;
+        FlowiseResponse? enveloppe;
+        ClassificationResult? resultat;
         try
         {
-            enveloppe = await response.Content.ReadFromJsonAsync<ReponseFlowise>(cancellationToken);
+            enveloppe = await response.Content.ReadFromJsonAsync<FlowiseResponse>(cancellationToken);
             if (string.IsNullOrWhiteSpace(enveloppe?.Text))
             {
                 throw new InvalidDataException("La réponse Flowise ne contient pas de champ text.");
             }
 
-            resultat = JsonSerializer.Deserialize<ResultatClassification>(
+            resultat = JsonSerializer.Deserialize<ClassificationResult>(
                 enveloppe.Text,
                 JsonSerializerOptions.Web);
         }
@@ -65,5 +65,5 @@ public sealed class FlowiseDocumentClassifier(HttpClient httpClient, FlowiseOpti
         return resultat with { ExecutionId = enveloppe.ExecutionId };
     }
 
-    private sealed record ReponseFlowise(string? Text, string? ExecutionId);
+    private sealed record FlowiseResponse(string? Text, string? ExecutionId);
 }

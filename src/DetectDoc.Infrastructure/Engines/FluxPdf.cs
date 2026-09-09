@@ -1,10 +1,10 @@
 namespace DetectDoc.Infrastructure.Engines;
 
-internal static class FluxPdf
+internal static class PdfStream
 {
     // Les moteurs relisent le flux à plusieurs reprises et le parseur accepte des octets
     // arbitraires : on exige un flux rejouable et une signature PDF avant tout traitement.
-    public static void Valider(Stream fluxDocument)
+    public static void Validate(Stream fluxDocument)
     {
         ArgumentNullException.ThrowIfNull(fluxDocument);
         if (!fluxDocument.CanRead || !fluxDocument.CanSeek)

@@ -26,13 +26,13 @@ public static class ServiceCollectionExtensions
         // Le constructeur charge les modèles ONNX : la résolution reste paresseuse pour que
         // l'API démarre sans modèle et que leur absence se traduise par une erreur de requête.
         services.AddSingleton(_ => new PpOcrEngine("tiny", repertoireModeles, reconnaissancesParalleles));
-        services.AddSingleton(fournisseur => new ExtractionAutomatique(
+        services.AddSingleton(fournisseur => new AutomaticExtraction(
             fournisseur.GetRequiredService<PdfPigNativeTextEngine>(),
             () => fournisseur.GetRequiredService<PpOcrEngine>()));
         services.AddSingleton(new FlowiseOptions(
             configuration["Flowise:BaseUrl"],
             configuration["Flowise:FlowId"]));
-        services.AddHttpClient<IClassifieurDocument, FlowiseDocumentClassifier>(client =>
+        services.AddHttpClient<IDocumentClassifier, FlowiseDocumentClassifier>(client =>
                 client.Timeout = TimeSpan.FromSeconds(60))
             .ConfigurePrimaryHttpMessageHandler(() => accepterCertificatInvalide
                 ? new HttpClientHandler

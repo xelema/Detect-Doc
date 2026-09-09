@@ -135,7 +135,7 @@ public class DemarrageTests
             .WithWebHostBuilder(builder =>
             {
                 builder.ConfigureServices(services =>
-                    services.AddSingleton<IClassifieurDocument>(new ClassifieurEnEchec(exception)));
+                    services.AddSingleton<IDocumentClassifier>(new ClassifieurEnEchec(exception)));
                 builder.ConfigureLogging(logging => logging.ClearProviders());
             });
         using var client = application.CreateClient();
@@ -169,7 +169,7 @@ public class DemarrageTests
     [Fact]
     public async Task SignaleUnPdfInvalideSansLImputerAFlowise()
     {
-        var classifieur = new ClassifieurDeTest((_, _) => new ResultatClassification("RIB", 0.9));
+        var classifieur = new ClassifieurDeTest((_, _) => new ClassificationResult("RIB", 0.9));
         await using var application = CreerApplication("Development", classifieur);
         using var client = application.CreateClient();
         using var contenu = new MultipartFormDataContent();
@@ -188,7 +188,7 @@ public class DemarrageTests
     [Fact]
     public async Task SignaleUnPdfTronqueSurLaRouteDeClassification()
     {
-        var classifieur = new ClassifieurDeTest((_, _) => new ResultatClassification("RIB", 0.9));
+        var classifieur = new ClassifieurDeTest((_, _) => new ClassificationResult("RIB", 0.9));
         await using var application = CreerApplication("Development", classifieur);
         using var client = application.CreateClient();
         using var contenu = new MultipartFormDataContent();
@@ -208,7 +208,7 @@ public class DemarrageTests
     [Fact]
     public async Task ClassifieEnAutoSansLesModelesOcr()
     {
-        var classifieur = new ClassifieurDeTest((_, _) => new ResultatClassification("RIB", 0.9));
+        var classifieur = new ClassifieurDeTest((_, _) => new ClassificationResult("RIB", 0.9));
         await using var application = CreerApplication("Development", classifieur);
         using var client = application.CreateClient();
         using var contenu = CreerPdfMultipart("Texte natif lisible");
@@ -227,7 +227,7 @@ public class DemarrageTests
     [InlineData("pdfpig")]
     public async Task RendLeMemeIdentifiantDeMoteurQuelQueSoitLeModeDeSelection(string engine)
     {
-        var classifieur = new ClassifieurDeTest((_, _) => new ResultatClassification("RIB", 0.9));
+        var classifieur = new ClassifieurDeTest((_, _) => new ClassificationResult("RIB", 0.9));
         await using var application = CreerApplication("Development", classifieur);
         using var client = application.CreateClient();
         using var contenu = CreerPdfMultipart("Texte natif lisible");
@@ -244,7 +244,7 @@ public class DemarrageTests
     [Fact]
     public async Task RefuseUnPdfSansTexteAvantDAppelerFlowise()
     {
-        var classifieur = new ClassifieurDeTest((_, _) => new ResultatClassification("RIB", 0.5));
+        var classifieur = new ClassifieurDeTest((_, _) => new ClassificationResult("RIB", 0.5));
         await using var application = CreerApplication("Development", classifieur);
         using var client = application.CreateClient();
         using var contenu = CreerPdfMultipart(string.Empty);
@@ -260,7 +260,7 @@ public class DemarrageTests
     [Fact]
     public async Task ClassifieUnPdfAvecUnScoreFaibleEtDesTypesDynamiques()
     {
-        var classifieur = new ClassifieurDeTest((_, _) => new ResultatClassification("DEVIS", 0.12, "run-123"));
+        var classifieur = new ClassifieurDeTest((_, _) => new ClassificationResult("DEVIS", 0.12, "run-123"));
         await using var application = CreerApplication("Development", classifieur);
         using var client = application.CreateClient();
         using var contenu = CreerPdfMultipart("Demande de devis");
@@ -282,7 +282,7 @@ public class DemarrageTests
     {
         var classifieur = new ClassifieurDeTest((appel, _) => appel == 1
             ? throw new HttpRequestException("Flowise indisponible.")
-            : new ResultatClassification("RIB", 0.9));
+            : new ClassificationResult("RIB", 0.9));
         await using var application = CreerApplication("Development", classifieur);
         using var client = application.CreateClient();
 
@@ -319,7 +319,7 @@ public class DemarrageTests
 
     private static WebApplicationFactory<Program> CreerApplication(
         string environnement,
-        IClassifieurDocument? classifieur = null) =>
+        IDocumentClassifier? classifieur = null) =>
         new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder =>
             {
@@ -348,16 +348,16 @@ public class DemarrageTests
         return contenu;
     }
 
-    private sealed class ClassifieurEnEchec(Exception exception) : IClassifieurDocument
+    private sealed class ClassifieurEnEchec(Exception exception) : IDocumentClassifier
     {
-        public Task<ResultatClassification> ClasserAsync(
+        public Task<ClassificationResult> ClassifyAsync(
             string texte,
             IReadOnlyCollection<string> types,
-            CancellationToken cancellationToken = default) => Task.FromException<ResultatClassification>(exception);
+            CancellationToken cancellationToken = default) => Task.FromException<ClassificationResult>(exception);
     }
 
     private sealed class ClassifieurDeTest(
-        Func<int, IReadOnlyCollection<string>, ResultatClassification> resultFactory) : IClassifieurDocument
+        Func<int, IReadOnlyCollection<string>, ClassificationResult> resultFactory) : IDocumentClassifier
     {
         private int _appels;
 
@@ -365,7 +365,7 @@ public class DemarrageTests
 
         public IReadOnlyCollection<string>? DerniersTypes { get; private set; }
 
-        public Task<ResultatClassification> ClasserAsync(
+        public Task<ClassificationResult> ClassifyAsync(
             string texte,
             IReadOnlyCollection<string> types,
             CancellationToken cancellationToken = default)

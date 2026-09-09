@@ -11,8 +11,8 @@ public static class DevEndpoints
     public static void MapDevEndpoints(this WebApplication app)
     {
         app.MapPost("/api/dev/classify", async Task<IResult> (
-            RequeteClassificationHttp? requete,
-            IClassifieurDocument classifieur,
+            ClassificationHttpRequest? requete,
+            IDocumentClassifier classifieur,
             CancellationToken cancellationToken) =>
         {
             var types = DocumentTypes.Normalize(requete?.Types);
@@ -26,15 +26,15 @@ public static class DevEndpoints
 
             try
             {
-                return Results.Ok(await classifieur.ClasserAsync(requete.Texte, types, cancellationToken));
+                return Results.Ok(await classifieur.ClassifyAsync(requete.Texte, types, cancellationToken));
             }
-            catch (Exception exception) when (ProblemesHttp.PourFlowise(exception, cancellationToken) is { } probleme)
+            catch (Exception exception) when (HttpProblems.ForFlowise(exception, cancellationToken) is { } probleme)
             {
                 return probleme;
             }
         })
             .WithSummary("Classifie un texte avec Flowise.")
-            .Produces<ResultatClassification>()
+            .Produces<ClassificationResult>()
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status502BadGateway)
             .ProducesProblem(StatusCodes.Status503ServiceUnavailable)
@@ -72,7 +72,7 @@ public static class DevEndpoints
 
                 return Results.Ok(pages);
             }
-            catch (Exception exception) when (ProblemesHttp.PourExtraction(exception) is { } probleme)
+            catch (Exception exception) when (HttpProblems.ForExtraction(exception) is { } probleme)
             {
                 return probleme;
             }

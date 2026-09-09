@@ -8,7 +8,7 @@ namespace DetectDoc.Infrastructure.Engines;
 public sealed class PpOcrEngine : ITextExtractionEngine, IDisposable
 {
     private const int Dpi = 300;
-    private const int NombreThreadsOnnx = 1;
+    private const int OnnxThreadCount = 1;
 
     private readonly RapidOcr _ocr = new();
     private readonly RapidOcrOptions _optionsOcr;
@@ -25,14 +25,14 @@ public sealed class PpOcrEngine : ITextExtractionEngine, IDisposable
         {
             RecMaxDegreeOfParallelism = reconnaissancesParalleles
         };
-        _ocr.InitModels(JeuDeModeles(taille, repertoireModeles), NombreThreadsOnnx);
+        _ocr.InitModels(ModelSet(taille, repertoireModeles), OnnxThreadCount);
     }
 
     public string Name => $"ppocr-{_taille}";
 
-    public IReadOnlyList<ResultatExtractionPage> Extract(Stream fluxDocument, CancellationToken cancellationToken = default)
+    public IReadOnlyList<PageExtractionResult> Extract(Stream fluxDocument, CancellationToken cancellationToken = default)
     {
-        FluxPdf.Valider(fluxDocument);
+        PdfStream.Validate(fluxDocument);
         cancellationToken.ThrowIfCancellationRequested();
 
         int nombrePages;
@@ -41,7 +41,7 @@ public sealed class PpOcrEngine : ITextExtractionEngine, IDisposable
             nombrePages = document.NumberOfPages;
         }
 
-        var pages = new List<ResultatExtractionPage>(nombrePages);
+        var pages = new List<PageExtractionResult>(nombrePages);
         for (var numeroPage = 0; numeroPage < nombrePages; numeroPage++)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -60,7 +60,7 @@ public sealed class PpOcrEngine : ITextExtractionEngine, IDisposable
                 .SelectMany(bloc => bloc.CharScores!)
                 .ToArray();
 
-            pages.Add(new ResultatExtractionPage(
+            pages.Add(new PageExtractionResult(
                 numeroPage + 1,
                 string.Join(" ", blocs.Select(bloc => bloc.Text)),
                 confiances.Length > 0 ? confiances.Average() : null));
@@ -69,7 +69,7 @@ public sealed class PpOcrEngine : ITextExtractionEngine, IDisposable
         return pages;
     }
 
-    private static RapidOcrModelSet JeuDeModeles(string taille, string repertoireModeles)
+    private static RapidOcrModelSet ModelSet(string taille, string repertoireModeles)
     {
         var jeu = taille switch
         {
