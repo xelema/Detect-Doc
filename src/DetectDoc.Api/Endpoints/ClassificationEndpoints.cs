@@ -37,7 +37,9 @@ public static class ClassificationEndpoints
             catch (JsonException) when (!types.TrimStart().StartsWith('['))
             {
                 // Swagger poste la liste séparée par des virgules plutôt qu'un tableau JSON.
-                typesDemandes = types.Split(',', StringSplitOptions.TrimEntries);
+                typesDemandes = types.Split(',', StringSplitOptions.TrimEntries)
+                    .Select(type => type.Trim('"'))
+                    .ToArray();
             }
             catch (JsonException)
             {

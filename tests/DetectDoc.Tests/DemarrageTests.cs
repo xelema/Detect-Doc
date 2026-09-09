@@ -172,7 +172,7 @@ public class DemarrageTests
         await using var application = CreerApplication("Development", classifieur);
         using var client = application.CreateClient();
         using var contenu = CreerPdfMultipart("Demande de devis");
-        contenu.Add(new StringContent("RIB, DEVIS"), "types");
+        contenu.Add(new StringContent("\"CV\",\"OFFRE_EMPLOI\",\"RIB\",\"FACTURE\""), "types");
         contenu.Add(new StringContent("pdfpig"), "engine");
 
         using var response = await client.PostAsync("/api/documents/classify", contenu);
@@ -182,7 +182,7 @@ public class DemarrageTests
         Assert.Equal("DEVIS", resultat.RootElement.GetProperty("type").GetString());
         Assert.Equal(0.12, resultat.RootElement.GetProperty("confiance").GetDouble());
         Assert.Equal("run-123", resultat.RootElement.GetProperty("executionId").GetString());
-        Assert.Equal(["RIB", "DEVIS"], classifieur.DerniersTypes);
+        Assert.Equal(["CV", "OFFRE_EMPLOI", "RIB", "FACTURE"], classifieur.DerniersTypes);
     }
 
     [Fact]
