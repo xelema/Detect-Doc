@@ -34,17 +34,11 @@ public class ExtractionAutomatiqueTests
     {
         public int Appels { get; private set; }
         public string Name => nom;
-        public string Version => "test";
-        public IReadOnlyDictionary<string, object> Parametres { get; } = new Dictionary<string, object>();
 
         public IReadOnlyList<ResultatExtractionPage> Extract(Stream fluxDocument, CancellationToken cancellationToken = default)
         {
             Appels++;
             return pages;
-        }
-
-        public void Dispose()
-        {
         }
     }
 }

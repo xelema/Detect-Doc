@@ -6,7 +6,6 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using UglyToad.PdfPig.Writer;
 using Xunit;
 
 namespace DetectDoc.Tests;
@@ -186,18 +185,7 @@ public class DemarrageTests
 
     private static MultipartFormDataContent CreerPdfMultipart(string texte)
     {
-        var builder = new PdfDocumentBuilder();
-        var page = builder.AddPage(UglyToad.PdfPig.Content.PageSize.A4);
-        if (texte.Length > 0)
-        {
-            page.AddText(
-                texte,
-                12,
-                new UglyToad.PdfPig.Core.PdfPoint(50, 700),
-                builder.AddStandard14Font(UglyToad.PdfPig.Fonts.Standard14Fonts.Standard14Font.Helvetica));
-        }
-
-        var fichier = new ByteArrayContent(builder.Build());
+        var fichier = new ByteArrayContent(PdfDeTest.Construire(texte));
         fichier.Headers.ContentType = new MediaTypeHeaderValue("application/pdf");
         var contenu = new MultipartFormDataContent();
         contenu.Add(fichier, "file", "document.pdf");

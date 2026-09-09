@@ -5,13 +5,10 @@ using UglyToad.PdfPig;
 
 namespace DetectDoc.Infrastructure.Engines;
 
-public sealed class PpOcrEngine : ITextExtractionEngine
+public sealed class PpOcrEngine : ITextExtractionEngine, IDisposable
 {
     private const int Dpi = 300;
     private const int NombreThreadsOnnx = 1;
-
-    private static readonly string VersionAssembly =
-        typeof(RapidOcr).Assembly.GetName().Version?.ToString() ?? string.Empty;
 
     private readonly RapidOcr _ocr = new();
     private readonly RapidOcrOptions _optionsOcr;
@@ -29,30 +26,14 @@ public sealed class PpOcrEngine : ITextExtractionEngine
             RecMaxDegreeOfParallelism = reconnaissancesParalleles
         };
         _ocr.InitModels(JeuDeModeles(taille, repertoireModeles), NombreThreadsOnnx);
-        Parametres = new Dictionary<string, object>
-        {
-            ["taille"] = taille,
-            ["dpi"] = Dpi,
-            ["threads_onnx"] = NombreThreadsOnnx,
-            ["reconnaissances_paralleles"] = reconnaissancesParalleles,
-            ["classifieur_orientation"] = _optionsOcr.DoAngle
-        };
     }
 
     public string Name => $"PP-OCRv6-{_taille}";
-    public string Version => VersionAssembly;
-    public IReadOnlyDictionary<string, object> Parametres { get; }
 
     public IReadOnlyList<ResultatExtractionPage> Extract(Stream fluxDocument, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(fluxDocument);
-        if (!fluxDocument.CanRead || !fluxDocument.CanSeek)
-        {
-            throw new ArgumentException("Le flux doit être lisible et seekable.", nameof(fluxDocument));
-        }
-
+        FluxPdf.Valider(fluxDocument);
         cancellationToken.ThrowIfCancellationRequested();
-        ValiderSignature(fluxDocument);
 
         int nombrePages;
         using (var document = PdfDocument.Open(fluxDocument))
@@ -66,23 +47,22 @@ public sealed class PpOcrEngine : ITextExtractionEngine
             cancellationToken.ThrowIfCancellationRequested();
             fluxDocument.Position = 0;
 
+            // Une page rendue est libérée avant la suivante : le PDF entier ne tient jamais en mémoire.
             using var image = Conversion.ToImage(
                 fluxDocument,
                 numeroPage,
                 leaveOpen: true,
                 password: null,
                 options: new RenderOptions(Dpi: Dpi));
-            var resultat = _ocr.Detect(image, _optionsOcr);
-            var blocs = resultat.TextBlocks;
+            var blocs = _ocr.Detect(image, _optionsOcr).TextBlocks;
             var confiances = blocs
                 .Where(bloc => bloc.CharScores is { Length: > 0 })
                 .SelectMany(bloc => bloc.CharScores!)
                 .ToArray();
-            var texte = string.Join(" ", blocs.Select(bloc => bloc.Text));
 
             pages.Add(new ResultatExtractionPage(
                 numeroPage + 1,
-                texte,
+                string.Join(" ", blocs.Select(bloc => bloc.Text)),
                 confiances.Length > 0 ? confiances.Average() : null));
         }
 
@@ -103,6 +83,7 @@ public sealed class PpOcrEngine : ITextExtractionEngine
         var modeleDetecteur = Path.Combine(repertoireV6, Path.GetFileName(jeu.DetModelPath));
         var modeleReconnaissance = Path.Combine(repertoireV6, Path.GetFileName(jeu.RecModelPath));
         var dictionnaire = Path.Combine(repertoireV6, Path.GetFileName(jeu.KeysPath));
+        // Le classifieur d'orientation reste celui livré par RapidOcrNet, à côté du binaire.
         var modeleOrientation = Path.Combine(AppContext.BaseDirectory, jeu.ClsModelPath);
         foreach (var chemin in new[] { modeleDetecteur, modeleOrientation, modeleReconnaissance, dictionnaire })
         {
@@ -119,20 +100,6 @@ public sealed class PpOcrEngine : ITextExtractionEngine
             RecModelPath = modeleReconnaissance,
             KeysPath = dictionnaire
         };
-    }
-
-    private static void ValiderSignature(Stream fluxDocument)
-    {
-        Span<byte> signature = stackalloc byte[5];
-        fluxDocument.Position = 0;
-        var estPdf = fluxDocument.ReadAtLeast(signature, signature.Length, throwOnEndOfStream: false) == signature.Length
-            && signature.SequenceEqual("%PDF-"u8);
-        fluxDocument.Position = 0;
-
-        if (!estPdf)
-        {
-            throw new InvalidDataException("Le flux ne porte pas une signature PDF valide.");
-        }
     }
 
     public void Dispose() => _ocr.Dispose();

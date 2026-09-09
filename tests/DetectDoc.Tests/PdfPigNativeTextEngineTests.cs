@@ -1,5 +1,4 @@
 using DetectDoc.Infrastructure.Engines;
-using UglyToad.PdfPig.Writer;
 using Xunit;
 
 namespace DetectDoc.Tests;
@@ -9,23 +8,12 @@ public class PdfPigNativeTextEngineTests
     [Fact]
     public void Extract_ExtraitLeTexteDUnPdfNatif()
     {
-        // Arrange
-        var builder = new PdfDocumentBuilder();
-        var page1 = builder.AddPage(UglyToad.PdfPig.Content.PageSize.A4);
-        page1.AddText("Bonjour le monde, ceci est la page 1", 12, new UglyToad.PdfPig.Core.PdfPoint(50, 700), builder.AddStandard14Font(UglyToad.PdfPig.Fonts.Standard14Fonts.Standard14Font.Helvetica));
+        using var stream = new MemoryStream(
+            PdfDeTest.Construire("Bonjour le monde, ceci est la page 1", "Facture 12345"));
+        var engine = new PdfPigNativeTextEngine();
 
-        var page2 = builder.AddPage(UglyToad.PdfPig.Content.PageSize.A4);
-        page2.AddText("Facture 12345", 12, new UglyToad.PdfPig.Core.PdfPoint(50, 700), builder.AddStandard14Font(UglyToad.PdfPig.Fonts.Standard14Fonts.Standard14Font.Helvetica));
-
-        byte[] pdfOctets = builder.Build();
-        using var stream = new MemoryStream(pdfOctets);
-
-        using var engine = new PdfPigNativeTextEngine();
-
-        // Act
         var resultat = engine.Extract(stream);
 
-        // Assert
         Assert.Collection(
             resultat,
             page =>
@@ -46,18 +34,11 @@ public class PdfPigNativeTextEngineTests
     [Fact]
     public void Extract_RetourneTexteVidePourUnePageSansTexteNatif()
     {
-        // Arrange
-        var builder = new PdfDocumentBuilder();
-        builder.AddPage(UglyToad.PdfPig.Content.PageSize.A4);
-        byte[] pdfOctets = builder.Build();
-        using var stream = new MemoryStream(pdfOctets);
+        using var stream = new MemoryStream(PdfDeTest.Construire(string.Empty));
+        var engine = new PdfPigNativeTextEngine();
 
-        using var engine = new PdfPigNativeTextEngine();
-
-        // Act
         var resultat = engine.Extract(stream);
 
-        // Assert
         var page = Assert.Single(resultat);
         Assert.Equal(1, page.NumeroPage);
         Assert.Equal(string.Empty, page.Texte);
@@ -68,7 +49,7 @@ public class PdfPigNativeTextEngineTests
     public void Extract_RefuseUnFluxSansSignaturePdf()
     {
         using var stream = new MemoryStream("pas un PDF"u8.ToArray());
-        using var engine = new PdfPigNativeTextEngine();
+        var engine = new PdfPigNativeTextEngine();
 
         var exception = Assert.Throws<InvalidDataException>(() => engine.Extract(stream));
 
@@ -78,10 +59,8 @@ public class PdfPigNativeTextEngineTests
     [Fact]
     public void Extract_RespecteUneAnnulationDejaDemandee()
     {
-        var builder = new PdfDocumentBuilder();
-        builder.AddPage(UglyToad.PdfPig.Content.PageSize.A4);
-        using var stream = new MemoryStream(builder.Build());
-        using var engine = new PdfPigNativeTextEngine();
+        using var stream = new MemoryStream(PdfDeTest.Construire(string.Empty));
+        var engine = new PdfPigNativeTextEngine();
 
         Assert.Throws<OperationCanceledException>(
             () => engine.Extract(stream, new CancellationToken(canceled: true)));
@@ -101,7 +80,7 @@ public class PdfPigNativeTextEngineTests
         var cheminPdf = Path.Combine(ObtenirRacineProjet(), "corpus", "raw", "dev-0003.pdf");
 
         using var stream = File.OpenRead(cheminPdf);
-        using var engine = new PdfPigNativeTextEngine();
+        var engine = new PdfPigNativeTextEngine();
 
         var resultat = engine.Extract(stream);
 

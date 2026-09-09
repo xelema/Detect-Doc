@@ -5,11 +5,10 @@ public readonly record struct ResultatExtractionPage(
     string Texte,
     float? Confiance);
 
-public interface ITextExtractionEngine : IDisposable
+public interface ITextExtractionEngine
 {
     string Name { get; }
-    string Version { get; }
-    IReadOnlyDictionary<string, object> Parametres { get; }
+
     IReadOnlyList<ResultatExtractionPage> Extract(
         Stream fluxDocument,
         CancellationToken cancellationToken = default);

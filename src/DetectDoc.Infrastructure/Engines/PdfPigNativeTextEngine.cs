@@ -3,33 +3,16 @@ using UglyToad.PdfPig;
 
 namespace DetectDoc.Infrastructure.Engines;
 
-public class PdfPigNativeTextEngine : ITextExtractionEngine
+public sealed class PdfPigNativeTextEngine : ITextExtractionEngine
 {
-    private static readonly IReadOnlyDictionary<string, object> ParametresMoteur =
-        new Dictionary<string, object>
-        {
-            ["extraction"] = "GetWords"
-        };
-
-    private static readonly string VersionAssembly =
-        typeof(PdfDocument).Assembly.GetName().Version?.ToString() ?? string.Empty;
-
     public string Name => "PdfPig";
-    public string Version => VersionAssembly;
-    public IReadOnlyDictionary<string, object> Parametres => ParametresMoteur;
 
     public IReadOnlyList<ResultatExtractionPage> Extract(
         Stream fluxDocument,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(fluxDocument);
-        if (!fluxDocument.CanRead || !fluxDocument.CanSeek)
-        {
-            throw new ArgumentException("Le flux doit être lisible et seekable.", nameof(fluxDocument));
-        }
-
+        FluxPdf.Valider(fluxDocument);
         cancellationToken.ThrowIfCancellationRequested();
-        ValiderSignature(fluxDocument);
 
         using var document = PdfDocument.Open(fluxDocument);
         var resultats = new List<ResultatExtractionPage>(document.NumberOfPages);
@@ -42,23 +25,5 @@ public class PdfPigNativeTextEngine : ITextExtractionEngine
         }
 
         return resultats;
-    }
-
-    private static void ValiderSignature(Stream fluxDocument)
-    {
-        Span<byte> signature = stackalloc byte[5];
-        fluxDocument.Position = 0;
-        var estPdf = fluxDocument.ReadAtLeast(signature, signature.Length, throwOnEndOfStream: false) == signature.Length
-            && signature.SequenceEqual("%PDF-"u8);
-        fluxDocument.Position = 0;
-
-        if (!estPdf)
-        {
-            throw new InvalidDataException("Le flux ne porte pas une signature PDF valide.");
-        }
-    }
-
-    public void Dispose()
-    {
     }
 }
