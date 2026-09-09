@@ -58,12 +58,15 @@ public static class ClassificationEndpoints
                     statusCode: StatusCodes.Status400BadRequest);
             }
 
+            // L'extraction et l'appel à Flowise échouent pour des raisons distinctes : un PDF
+            // illisible est une erreur de l'appelant, une réponse Flowise absente est une panne
+            // amont. Les deux blocs restent séparés pour que chaque cause garde son statut.
+            IReadOnlyList<ResultatExtractionPage> pages;
+            string moteurEffectif;
+            var extraction = Stopwatch.StartNew();
             try
             {
                 using var flux = file.OpenReadStream();
-                var extraction = Stopwatch.StartNew();
-                IReadOnlyList<ResultatExtractionPage> pages;
-                string moteurEffectif;
                 switch (engine?.ToLowerInvariant())
                 {
                     case null or "" or "auto":
@@ -83,38 +86,45 @@ public static class ClassificationEndpoints
                     default:
                         throw new ArgumentException("Le moteur doit être auto, pdfpig ou ppocr-tiny.", nameof(engine));
                 }
-                extraction.Stop();
-
-                var texte = string.Join(Environment.NewLine, pages.Select(page => page.Texte));
-                if (string.IsNullOrWhiteSpace(texte))
-                {
-                    return Results.Problem(
-                        title: "Texte inexploitable.",
-                        detail: "L'extraction ne retourne aucun texte.",
-                        statusCode: StatusCodes.Status422UnprocessableEntity);
-                }
-
-                var classification = Stopwatch.StartNew();
-                var resultat = await classifieur.ClasserAsync(texte, typesValides, cancellationToken);
-                classification.Stop();
-                total.Stop();
-
-                return Results.Ok(new ResultatClassificationDocumentHttp(
-                    resultat.Type,
-                    resultat.Confiance,
-                    moteurEffectif,
-                    pages.Count,
-                    extraction.ElapsedMilliseconds,
-                    classification.ElapsedMilliseconds,
-                    total.ElapsedMilliseconds,
-                    resultat.ExecutionId));
+            }
+            catch (InvalidDataException exception)
+            {
+                return Results.Problem(
+                    title: "PDF invalide.",
+                    detail: exception.Message,
+                    statusCode: StatusCodes.Status422UnprocessableEntity);
             }
             catch (ArgumentException exception)
             {
                 return Results.Problem(
-                    title: "Requête invalide.",
+                    title: "Moteur inconnu.",
                     detail: exception.Message,
                     statusCode: StatusCodes.Status400BadRequest);
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Problem(
+                    title: "Moteur indisponible.",
+                    detail: exception.Message,
+                    statusCode: StatusCodes.Status503ServiceUnavailable);
+            }
+
+            extraction.Stop();
+
+            var texte = string.Join(Environment.NewLine, pages.Select(page => page.Texte));
+            if (string.IsNullOrWhiteSpace(texte))
+            {
+                return Results.Problem(
+                    title: "Texte inexploitable.",
+                    detail: "L'extraction ne retourne aucun texte.",
+                    statusCode: StatusCodes.Status422UnprocessableEntity);
+            }
+
+            var classification = Stopwatch.StartNew();
+            ResultatClassification resultat;
+            try
+            {
+                resultat = await classifieur.ClasserAsync(texte, typesValides, cancellationToken);
             }
             catch (InvalidDataException exception)
             {
@@ -139,10 +149,23 @@ public static class ClassificationEndpoints
             catch (InvalidOperationException exception)
             {
                 return Results.Problem(
-                    title: "Service indisponible.",
+                    title: "Flowise non configuré.",
                     detail: exception.Message,
                     statusCode: StatusCodes.Status503ServiceUnavailable);
             }
+
+            classification.Stop();
+            total.Stop();
+
+            return Results.Ok(new ResultatClassificationDocumentHttp(
+                resultat.Type,
+                resultat.Confiance,
+                moteurEffectif,
+                pages.Count,
+                extraction.ElapsedMilliseconds,
+                classification.ElapsedMilliseconds,
+                total.ElapsedMilliseconds,
+                resultat.ExecutionId));
         })
             .DisableAntiforgery()
             .WithSummary("Extrait puis classe un PDF avec le moteur choisi.")
