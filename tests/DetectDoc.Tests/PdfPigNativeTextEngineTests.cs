@@ -28,7 +28,7 @@ public class PdfPigNativeTextEngineTests
                 Assert.Contains("Facture 12345", page.Texte);
                 Assert.Null(page.Confiance);
             });
-        Assert.Equal("PdfPig", engine.Name);
+        Assert.Equal("pdfpig", engine.Name);
     }
 
     [Fact]

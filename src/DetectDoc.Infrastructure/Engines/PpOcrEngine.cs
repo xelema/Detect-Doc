@@ -28,7 +28,7 @@ public sealed class PpOcrEngine : ITextExtractionEngine, IDisposable
         _ocr.InitModels(JeuDeModeles(taille, repertoireModeles), NombreThreadsOnnx);
     }
 
-    public string Name => $"PP-OCRv6-{_taille}";
+    public string Name => $"ppocr-{_taille}";
 
     public IReadOnlyList<ResultatExtractionPage> Extract(Stream fluxDocument, CancellationToken cancellationToken = default)
     {

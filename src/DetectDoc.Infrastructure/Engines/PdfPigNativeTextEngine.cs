@@ -5,7 +5,7 @@ namespace DetectDoc.Infrastructure.Engines;
 
 public sealed class PdfPigNativeTextEngine : ITextExtractionEngine
 {
-    public string Name => "PdfPig";
+    public string Name => "pdfpig";
 
     public IReadOnlyList<ResultatExtractionPage> Extract(
         Stream fluxDocument,

@@ -58,6 +58,8 @@ public static class ClassificationEndpoints
                     statusCode: StatusCodes.Status400BadRequest);
             }
 
+            // Le moteur rendu dans la réponse vient toujours de ITextExtractionEngine.Name, y compris
+            // en mode auto : l'appelant reçoit une valeur qu'il peut renvoyer telle quelle dans engine.
             // L'extraction et l'appel à Flowise échouent pour des raisons distinctes : un PDF
             // illisible est une erreur de l'appelant, une réponse Flowise absente est une panne
             // amont. Les deux blocs restent séparés pour que chaque cause garde son statut.
@@ -77,11 +79,12 @@ public static class ClassificationEndpoints
                         break;
                     case "pdfpig":
                         pages = pdfPig.Extract(flux, cancellationToken);
-                        moteurEffectif = "pdfpig";
+                        moteurEffectif = pdfPig.Name;
                         break;
                     case "ppocr-tiny":
-                        pages = services.GetRequiredService<PpOcrEngine>().Extract(flux, cancellationToken);
-                        moteurEffectif = "ppocr-tiny";
+                        var ppOcr = services.GetRequiredService<PpOcrEngine>();
+                        pages = ppOcr.Extract(flux, cancellationToken);
+                        moteurEffectif = ppOcr.Name;
                         break;
                     default:
                         throw new ArgumentException("Le moteur doit être auto, pdfpig ou ppocr-tiny.", nameof(engine));

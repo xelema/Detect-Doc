@@ -219,7 +219,26 @@ public class DemarrageTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var resultat = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.Equal("PdfPig", resultat.RootElement.GetProperty("moteur").GetString());
+        Assert.Equal("pdfpig", resultat.RootElement.GetProperty("moteur").GetString());
+    }
+
+    [Theory]
+    [InlineData("auto")]
+    [InlineData("pdfpig")]
+    public async Task RendLeMemeIdentifiantDeMoteurQuelQueSoitLeModeDeSelection(string engine)
+    {
+        var classifieur = new ClassifieurDeTest((_, _) => new ResultatClassification("RIB", 0.9));
+        await using var application = CreerApplication("Development", classifieur);
+        using var client = application.CreateClient();
+        using var contenu = CreerPdfMultipart("Texte natif lisible");
+        contenu.Add(new StringContent("[\"RIB\"]"), "types");
+        contenu.Add(new StringContent(engine), "engine");
+
+        using var response = await client.PostAsync("/api/documents/classify", contenu);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var resultat = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("pdfpig", resultat.RootElement.GetProperty("moteur").GetString());
     }
 
     [Fact]
