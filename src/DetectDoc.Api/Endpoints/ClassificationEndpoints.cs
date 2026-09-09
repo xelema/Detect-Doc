@@ -4,7 +4,6 @@ using DetectDoc.Core.Classification;
 using DetectDoc.Core.Engines;
 using DetectDoc.Infrastructure.Engines;
 using Microsoft.AspNetCore.Mvc;
-using UglyToad.PdfPig.Core;
 
 namespace DetectDoc.Api.Endpoints;
 
@@ -88,35 +87,9 @@ public static class ClassificationEndpoints
                         throw new ArgumentException("Le moteur doit être auto, pdfpig ou ppocr-tiny.", nameof(engine));
                 }
             }
-            catch (InvalidDataException exception)
+            catch (Exception exception) when (ProblemesHttp.PourExtraction(exception) is { } probleme)
             {
-                return Results.Problem(
-                    title: "PDF invalide.",
-                    detail: exception.Message,
-                    statusCode: StatusCodes.Status422UnprocessableEntity);
-            }
-            catch (PdfDocumentFormatException)
-            {
-                // PdfPig accepte l'en-tête puis échoue sur la structure : la signature validée en
-                // amont ne garantit pas un document ouvrable.
-                return Results.Problem(
-                    title: "PDF invalide.",
-                    detail: "Le fichier ne contient pas un PDF lisible.",
-                    statusCode: StatusCodes.Status422UnprocessableEntity);
-            }
-            catch (ArgumentException exception)
-            {
-                return Results.Problem(
-                    title: "Moteur inconnu.",
-                    detail: exception.Message,
-                    statusCode: StatusCodes.Status400BadRequest);
-            }
-            catch (InvalidOperationException exception)
-            {
-                return Results.Problem(
-                    title: "Moteur indisponible.",
-                    detail: exception.Message,
-                    statusCode: StatusCodes.Status503ServiceUnavailable);
+                return probleme;
             }
 
             extraction.Stop();
@@ -136,32 +109,9 @@ public static class ClassificationEndpoints
             {
                 resultat = await classifieur.ClasserAsync(texte, typesValides, cancellationToken);
             }
-            catch (InvalidDataException exception)
+            catch (Exception exception) when (ProblemesHttp.PourFlowise(exception, cancellationToken) is { } probleme)
             {
-                return Results.Problem(
-                    title: "Réponse Flowise invalide.",
-                    detail: exception.Message,
-                    statusCode: StatusCodes.Status502BadGateway);
-            }
-            catch (HttpRequestException exception)
-            {
-                return Results.Problem(
-                    title: "Flowise indisponible.",
-                    detail: exception.Message,
-                    statusCode: StatusCodes.Status503ServiceUnavailable);
-            }
-            catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
-            {
-                return Results.Problem(
-                    title: "Flowise a dépassé le délai d'appel.",
-                    statusCode: StatusCodes.Status504GatewayTimeout);
-            }
-            catch (InvalidOperationException exception)
-            {
-                return Results.Problem(
-                    title: "Flowise non configuré.",
-                    detail: exception.Message,
-                    statusCode: StatusCodes.Status503ServiceUnavailable);
+                return probleme;
             }
 
             classification.Stop();
@@ -183,6 +133,7 @@ public static class ClassificationEndpoints
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
             .ProducesProblem(StatusCodes.Status502BadGateway)
-            .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
+            .ProducesProblem(StatusCodes.Status503ServiceUnavailable)
+            .ProducesProblem(StatusCodes.Status504GatewayTimeout);
     }
 }

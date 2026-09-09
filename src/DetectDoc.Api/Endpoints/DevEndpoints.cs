@@ -1,7 +1,6 @@
 using DetectDoc.Core.Classification;
 using DetectDoc.Core.Engines;
 using DetectDoc.Infrastructure.Engines;
-using UglyToad.PdfPig.Core;
 
 namespace DetectDoc.Api.Endpoints;
 
@@ -29,33 +28,17 @@ public static class DevEndpoints
             {
                 return Results.Ok(await classifieur.ClasserAsync(requete.Texte, types, cancellationToken));
             }
-            catch (InvalidDataException exception)
+            catch (Exception exception) when (ProblemesHttp.PourFlowise(exception, cancellationToken) is { } probleme)
             {
-                return Results.Problem(
-                    title: "Réponse Flowise invalide.",
-                    detail: exception.Message,
-                    statusCode: StatusCodes.Status502BadGateway);
-            }
-            catch (HttpRequestException exception)
-            {
-                return Results.Problem(
-                    title: "Flowise indisponible.",
-                    detail: exception.Message,
-                    statusCode: StatusCodes.Status503ServiceUnavailable);
-            }
-            catch (InvalidOperationException exception)
-            {
-                return Results.Problem(
-                    title: "Flowise non configuré.",
-                    detail: exception.Message,
-                    statusCode: StatusCodes.Status503ServiceUnavailable);
+                return probleme;
             }
         })
             .WithSummary("Classifie un texte avec Flowise.")
             .Produces<ResultatClassification>()
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status502BadGateway)
-            .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
+            .ProducesProblem(StatusCodes.Status503ServiceUnavailable)
+            .ProducesProblem(StatusCodes.Status504GatewayTimeout);
 
         app.MapPost("/api/dev/extract/{engine}", IResult (
             string engine,
@@ -89,33 +72,9 @@ public static class DevEndpoints
 
                 return Results.Ok(pages);
             }
-            catch (InvalidDataException exception)
+            catch (Exception exception) when (ProblemesHttp.PourExtraction(exception) is { } probleme)
             {
-                return Results.Problem(
-                    title: "PDF invalide.",
-                    detail: exception.Message,
-                    statusCode: StatusCodes.Status422UnprocessableEntity);
-            }
-            catch (PdfDocumentFormatException)
-            {
-                return Results.Problem(
-                    title: "PDF invalide.",
-                    detail: "Le fichier ne contient pas un PDF lisible.",
-                    statusCode: StatusCodes.Status422UnprocessableEntity);
-            }
-            catch (ArgumentException exception)
-            {
-                return Results.Problem(
-                    title: "Moteur inconnu.",
-                    detail: exception.Message,
-                    statusCode: StatusCodes.Status400BadRequest);
-            }
-            catch (InvalidOperationException exception)
-            {
-                return Results.Problem(
-                    title: "Moteur indisponible.",
-                    detail: exception.Message,
-                    statusCode: StatusCodes.Status503ServiceUnavailable);
+                return probleme;
             }
         })
             .DisableAntiforgery()
