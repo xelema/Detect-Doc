@@ -6,17 +6,24 @@ L'entrée mesurée est le **texte de référence du manifest**, pas une sortie d
 
 ## Lancer un run
 
+Le conteneur est la façon de référence de produire un run : tous les moteurs y tourneront dans le même environnement, le prochain en amenant un runtime et un modèle qu'il vaut mieux ne pas installer sur le poste. Depuis ce dossier :
+
 ```powershell
-dotnet run -c Release -- <chemin-du-manifest> [moteur]
+docker build --tag detectdoc-pii-comparison .
+docker run --rm --volume "$((Resolve-Path ..\..\corpus).Path):/corpus:ro" --volume "${PWD}\PiiMaskingComparison\run:/work/run" detectdoc-pii-comparison /corpus/manifest.jsonl regex
 ```
 
-Moteur disponible : `regex` (défaut).
+Le corpus est monté en lecture seule, `run/` en écriture : les résultats atterrissent dans le même dossier que les runs lancés en local. Le moteur est le dernier argument. Le `Resolve-Path` donne au démon le chemin absolu qu'il attend, un `..` dans une source de montage ne passant pas partout.
+
+Pour mettre au point une règle, `dotnet run` depuis `PiiMaskingComparison/` reste plus rapide :
 
 ```powershell
 dotnet run -c Release -- ..\..\..\corpus\manifest.jsonl regex
 ```
 
-Le split mesuré est `dev`. Le jeu `test` ne s'ouvre qu'au moment de produire une mesure destinée au rapport.
+Les deux chemins exécutent le même code et donnent la même couverture, qui est déterministe. **Les mesures de coût, elles, ne se comparent pas entre l'hôte et le conteneur** : un chiffre publié vient d'un run conteneurisé.
+
+Moteur disponible : `regex` (défaut). Le split mesuré est `dev` ; le jeu `test` ne s'ouvre qu'au moment de produire une mesure destinée au rapport.
 
 ## Ce qu'un run produit
 
