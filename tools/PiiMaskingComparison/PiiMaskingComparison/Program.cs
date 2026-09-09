@@ -56,7 +56,7 @@ static string ConstruireRecap(string runId, RunMetadata metadata, List<ResultatD
     var occurrences = mesures.SelectMany(r => r.Occurrences).ToList();
     var fauxPositifs = mesures.SelectMany(r => r.FauxPositifs).ToList();
     var nonLocalisees = mesures.SelectMany(r => r.ValeursNonLocalisees).ToList();
-    var nbDetections = mesures.Sum(r => r.NbDetections);
+    var nbDetections = mesures.Sum(r => r.Detections.Count);
 
     var recap = new StringBuilder();
     recap.AppendLine($"# Run `{runId}`");
@@ -84,16 +84,21 @@ static string ConstruireRecap(string runId, RunMetadata metadata, List<ResultatD
         return recap.ToString();
     }
 
+    // Toutes les catégories sont listées, y compris celles qu'aucune valeur du split n'alimente
+    // et celles qu'aucune règle ne vise : un zéro affiché est une information, une ligne absente
+    // se lit comme un oubli.
     recap.AppendLine("## Couverture par catégorie");
     recap.AppendLine();
-    recap.AppendLine("| Catégorie | Attendues | Couvertes | % couvertes | Manquées | Faux positifs |");
-    recap.AppendLine("|---|---|---|---|---|---|");
-    foreach (var groupe in occurrences.GroupBy(o => o.Categorie).OrderBy(g => g.Key.ToString()))
+    recap.AppendLine("| Catégorie | Attendues | Couvertes | % couvertes | Manquées | Faux positifs | Non localisées |");
+    recap.AppendLine("|---|---|---|---|---|---|---|");
+    foreach (var categorie in Enum.GetValues<CategoriePii>())
     {
-        var couvertes = groupe.Count(o => o.Couverte);
-        var faux = fauxPositifs.Count(f => f.Categorie == groupe.Key);
+        var attendues = occurrences.Where(o => o.Categorie == categorie).ToList();
+        var couvertes = attendues.Count(o => o.Couverte);
+        var pourcentage = attendues.Count == 0 ? "-" : $"{100.0 * couvertes / attendues.Count:F1} %";
         recap.AppendLine(
-            $"| {groupe.Key} | {groupe.Count()} | {couvertes} | {100.0 * couvertes / groupe.Count():F1} % | {groupe.Count() - couvertes} | {faux} |");
+            $"| {categorie} | {attendues.Count} | {couvertes} | {pourcentage} | {attendues.Count - couvertes} " +
+            $"| {fauxPositifs.Count(f => f.Categorie == categorie)} | {nonLocalisees.Count(v => v.Categorie == categorie)} |");
     }
     recap.AppendLine();
 
@@ -111,16 +116,28 @@ static string ConstruireRecap(string runId, RunMetadata metadata, List<ResultatD
     recap.AppendLine($"| Documents en erreur | {resultats.Count(r => r.Statut == Statut.Erreur)} |");
     recap.AppendLine();
 
-    // Ces valeurs ne comptent ni en couvertes ni en manquées : le texte ne les porte pas sous la
-    // forme déclarée au manifest, le détecteur n'avait donc rien à y trouver. Leur volume est la
-    // marge d'incertitude du chiffre de couverture ci-dessus, pas un résultat du moteur.
-    recap.AppendLine("## Valeurs du manifest non localisées dans le texte");
+    // Ces valeurs ne comptent ni en couvertes ni en manquées : le texte ne les porte sous aucune
+    // forme comparable, le détecteur n'avait donc rien à y trouver. Leur volume est la marge
+    // d'incertitude du chiffre de couverture, pas un résultat du moteur.
+    recap.AppendLine(
+        $"Valeurs du manifest non localisées dans le texte : {nonLocalisees.Count}, hors mesure.");
     recap.AppendLine();
-    recap.AppendLine("| Catégorie | Valeurs |");
-    recap.AppendLine("|---|---|");
-    foreach (var groupe in nonLocalisees.GroupBy(v => v.Categorie).OrderBy(g => g.Key.ToString()))
+
+    // Le manifest déclare ce que le générateur a injecté, pas tout ce que le document contient.
+    // Sans ce rappel, la colonne des faux positifs se lit comme du bruit du moteur.
+    recap.AppendLine(
+        "Est compté faux positif ce qui ne recouvre aucune valeur déclarée au manifest. " +
+        "L'adresse de l'organisme émetteur ou l'employeur d'un participant sont détectés à juste titre " +
+        "sans y figurer : lire le détail par règle avant de conclure sur la précision.");
+    recap.AppendLine();
+
+    recap.AppendLine("## Détections par règle");
+    recap.AppendLine();
+    recap.AppendLine("| Règle | Détections | dont faux positifs |");
+    recap.AppendLine("|---|---|---|");
+    foreach (var groupe in mesures.SelectMany(r => r.Detections).GroupBy(d => d).OrderBy(g => g.Key))
     {
-        recap.AppendLine($"| {groupe.Key} | {groupe.Count()} |");
+        recap.AppendLine($"| {groupe.Key} | {groupe.Count()} | {fauxPositifs.Count(f => f.Regle == groupe.Key)} |");
     }
     recap.AppendLine();
 

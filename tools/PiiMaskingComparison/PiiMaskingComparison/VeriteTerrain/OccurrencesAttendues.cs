@@ -4,26 +4,49 @@ using PiiMaskingComparison.Manifest;
 
 namespace PiiMaskingComparison.VeriteTerrain;
 
-/// <param name="Cle">Clé du manifest d'où vient la valeur, conservée pour le diagnostic.</param>
 public readonly record struct OccurrenceAttendue(CategoriePii Categorie, string Cle, string Valeur, int Start, int Length);
 
-/// <summary>Valeur injectée que le texte de référence ne porte pas sous cette forme.</summary>
 public readonly record struct ValeurAbsente(CategoriePii Categorie, string Cle, string Valeur);
 
-/// <summary>
-/// Construit la vérité terrain d'un document : où se trouvent, dans le texte de référence, les
-/// valeurs que le générateur déclare y avoir injectées.
-/// </summary>
-/// <remarks>
-/// La recherche ignore les blancs des deux côtés : le manifest porte l'IBAN d'un seul tenant
-/// quand le document l'imprime par groupes de quatre, et un téléphone change de séparateurs
-/// d'un gabarit à l'autre. Ce qui reste introuvable sort en <see cref="ValeurAbsente"/> plutôt
-/// que de compter comme une PII manquée : une valeur que le texte ne contient pas n'est pas un
-/// échec du détecteur. La casse, elle, est respectée, donc un nom imprimé en capitales alors
-/// que le manifest le porte en casse mixte est déclaré absent.
-/// </remarks>
+/// <summary>Localise dans le texte de référence les valeurs que le manifest déclare y avoir injectées.</summary>
 public static class VeriteTerrainDocument
 {
+    // Tableau explicite plutôt qu'heuristique sur le nom de la clé : `contact_client` et
+    // `titulaire` désignent des personnes sans que leur nom le dise, et une clé ajoutée au
+    // générateur doit ressortir en Inconnue au lieu de se diluer dans une catégorie fourre-tout.
+    private static readonly Dictionary<string, CategoriePii> CategorieParCle = new()
+    {
+        ["nom_complet"] = CategoriePii.Nom,
+        ["nom_formateur"] = CategoriePii.Nom,
+        ["noms"] = CategoriePii.Nom,
+        ["noms_participants"] = CategoriePii.Nom,
+        ["contact_client"] = CategoriePii.Nom,
+        ["contact_nom_complet"] = CategoriePii.Nom,
+        ["contact_prenom"] = CategoriePii.Nom,
+        ["titulaire"] = CategoriePii.Nom,
+        ["organisme"] = CategoriePii.Organisme,
+        ["raison_sociale_emetteur"] = CategoriePii.Organisme,
+        ["designation_client"] = CategoriePii.Organisme,
+        ["email"] = CategoriePii.Email,
+        ["email_emetteur"] = CategoriePii.Email,
+        ["telephone_mobile"] = CategoriePii.Telephone,
+        ["telephone_fixe"] = CategoriePii.Telephone,
+        ["telephone_emetteur"] = CategoriePii.Telephone,
+        ["adresse"] = CategoriePii.Adresse,
+        ["adresse_titulaire"] = CategoriePii.Adresse,
+        ["iban"] = CategoriePii.Iban,
+        ["bic"] = CategoriePii.Bic,
+        ["siret_emetteur"] = CategoriePii.Siret,
+        ["rpps"] = CategoriePii.IdentifiantProfessionnel,
+        ["adeli"] = CategoriePii.IdentifiantProfessionnel,
+        ["rum"] = CategoriePii.NumeroDocument,
+        ["reseau_social"] = CategoriePii.ReseauSocial
+    };
+
+    /// <summary>
+    /// Une valeur introuvable sort en <see cref="ValeurAbsente"/> plutôt que de compter comme
+    /// manquée : ce que le texte ne contient pas n'est pas un échec du détecteur.
+    /// </summary>
     public static (List<OccurrenceAttendue> Attendues, List<ValeurAbsente> Absentes) Construire(
         ManifestEntry entree, string texte)
     {
@@ -33,10 +56,10 @@ public static class VeriteTerrainDocument
 
         foreach (var (cle, valeurJson) in entree.PiiInjectees ?? new Dictionary<string, JsonElement>())
         {
-            var categorie = CategorieDe(cle);
+            var categorie = CategorieParCle.GetValueOrDefault(cle, CategoriePii.Inconnue);
             foreach (var valeur in Valeurs(valeurJson))
             {
-                var occurrences = Localiser(compact, indices, valeur)
+                var occurrences = Localiser(texte, compact, indices, valeur)
                     .Select(o => new OccurrenceAttendue(categorie, cle, valeur, o.Start, o.Length))
                     .ToList();
 
@@ -54,16 +77,10 @@ public static class VeriteTerrainDocument
     }
 
     /// <summary>
-    /// La catégorie se déduit du nom de la clé : le générateur en utilise plus de vingt, dont
-    /// `email_emetteur` et `telephone_mobile`, qui décrivent le rôle du champ, pas sa nature.
+    /// Caractère qui ne porte rien à lui seul : le laisser en clair au milieu d'une valeur masquée
+    /// ne révèle personne. Exclu des deux côtés de la mesure, localisation et couverture.
     /// </summary>
-    private static CategoriePii CategorieDe(string cle) => cle switch
-    {
-        _ when cle.Contains("email") => CategoriePii.Email,
-        _ when cle.Contains("iban") => CategoriePii.Iban,
-        _ when cle.Contains("telephone") => CategoriePii.Telephone,
-        _ => CategoriePii.Autre
-    };
+    public static bool EstNonSignifiant(char c) => char.IsWhiteSpace(c) || c is ',' or '.' or '-' or '\'' or '’';
 
     private static IEnumerable<string> Valeurs(JsonElement valeur) =>
         (valeur.ValueKind switch
@@ -74,7 +91,6 @@ public static class VeriteTerrainDocument
         .OfType<string>()
         .Where(v => v.Trim().Length > 0);
 
-    /// <summary>Texte privé de ses blancs, et l'indice d'origine de chaque caractère conservé.</summary>
     private static (string Compact, int[] Indices) Compacter(string texte)
     {
         var compact = new char[texte.Length];
@@ -83,12 +99,12 @@ public static class VeriteTerrainDocument
 
         for (var i = 0; i < texte.Length; i++)
         {
-            if (char.IsWhiteSpace(texte[i]))
+            if (EstNonSignifiant(texte[i]))
             {
                 continue;
             }
 
-            compact[n] = texte[i];
+            compact[n] = char.ToLowerInvariant(texte[i]);
             indices[n] = i;
             n++;
         }
@@ -96,9 +112,14 @@ public static class VeriteTerrainDocument
         return (new string(compact, 0, n), indices[..n]);
     }
 
-    private static IEnumerable<(int Start, int Length)> Localiser(string compact, int[] indices, string valeur)
+    // La comparaison se fait sur le texte compacté et en minuscules : le manifest porte l'IBAN
+    // d'un seul tenant quand le document l'imprime par groupes de quatre, l'adresse `12 rue X,
+    // 75000 Ville` s'imprime sur deux lignes sans virgule, et une carte de visite écrit le nom de
+    // famille en capitales. La plage rendue, elle, est celle du texte d'origine.
+    private static IEnumerable<(int Start, int Length)> Localiser(
+        string texte, string compact, int[] indices, string valeur)
     {
-        var recherche = new string(valeur.Where(c => !char.IsWhiteSpace(c)).ToArray());
+        var recherche = new string(valeur.Where(c => !EstNonSignifiant(c)).Select(char.ToLowerInvariant).ToArray());
         if (recherche.Length == 0)
         {
             yield break;
@@ -113,13 +134,23 @@ public static class VeriteTerrainDocument
                 yield break;
             }
 
-            // La plage rendue est celle du texte d'origine, blancs internes compris : c'est elle
-            // que le masquage devra couvrir entièrement.
+            var apres = trouve + recherche.Length;
             var start = indices[trouve];
-            var fin = indices[trouve + recherche.Length - 1];
-            yield return (start, fin - start + 1);
+            var fin = indices[apres - 1];
 
-            depuis = trouve + recherche.Length;
+            // Une suite de chiffres prise au milieu d'une suite plus longue n'est pas la valeur
+            // cherchée : le numéro de déclaration d'activité d'un organisme contient par hasard un
+            // ADELI. Le voisinage se juge sur le texte d'origine, deux numéros de lignes voisines
+            // se touchant dans le texte compacté.
+            if (!Colle(texte, start - 1, recherche[0]) && !Colle(texte, fin + 1, recherche[^1]))
+            {
+                yield return (start, fin - start + 1);
+            }
+
+            depuis = apres;
         }
     }
+
+    private static bool Colle(string texte, int position, char bord) =>
+        position >= 0 && position < texte.Length && char.IsDigit(bord) && char.IsDigit(texte[position]);
 }

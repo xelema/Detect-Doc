@@ -38,10 +38,6 @@ public sealed record RunMetadata
         };
     }
 
-    /// <remarks>
-    /// Haché en flux : le manifest porte le texte de référence de tout le corpus et pèse
-    /// plusieurs centaines de kilo-octets.
-    /// </remarks>
     private static string CalculerSha256(string cheminManifest)
     {
         using var flux = File.OpenRead(cheminManifest);

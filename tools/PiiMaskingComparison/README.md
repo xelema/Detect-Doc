@@ -26,13 +26,29 @@ Un dossier `run/<date>_<moteur>/` contenant trois fichiers :
 |---|---|
 | `run.json` | conditions du run : moteur, version, paramètres, empreinte du manifest, machine |
 | `resultats.jsonl` | une ligne par document : occurrences attendues et leur couverture, faux positifs, coût |
-| `recap.md` | couverture par catégorie, chiffres globaux, coût |
+| `recap.md` | couverture par catégorie, détail par règle, chiffres globaux, coût |
+
+Le récapitulatif liste **toutes** les catégories, même celles qu'aucune valeur du split n'alimente et celles qu'aucune règle ne vise : un zéro affiché est une information, une ligne absente se lit comme un oubli. Une clé du manifest que le tool ne sait pas classer apparaît en `Inconnue` et demande une reprise du mapping.
+
+| Catégorie | Clés du manifest |
+|---|---|
+| `Nom` | `nom_complet`, `nom_formateur`, `noms`, `noms_participants`, `contact_client`, `contact_nom_complet`, `contact_prenom`, `titulaire` |
+| `Organisme` | `organisme`, `raison_sociale_emetteur`, `designation_client` |
+| `Email` | `email`, `email_emetteur` |
+| `Telephone` | `telephone_mobile`, `telephone_fixe`, `telephone_emetteur` |
+| `Adresse` | `adresse`, `adresse_titulaire` |
+| `Iban` | `iban` |
+| `Bic` | `bic` |
+| `Siret` | `siret_emetteur` |
+| `IdentifiantProfessionnel` | `rpps`, `adeli` |
+| `NumeroDocument` | `rum` |
+| `ReseauSocial` | `reseau_social` |
 
 ## Comment la vérité terrain est construite
 
 Le manifest déclare les valeurs synthétiques injectées dans chaque document, sous `pii_injectees`. Le benchmark les cherche dans le texte de référence et retient **une occurrence par emplacement trouvé** : c'est par occurrence que se compte une fuite, une valeur répétée pouvant être masquée à un endroit et pas à l'autre.
 
-La recherche ignore les blancs des deux côtés. Le manifest porte l'IBAN d'un seul tenant quand le document l'imprime par groupes de quatre ; sans cette tolérance, la catégorie la plus structurée du WI ne serait pas mesurable. La casse, elle, est respectée.
+La comparaison porte sur les seuls caractères signifiants, casse ignorée : le manifest porte l'IBAN d'un seul tenant quand le document l'imprime par groupes de quatre, l'adresse `12 rue X, 75000 Ville` s'imprime sur deux lignes sans virgule, et une carte de visite écrit le nom de famille en capitales. Ces écarts sont de mise en page, pas de contenu. Une suite de chiffres trouvée au milieu d'une suite plus longue est écartée : le numéro de déclaration d'activité d'un organisme contient par hasard un ADELI une fois les espaces retirés.
 
 Une occurrence n'est **couverte** que si toute sa plage est détectée. Une valeur à moitié couverte laisse de quoi identifier la personne, elle compte comme manquée.
 
@@ -41,6 +57,8 @@ Une occurrence n'est **couverte** que si toute sa plage est détectée. Une vale
 - **Les valeurs non localisées ne sont pas comptées**, ni en couvertes ni en manquées : le texte ne les porte pas sous la forme déclarée. C'est le cas des noms imprimés en capitales alors que le manifest les écrit en casse mixte. Leur volume, publié dans `recap.md`, est la marge d'incertitude du taux de couverture.
 - **La catégorie se déduit du nom de la clé** du manifest. Les clés qui ne contiennent ni `email`, ni `iban`, ni `telephone` tombent en `Autre` : leurs occurrences restent attendues, donc visibles en manquées, sans qu'aucune règle ne les vise encore.
 - **Le corpus déclare ce qu'il a injecté, pas tout ce qu'il contient.** Une adresse de courriel figée dans un gabarit est une détection correcte comptée en faux positif, faute d'être déclarée. Relire les faux positifs du `resultats.jsonl` avant de conclure sur la précision d'un moteur.
+- **Les noms sans libellé ne sont pas couverts.** La baseline ne reconnaît un nom que s'il suit un libellé du document ou une civilité. Un nom en cellule de tableau d'émargement ou en en-tête de carte de visite n'a aucune forme distinctive : c'est la charge du détecteur suivant, pas d'une règle de plus.
+- **Les listes de mots-clés ne généralisent pas.** Les règles qui reconnaissent une raison sociale à `Institut`, `Industrie` ou `Conseil` attrapent ce que le générateur produit, pas ce qu'écrit un client.
 - Les durées ne sont pas comparables d'un run à l'autre sans moyenner plusieurs exécutions. La couverture, elle, est déterministe.
 
 ## Structure
@@ -51,5 +69,7 @@ Une occurrence n'est **couverte** que si toute sa plage est détectée. Une vale
 | `Manifest/` | lecture de `corpus/manifest.jsonl` |
 | `VeriteTerrain/` | localisation des valeurs injectées dans le texte de référence |
 | `Benchmark/` | exécution d'un run, mesure du coût, écriture des résultats |
+
+Les règles du moteur regex sont de deux familles. Les unes reconnaissent une forme qui se suffit à elle-même, un IBAN ou une adresse de courriel. Les autres partent d'un libellé du document, `BIC`, `RPPS`, `Formateur`, et ne retiennent que la valeur qui suit, capturée dans le groupe 1 : sans ce libellé, un BIC est huit majuscules et un ADELI neuf chiffres, deux formes trop banales pour être masquées à l'aveugle.
 
 Un moteur expose son nom, sa version, ses paramètres et une méthode qui rend les plages sensibles d'un texte. Le benchmark ne connaît ni les règles ni les modèles : la stratégie de détection appartient au moteur, la confrontation à la vérité terrain appartient au benchmark.

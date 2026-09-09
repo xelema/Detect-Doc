@@ -16,12 +16,11 @@ public sealed class BenchmarkRunner(IPiiDetectionEngine moteur)
     {
         var texte = entree.TexteReference ?? string.Empty;
 
-        // Sans texte de référence, il n'y a ni vérité terrain ni entrée à donner au moteur. Le
-        // document reste dans les résultats pour que le corpus mesuré se recoupe ligne pour
-        // ligne avec le corpus déclaré au manifest.
+        // Le document sans texte reste dans les résultats pour que le corpus mesuré se recoupe
+        // ligne pour ligne avec le corpus déclaré au manifest.
         if (string.IsNullOrWhiteSpace(texte))
         {
-            return Creer(entree, Statut.ReferenceAbsente, [], [], [], 0, 0, 0);
+            return Creer(entree, Statut.ReferenceAbsente, [], [], [], [], 0, 0);
         }
 
         var (attendues, absentes) = VeriteTerrainDocument.Construire(entree, texte);
@@ -40,7 +39,7 @@ public sealed class BenchmarkRunner(IPiiDetectionEngine moteur)
         catch (Exception ex)
         {
             // Le temps passé avant l'échec fait partie de ce que coûte le moteur sur ce corpus.
-            return Creer(entree, Statut.Erreur, [], [], nonLocalisees, 0,
+            return Creer(entree, Statut.Erreur, [], [], nonLocalisees, [],
                 Stopwatch.GetElapsedTime(horodatage).TotalMilliseconds,
                 GC.GetAllocatedBytesForCurrentThread() - allouesAvant,
                 $"{ex.GetType().Name}: {ex.Message}");
@@ -50,11 +49,12 @@ public sealed class BenchmarkRunner(IPiiDetectionEngine moteur)
         var alloues = GC.GetAllocatedBytesForCurrentThread() - allouesAvant;
         var (occurrences, fauxPositifs) = Confronter(texte, attendues, detections);
 
-        return Creer(entree, Statut.Ok, occurrences, fauxPositifs, nonLocalisees, detections.Count, duree, alloues);
+        return Creer(entree, Statut.Ok, occurrences, fauxPositifs, nonLocalisees,
+            detections.Select(d => d.Regle).ToList(), duree, alloues);
     }
 
     /// <summary>
-    /// Confronte plages attendues et plages détectées, caractère par caractère : deux moteurs
+    /// Confronte plages attendues et plages détectées caractère par caractère : deux moteurs
     /// peuvent couvrir la même valeur avec des bornes différentes, seule la couverture compte.
     /// </summary>
     private static (List<OccurrencePii>, List<DetectionFausse>) Confronter(
@@ -65,19 +65,24 @@ public sealed class BenchmarkRunner(IPiiDetectionEngine moteur)
 
         var occurrences = attendues
             .Select(a => new OccurrencePii(a.Categorie, a.Cle, a.Valeur, a.Start, a.Length,
-                Couverte: Tout(masque, a.Start, a.Length)))
+                Couverte: Signifiants(texte, a.Start, a.Length).All(i => masque[i])))
             .ToList();
 
-        // Un faux positif est une détection qui ne touche aucune PII attendue. Une détection qui
-        // déborde d'une valeur réelle masque du texte en trop, pas une personne inventée : elle
-        // relève des bornes de la règle, pas de sa précision.
+        // Est fausse la détection qui ne touche aucune PII attendue. Celle qui déborde d'une
+        // valeur réelle masque du texte en trop, pas une personne inventée.
         var fauxPositifs = detections
-            .Where(d => !AuMoinsUn(sensible, d.Start, d.Length))
+            .Where(d => !Signifiants(texte, d.Start, d.Length).Any(i => sensible[i]))
             .Select(d => new DetectionFausse(d.Categorie, d.Regle, texte.Substring(d.Start, d.Length)))
             .ToList();
 
         return (occurrences, fauxPositifs);
     }
+
+    // Une adresse imprimée sur deux lignes est couverte par deux détections, et le retour à la
+    // ligne resté en clair entre elles ne révèle rien.
+    private static IEnumerable<int> Signifiants(string texte, int start, int length) =>
+        Enumerable.Range(start, length)
+            .Where(i => i < texte.Length && !VeriteTerrainDocument.EstNonSignifiant(texte[i]));
 
     private static bool[] Peindre(int longueur, IEnumerable<(int Start, int Length)> plages)
     {
@@ -93,14 +98,8 @@ public sealed class BenchmarkRunner(IPiiDetectionEngine moteur)
         return peint;
     }
 
-    private static bool Tout(bool[] peint, int start, int length) =>
-        Enumerable.Range(start, length).All(i => i < peint.Length && peint[i]);
-
-    private static bool AuMoinsUn(bool[] peint, int start, int length) =>
-        Enumerable.Range(start, length).Any(i => i < peint.Length && peint[i]);
-
     private ResultatDocument Creer(ManifestEntry entree, Statut statut, List<OccurrencePii> occurrences,
-        List<DetectionFausse> fauxPositifs, List<ValeurNonLocalisee> nonLocalisees, int nbDetections,
+        List<DetectionFausse> fauxPositifs, List<ValeurNonLocalisee> nonLocalisees, List<string> detections,
         double dureeMs, long octetsAlloues, string? messageErreur = null)
     {
         return new ResultatDocument
@@ -114,7 +113,7 @@ public sealed class BenchmarkRunner(IPiiDetectionEngine moteur)
             Occurrences = occurrences,
             FauxPositifs = fauxPositifs,
             ValeursNonLocalisees = nonLocalisees,
-            NbDetections = nbDetections,
+            Detections = detections,
             DureeMs = dureeMs,
             OctetsAlloues = octetsAlloues
         };
