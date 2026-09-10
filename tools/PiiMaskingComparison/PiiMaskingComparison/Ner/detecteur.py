@@ -33,8 +33,9 @@ CATEGORIES_GLINER = {
 
 
 def charger_presidio():
+    import spacy
     from presidio_analyzer import AnalyzerEngine, RecognizerRegistry
-    from presidio_analyzer.nlp_engine import NlpEngineProvider
+    from presidio_analyzer.nlp_engine import NlpEngineProvider, SpacyNlpEngine
     from presidio_analyzer.predefined_recognizers import PhoneRecognizer
 
     modele = os.environ.get("PII_PRESIDIO_MODELE", "fr_core_news_sm")
@@ -42,10 +43,21 @@ def charger_presidio():
     entites = ([e.strip() for e in demandees.split(",") if e.strip() in CATEGORIES_PRESIDIO]
                if demandees else list(CATEGORIES_PRESIDIO))
 
-    provider = NlpEngineProvider(nlp_configuration={
-        "nlp_engine_name": "spacy",
-        "models": [{"lang_code": LANGUE, "model_name": modele}],
-    })
+    if modele == "aucun":
+        # Pipeline spaCy vide : il tokenise et rien d'autre. Les neuf reconnaisseurs de motifs
+        # fonctionnent, le dixième, celui qui produit les noms, n'a plus de modèle à interroger.
+        # Mesure le plancher de Presidio, sans le gigaoctet du modèle.
+        class MoteurSansModele(SpacyNlpEngine):
+            def __init__(self):
+                super().__init__(models=[{"lang_code": LANGUE, "model_name": modele}])
+                self.nlp = {LANGUE: spacy.blank(LANGUE)}
+
+        moteur_nlp = MoteurSansModele()
+    else:
+        moteur_nlp = NlpEngineProvider(nlp_configuration={
+            "nlp_engine_name": "spacy",
+            "models": [{"lang_code": LANGUE, "model_name": modele}],
+        }).create_engine()
 
     registre = RecognizerRegistry(supported_languages=[LANGUE])
     registre.load_predefined_recognizers(languages=[LANGUE])
@@ -53,7 +65,7 @@ def charger_presidio():
     registre.add_recognizer(PhoneRecognizer(supported_language=LANGUE, supported_regions=["FR"]))
 
     analyzer = AnalyzerEngine(
-        nlp_engine=provider.create_engine(),
+        nlp_engine=moteur_nlp,
         registry=registre,
         supported_languages=[LANGUE],
     )

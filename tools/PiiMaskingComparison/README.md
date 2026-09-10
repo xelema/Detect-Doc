@@ -45,7 +45,7 @@ Deux variables règlent ce moteur, en local comme dans le conteneur. Elles sont 
 
 | Variable | Défaut | Effet |
 |---|---|---|
-| `PII_PRESIDIO_MODELE` | `fr_core_news_sm` | modèle spaCy chargé, `fr_core_news_sm` ou `fr_core_news_md`, les deux dans l'image |
+| `PII_PRESIDIO_MODELE` | `fr_core_news_sm` | modèle spaCy chargé, `fr_core_news_sm` ou `fr_core_news_md`, les deux dans l'image. La valeur `aucun` monte Presidio sur un pipeline spaCy vide : les reconnaisseurs de motifs fonctionnent, celui qui produit les noms n'a plus de modèle à interroger |
 | `PII_PRESIDIO_ENTITES` | toutes | liste d'entités Presidio séparées par des virgules, par exemple `PERSON,EMAIL_ADDRESS,PHONE_NUMBER,IBAN_CODE` |
 | `PII_GLINER_MODELE` | `urchade/gliner_multi_pii-v1` | poids GLiNER, figés à leur révision dans l'image |
 | `PII_GLINER_LABELS` | tous | labels demandés au modèle, parmi `person, organization, address, email, phone number, iban` |
@@ -53,6 +53,19 @@ Deux variables règlent ce moteur, en local comme dans le conteneur. Elles sont 
 | `PII_GLINER_CARACTERES` | `1200` | taille des blocs, coupés sur des fins de ligne |
 | `PII_GLINER2_MODELE` | `fastino/gliner2.5-multi-v1` | idem pour GLiNER2.5 |
 | `PII_GLINER2_LABELS`, `PII_GLINER2_SEUIL`, `PII_GLINER2_CARACTERES` | idem | mêmes réglages, appliqués au moteur `gliner2` |
+
+## Mesurer la consommation d'un run
+
+`docker stats` mesure le groupe de contrôle du conteneur, donc les deux processus, .NET et Python. C'est la seule mesure qui ne dépende pas de ce que les programmes déclarent d'eux-mêmes. `Mesurer-Run.ps1` lance le run en arrière-plan, échantillonne pendant toute son exécution et range le relevé horodaté dans le dossier du run.
+
+```powershell
+.\Mesurer-Run.ps1 -Moteur hybride-gliner2
+.\Mesurer-Run.ps1 -Moteur presidio -Variables @{ PII_PRESIDIO_MODELE = 'fr_core_news_md' }
+```
+
+Le fichier `stats.csv` porte une ligne par échantillon : horodatage, pourcentage processeur, mémoire du conteneur, nombre de processus. L'horodatage permet de séparer le chargement du modèle, qui domine le pic mémoire, du traitement des documents.
+
+Deux précautions de lecture. Le pourcentage processeur est rapporté à un cœur, il dépasse donc 100 % dès que le moteur en utilise plusieurs. Et la première mesure d'une image fraîchement construite inclut la lecture des poids depuis le disque, plus lente que les suivantes où le cache du système les tient déjà.
 
 ## Ce qu'un run produit
 
