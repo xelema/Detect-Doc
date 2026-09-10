@@ -16,13 +16,14 @@ RUN apt-get update \
     && apt-get install --yes --no-install-recommends python3 python3-venv \
     && rm -rf /var/lib/apt/lists/*
 
-COPY PiiMaskingComparison/Ner/requirements.txt /tmp/requirements.txt
-
 # torch vient de l'index CPU de PyTorch : l'index par défaut livre les roues CUDA, deux
-# gigaoctets de pilotes dont un comparatif sur processeur n'a aucun usage.
+# gigaoctets de pilotes dont un comparatif sur processeur n'a aucun usage. Il a sa propre couche,
+# 196 Mo qu'un changement de dépendances n'a pas de raison de retélécharger.
 RUN python3 -m venv /opt/ner \
-    && /opt/ner/bin/pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch==2.14.0 \
-    && /opt/ner/bin/pip install --no-cache-dir --requirement /tmp/requirements.txt
+    && /opt/ner/bin/pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch==2.14.0
+
+COPY PiiMaskingComparison/Ner/requirements.txt /tmp/requirements.txt
+RUN /opt/ner/bin/pip install --no-cache-dir --requirement /tmp/requirements.txt
 
 # Les poids sont figés à une révision et téléchargés au build : un run ne doit dépendre ni du
 # réseau, ni de ce que le dépôt distant contient le jour où il tourne.
