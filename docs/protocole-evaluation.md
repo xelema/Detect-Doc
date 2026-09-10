@@ -97,10 +97,15 @@ Ce que ça donne : le coût par document en fonction de la taille de liste, et s
 |---|---|---|
 | latence par document, p50 et p95 | horodatage autour de chaque étape | la moyenne cache les documents lourds, le p95 est ce que l'utilisateur ressent |
 | latence décomposée par étape : OCR, masquage, appel modèle | idem | savoir si les quatre secondes viennent de l'OCR ou du modèle change complètement l'action à mener |
-| pic mémoire du processus | `Process.PeakWorkingSet64`, relevé par document | critère de sélection de l'OCR |
+| pic mémoire par document | working set échantillonné pendant l'extraction, plus haut relevé retenu | critère de sélection de l'OCR |
+| mémoire propre au document | écart entre ce pic et le working set relevé juste avant | seule part comparable d'un moteur à l'autre, le pic absolu portant aussi le socle déjà occupé |
 | temps processeur consommé | `Process.TotalProcessorTime`, relevé par document | distingue un traitement lent d'un traitement gourmand |
 
-Le pic mémoire et le temps processeur se relèvent avec les API .NET standard, sans profileur ni outillage tiers : le coût de mise en place est de quelques lignes, il n'y a aucune raison de s'en passer.
+Le temps processeur se relève avec les API .NET standard, sans profileur ni outillage tiers.
+
+**Le pic mémoire demande un échantillonnage, pas un compteur.** `Process.PeakWorkingSet64` est le pic du processus depuis son démarrage et ne redescend jamais : relevé par document, il fait hériter chaque document du pic de tous ceux qui l'ont précédé, et le maximum sur un run vaut alors toujours la valeur du dernier document mesuré. Aucun système ne tient ce pic à l'échelle d'un intervalle, et les compteurs du GC ne voient pas la mémoire allouée en non managé par les moteurs OCR, qui en est l'essentiel. Le runner échantillonne donc le working set toutes les 25 ms pendant l'extraction et garde le maximum, ce que ferait de toute façon un profileur externe. Contrôlé contre `PeakWorkingSet64` sur une charge d'une seconde et demie à pic unique : les deux rendent la même valeur.
+
+Cette mesure impose deux conditions au runner, sans quoi les chiffres publiés ne décrivent pas le moteur. Rien d'autre que l'extraction ne doit se produire dans la fenêtre chronométrée, en particulier aucune écriture de fichier de mise au point. Et le processus ne doit rien accumuler d'un document à l'autre : ce qu'il retient reste dans le working set et gonfle le pic de tous les documents suivants.
 
 ## Ce que le corpus permet de conclure
 

@@ -9,3 +9,17 @@ __pycache__/
 # `corpus/manifest.jsonl` est versionne, lui : c'est le livrable.
 corpus/raw/
 augraphy_cache/
+
+# Modeles OCR. Meme regle que le corpus : trop lourds pour l'historique, et refabriquables a
+# l'identique. `Get-Modeles.ps1` porte leur source et leur empreinte sha256.
+models/
+
+# Sorties d'execution du comparatif OCR, un dossier par run.
+tools/OcrComparison/OcrComparison/run/
+
+# Sorties de build .NET et fichiers d'IDE.
+bin/
+obj/
+.vs/
+.idea/
+*.user
