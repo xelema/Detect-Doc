@@ -1,0 +1,16 @@
+presidio-analyzer==2.2.364
+spacy==3.8.16
+
+# Modèles spaCy français, 16 et 45 Mo. Les deux sont dans l'image pour qu'un changement de
+# modèle soit un changement de variable d'environnement, pas une reconstruction. pip vérifie
+# l'empreinte déclarée dans le fragment d'URL.
+https://github.com/explosion/spacy-models/releases/download/fr_core_news_sm-3.8.0/fr_core_news_sm-3.8.0-py3-none-any.whl#sha256=7d6ad14cd5078e53147bfbf70fb9d433c6a3865b695fda2657140bbc59a27e29
+https://github.com/explosion/spacy-models/releases/download/fr_core_news_md-3.8.0/fr_core_news_md-3.8.0-py3-none-any.whl#sha256=8a70d090a54ef77525c3ffa6a6195b9d365f2cf369ae1cd84ede93f3d709079e
+
+# GLiNER et sa pile. La branche 5 de transformers ne sait plus lire le tokenizer SentencePiece
+# de mDeBERTa, sur lequel repose ce modèle : rester en 4.x est une contrainte, pas une frilosité.
+gliner==0.2.29
+gliner2[local]==2.0.0
+transformers==4.57.6
+sentencepiece==0.2.2
+protobuf==7.36.1
