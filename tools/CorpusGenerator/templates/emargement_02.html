@@ -1,0 +1,102 @@
+{# Grille multi-jours, une colonne par demi-journée. #}
+{% extends "_emargement_page.html" %}
+{% import "_emargement_macros.html" as m %}
+
+{% block style %}
+  .bandeau {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 3mm;
+    border-bottom: 1.2mm solid {{ s.couleur }};
+  }
+  .organisme { display: flex; gap: 3mm; align-items: center; }
+  .infos {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr;
+    gap: 2mm 6mm;
+    margin: 4mm 0;
+  }
+  .grille { font-size: 0.9em; }
+  .grille td { height: 12mm; }
+  .nom { width: 17%; }
+  .meta { width: 13%; }
+  .signature-col { text-align: center; }
+  .formateur td { height: 10mm; background: #fafafa; }
+{% endblock %}
+
+{% block contenu %}
+{% for groupe in groupes %}
+<section class="feuille">
+  {% if not loop.first %}
+  <div class="continuation">Suite, page {{ loop.index }} sur {{ groupes | length }}</div>
+  {% endif %}
+
+  <header class="bandeau">
+    <div class="organisme">{{ m.identite_organisme(f, logo) }}</div>
+    {% if s.titre %}<div class="titre">{{ s.titre }}</div>{% endif %}
+  </header>
+
+  <div class="infos">
+    <div><span class="fort">Action :</span> {{ f.intitule_action }}</div>
+    <div><span class="fort">Session :</span> {{ f.numero_session }}</div>
+    <div><span class="fort">Lieu :</span> {{ f.organisme.adresse.ville }}</div>
+    <div>
+      <span class="fort">Période :</span>
+      du {{ f.date_debut | date_fr }} au {{ f.date_fin | date_fr }}
+    </div>
+    <div><span class="fort">Formateur :</span> {{ f.formateur.nom_complet }}</div>
+    {% if s.residu_publipostage %}
+    <div><span class="fort">Client :</span> « OrgFor_Nom »</div>
+    {% endif %}
+  </div>
+
+  <table class="grille">
+    <thead>
+      <tr>
+        <th class="nom" rowspan="2">Stagiaire</th>
+        {% if s.avec_entreprise %}<th class="meta" rowspan="2">Établissement</th>{% endif %}
+        {% if s.avec_fonction %}<th class="meta" rowspan="2">Fonction</th>{% endif %}
+        {% for c in f.creneaux %}
+        <th>{{ c.date_session | date_fr }}</th>
+        {% endfor %}
+      </tr>
+      <tr>
+        {% for c in f.creneaux %}
+        <th>{{ c.libelle }}<br><span class="petit">{{ c.horaire }}</span></th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in groupe %}
+      <tr>
+        <td class="fort">{{ p.nom_complet }}</td>
+        {% if s.avec_entreprise %}<td>{{ p.entreprise }}</td>{% endif %}
+        {% if s.avec_fonction %}<td>{{ p.fonction }}</td>{% endif %}
+        {% for case in p.cases %}
+        <td class="signature-col">{{ m.case_emargement(case, s) }}</td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+      {% if s.avec_bloc_formateur %}
+      <tr class="formateur">
+        <td class="fort">Formateur<br>{{ f.formateur.nom_complet }}</td>
+        {% if s.avec_entreprise %}<td>{{ f.organisme.raison_sociale }}</td>{% endif %}
+        {% if s.avec_fonction %}<td>Formateur</td>{% endif %}
+        {% for case in f.formateur.cases %}
+        <td class="signature-col">{{ m.case_emargement(case, s) }}</td>
+        {% endfor %}
+      </tr>
+      {% endif %}
+    </tbody>
+  </table>
+
+  {{ m.pied_session(f, s) }}
+  {% if s.avec_cachet %}
+  <div style="margin-top: 4mm; text-align: right">
+    <span class="cachet">VALIDÉ<br>{{ f.organisme.raison_sociale }}</span>
+  </div>
+  {% endif %}
+</section>
+{% endfor %}
+{% endblock %}

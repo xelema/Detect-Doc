@@ -1,0 +1,152 @@
+{# Template de releve d'identite bancaire, variante 01.
+   Reprend la forme d'un RIB tel que les banques en delivrent en PDF depuis leur espace
+   en ligne : bandeau de l'etablissement, pave des quatre codes nationaux, identifiants
+   internationaux, domiciliation, et la mention d'usage en pied. #}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Relevé d'identité bancaire</title>
+<style>
+  @page { size: A4; margin: 20mm 18mm; }
+  body {
+    font-family: "{{ s.police }}", Arial, sans-serif;
+    font-size: {{ s.corps_pt }}pt;
+    color: #1a1a1a;
+  }
+  table { border-collapse: collapse; }
+  .entete { width: 100%; margin-bottom: 10mm; }
+  .entete td { vertical-align: top; }
+  .banque-nom { font-size: 15pt; font-weight: bold; color: {{ s.couleur }}; }
+  .banque-detail { font-size: 8pt; color: #555; line-height: 1.4; }
+  .titre {
+    background: {{ s.couleur }}; color: #fff; padding: 5px 10px;
+    font-size: 12pt; font-weight: bold; letter-spacing: 1.5px;
+    text-transform: uppercase; text-align: center;
+  }
+  .cadre { border: 1px solid #999; border-top: none; padding: 7mm 8mm; }
+  .section { margin-bottom: 6mm; }
+  .section:last-child { margin-bottom: 0; }
+  .intitule {
+    font-size: 7.5pt; text-transform: uppercase; letter-spacing: 1px;
+    color: #666; border-bottom: 1px solid #ddd; padding-bottom: 2px;
+    margin-bottom: 3px;
+  }
+  .codes { width: 100%; margin-top: 2px; }
+  .codes th {
+    border: 1px solid #999; background: #f2f2f2; padding: 4px;
+    font-size: 7.5pt; font-weight: normal; color: #444;
+  }
+  .codes td {
+    border: 1px solid #999; padding: 7px 4px; text-align: center;
+    font-family: "{{ s.police_mono }}", monospace; font-size: 11pt;
+    letter-spacing: 1px;
+  }
+  .international td { padding: 2px 0; vertical-align: top; }
+  .international .cle { width: 22mm; font-size: 8.5pt; color: #555; }
+  .valeur-mono {
+    font-family: "{{ s.police_mono }}", monospace; font-size: 11pt;
+    letter-spacing: 0.5px;
+  }
+  .deux-colonnes { width: 100%; }
+  .deux-colonnes td { vertical-align: top; width: 50%; }
+  .deux-colonnes td:first-child { padding-right: 8mm; }
+  .nom-fort { font-weight: bold; }
+  .note {
+    margin-top: 7mm; font-size: 7.5pt; color: #555; line-height: 1.45;
+    border-top: 1px solid #ddd; padding-top: 3mm;
+  }
+  .decoupe {
+    margin-top: 10mm; border-top: 1px dashed #aaa;
+    font-size: 7pt; color: #999; padding-top: 2px;
+  }
+</style>
+</head>
+<body>
+
+<table class="entete">
+  <tr>
+    <td style="width: 62px">{{ logo }}</td>
+    <td>
+      <div class="banque-nom">{{ r.banque }}</div>
+      <div class="banque-detail">
+        {{ r.agence }}<br>
+        {{ r.adresse_agence.ligne1 }} · {{ r.adresse_agence.code_postal }}
+        {{ r.adresse_agence.ville }}
+      </div>
+    </td>
+    <td style="text-align: right; font-size: 8pt; color: #555">
+      Édité le {{ r.date_edition | date_fr }}
+    </td>
+  </tr>
+</table>
+
+<div class="titre">Relevé d'identité bancaire</div>
+
+<div class="cadre">
+
+  <div class="section">
+    <div class="intitule">Identifiant national de compte</div>
+    <table class="codes">
+      <tr>
+        <th style="width: 22%">Code établissement</th>
+        <th style="width: 22%">Code guichet</th>
+        <th style="width: 38%">Numéro de compte</th>
+        <th style="width: 18%">Clé RIB</th>
+      </tr>
+      <tr>
+        <td>{{ r.code_banque }}</td>
+        <td>{{ r.code_guichet }}</td>
+        <td>{{ r.numero_compte }}</td>
+        <td>{{ r.cle }}</td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <div class="intitule">Identifiants internationaux</div>
+    <table class="international">
+      <tr>
+        <td class="cle">IBAN</td>
+        <td class="valeur-mono">{{ r.iban_formate }}</td>
+      </tr>
+      <tr>
+        <td class="cle">BIC</td>
+        <td class="valeur-mono">{{ r.bic }}</td>
+      </tr>
+    </table>
+    <div style="font-size: 7pt; color: #777; margin-top: 3px">
+      IBAN : International Bank Account Number · BIC : Bank Identifier Code
+    </div>
+  </div>
+
+  <table class="deux-colonnes">
+    <tr>
+      <td>
+        <div class="intitule">Titulaire du compte</div>
+        <div class="nom-fort">{{ r.titulaire }}</div>
+        <div>{{ r.adresse_titulaire.ligne1 }}</div>
+        <div>{{ r.adresse_titulaire.code_postal }} {{ r.adresse_titulaire.ville }}</div>
+      </td>
+      <td>
+        <div class="intitule">Domiciliation</div>
+        <div class="nom-fort">{{ r.banque }}</div>
+        <div>{{ r.agence }}</div>
+        <div>{{ r.adresse_agence.code_postal }} {{ r.adresse_agence.ville }}</div>
+      </td>
+    </tr>
+  </table>
+
+  <div class="note">
+    Ce relevé est destiné à être remis à tout organisme demandeur désirant effectuer
+    des opérations sur votre compte, notamment vos créanciers et débiteurs appelés à y
+    faire inscrire des virements ou des prélèvements.
+    Vérifiez l'exactitude des informations avant toute transmission.
+  </div>
+
+</div>
+
+<div class="decoupe">Partie à découper et à remettre à votre organisme</div>
+
+</body>
+</html>

@@ -1,0 +1,149 @@
+{# Formulaire sectoriel, intervenant séparé et identifiants professionnels. #}
+{% extends "_emargement_page.html" %}
+{% import "_emargement_macros.html" as m %}
+
+{% block style %}
+  .institution {
+    display: grid;
+    grid-template-columns: 18mm 1fr 42mm;
+    gap: 4mm;
+    align-items: center;
+    border-bottom: 0.8mm solid {{ s.couleur }};
+    padding-bottom: 3mm;
+  }
+  .reference {
+    border: 0.3mm solid #555;
+    padding: 2mm;
+    text-align: center;
+    font-size: 7pt;
+  }
+  .dossier {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5mm 8mm;
+    margin: 4mm 0;
+  }
+  .section {
+    margin: 4mm 0 1.5mm;
+    padding: 1.5mm 2mm;
+    background: {{ s.couleur }};
+    color: white;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+  .officiel { font-size: 0.88em; }
+  .officiel td { height: 11mm; text-align: center; }
+  .officiel .identite { width: 23%; text-align: left; }
+  .officiel .identifiant { width: 17%; }
+  .clause {
+    margin-top: 4mm;
+    padding: 3mm;
+    border: 0.3mm solid #555;
+    font-size: 7.5pt;
+  }
+{% endblock %}
+
+{% block contenu %}
+{% for groupe in groupes %}
+<section class="feuille">
+  {% if not loop.first %}
+  <div class="continuation">Suite, page {{ loop.index }} sur {{ groupes | length }}</div>
+  {% endif %}
+
+  <header class="institution">
+    <div class="logo">{{ logo }}</div>
+    <div>
+      <div class="fort">{{ f.organisme.raison_sociale }}</div>
+      <div class="petit">
+        Organisme de développement des compétences,
+        déclaration {{ f.organisme.numero_declaration_activite }}
+      </div>
+      {% if s.titre %}<div class="titre" style="margin-top: 2mm">{{ s.titre }}</div>{% endif %}
+    </div>
+    <div class="reference">
+      Référence action<br><strong>{{ f.numero_session }}</strong><br>
+      Document qualité
+    </div>
+  </header>
+
+  <div class="dossier">
+    <div><span class="fort">Action :</span> {{ f.intitule_action }}</div>
+    <div><span class="fort">Date :</span> {{ f.date_debut | date_fr }}</div>
+    <div><span class="fort">Lieu :</span> {{ f.lieu }}</div>
+    {% if s.avec_opco %}<div><span class="fort">Financeur :</span> {{ f.reference_opco }}</div>{% endif %}
+    {% if s.residu_publipostage %}
+    <div><span class="fort">Établissement :</span> « OrgFor_Nom »</div>
+    {% endif %}
+  </div>
+
+  <div class="section">Intervenant</div>
+  <table class="officiel">
+    <thead>
+      <tr>
+        <th class="identite">Nom et qualité</th>
+        <th class="identifiant">Matricule</th>
+        {% for c in f.creneaux %}
+        <th>{{ c.libelle }}<br><span class="petit">{{ c.horaire }}</span></th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="identite">
+          <strong>{{ f.formateur.nom_complet }}</strong><br>Formateur
+        </td>
+        <td>{{ f.formateur.matricule }}</td>
+        {% for case in f.formateur.cases %}
+        <td>{{ m.case_emargement(case, s) }}</td>
+        {% endfor %}
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="section">Participants</div>
+  <table class="officiel">
+    <thead>
+      <tr>
+        <th class="identite">Participant et établissement</th>
+        <th class="identifiant">Identifiants professionnels</th>
+        {% for c in f.creneaux %}<th>{{ c.libelle }}</th>{% endfor %}
+        {% if s.avec_document_pedagogique %}<th>Document reçu</th>{% endif %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in groupe %}
+      <tr>
+        <td class="identite">
+          <strong>{{ p.nom_complet }}</strong><br>
+          <span class="petit">{{ p.entreprise }}</span>
+        </td>
+        <td class="identifiant">
+          RPPS {{ p.rpps }}<br>ADELI {{ p.adeli }}
+        </td>
+        {% for case in p.cases %}
+        <td>{{ m.case_emargement(case, s) }}</td>
+        {% endfor %}
+        {% if s.avec_document_pedagogique %}
+        <td>{{ "Oui" if p.document_pedagogique_recu else "Non" }}</td>
+        {% endif %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% if s.avec_clause_attestation %}
+  <div class="clause">
+    En signant, le participant atteste avoir pris part à la session et reçu les
+    documents pédagogiques prévus. Les informations professionnelles sont utilisées
+    pour le suivi réglementaire de l'action.
+    <div style="margin-top: 2mm">
+      Signature du responsable :
+      <span class="signature">{{ f.formateur.nom | paraphe }}</span>
+    </div>
+  </div>
+  {% endif %}
+
+  {{ m.pied_session(f, s) }}
+</section>
+{% endfor %}
+{% endblock %}

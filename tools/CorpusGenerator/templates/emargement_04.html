@@ -1,0 +1,114 @@
+{# Feuille collective, journées en colonnes et total d'heures. #}
+{% extends "_emargement_page.html" %}
+{% import "_emargement_macros.html" as m %}
+
+{% block style %}
+  .cartouche {
+    border: 0.6mm solid {{ s.couleur }};
+    padding: 4mm;
+    margin-bottom: 4mm;
+  }
+  .ligne-titre {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .organisme { display: flex; gap: 3mm; align-items: center; }
+  .infos {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr;
+    gap: 2mm 6mm;
+    margin-top: 3mm;
+  }
+  .collectif td { height: 12mm; text-align: center; }
+  .collectif .nom { width: 20%; text-align: left; }
+  .collectif .entreprise { width: 15%; text-align: left; }
+  .total { width: 9%; font-weight: 700; }
+  .validation {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 5mm;
+    margin-top: 5mm;
+  }
+  .cadre { border: 0.3mm solid #555; padding: 3mm; min-height: 25mm; }
+{% endblock %}
+
+{% block contenu %}
+{% for groupe in groupes %}
+<section class="feuille">
+  {% if not loop.first %}
+  <div class="continuation">Suite, page {{ loop.index }} sur {{ groupes | length }}</div>
+  {% endif %}
+
+  <div class="cartouche">
+    <div class="ligne-titre">
+      <div class="organisme">{{ m.identite_organisme(f, logo) }}</div>
+      {% if s.titre %}<div class="titre">{{ s.titre }}</div>{% endif %}
+    </div>
+    <div class="infos">
+      <div><span class="fort">Formation :</span> {{ f.intitule_action }}</div>
+      <div><span class="fort">Référence :</span> {{ f.numero_session }}</div>
+      <div><span class="fort">Lieu :</span> {{ f.organisme.adresse.ville }}</div>
+      <div>
+        <span class="fort">Dates :</span>
+        {{ f.date_debut | date_fr }} au {{ f.date_fin | date_fr }}
+      </div>
+      <div><span class="fort">Formateur :</span> {{ f.formateur.nom_complet }}</div>
+      {% if s.avec_opco %}<div><span class="fort">OPCO :</span> {{ f.reference_opco }}</div>{% endif %}
+    </div>
+  </div>
+
+  <table class="collectif">
+    <thead>
+      <tr>
+        <th class="nom">Participant</th>
+        {% if s.avec_entreprise %}<th class="entreprise">Entreprise</th>{% endif %}
+        {% for c in f.creneaux %}
+        <th>{{ c.date_session | date_fr }}<br><span class="petit">{{ c.libelle }}</span></th>
+        {% endfor %}
+        <th class="total">Total</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in groupe %}
+      <tr>
+        <td class="nom fort">{{ p.nom_complet }}</td>
+        {% if s.avec_entreprise %}<td class="entreprise">{{ p.entreprise }}</td>{% endif %}
+        {% for case in p.cases %}
+        <td>{{ m.case_emargement(case, s) }}</td>
+        {% endfor %}
+        <td class="total">{{ p.heures_suivies }} h</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="validation">
+    {% if s.avec_bloc_formateur %}
+    <div class="cadre">
+      <div class="fort">Signature du formateur</div>
+      <div>{{ f.formateur.nom_complet }}</div>
+      <div style="margin-top: 3mm">{{ m.case_emargement(f.formateur.cases[0], s) }}</div>
+    </div>
+    {% endif %}
+    <div class="cadre">
+      <div class="fort">Responsable de formation</div>
+      {% if s.avec_clause_attestation %}
+      <div class="petit">
+        Je certifie l'exactitude des heures de présence portées sur cette feuille.
+      </div>
+      {% endif %}
+      <div style="margin-top: 4mm">Date et signature :</div>
+    </div>
+    <div class="cadre">
+      <div class="fort">Cachet de l'organisme</div>
+      {% if s.avec_cachet %}
+      <div style="margin-top: 3mm"><span class="cachet">{{ f.organisme.raison_sociale }}</span></div>
+      {% endif %}
+    </div>
+  </div>
+
+  {{ m.pied_session(f, s) }}
+</section>
+{% endfor %}
+{% endblock %}

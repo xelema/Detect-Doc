@@ -1,0 +1,111 @@
+{# Support commun aux cinq structures de feuille d'émargement.
+
+   Il fixe uniquement le papier, la typographie et le rendu manuscrit. Chaque template
+   porte sa propre hiérarchie et sa propre grille. #}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>{{ s.titre or "Suivi de session" }}</title>
+<style>
+  @page {
+    size: A4 {{ "landscape" if s.orientation == "paysage" else "portrait" }};
+    margin: 10mm 11mm;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    color: #202020;
+    font-family: "{{ s.police }}", "Liberation Sans", sans-serif;
+    font-size: {{ s.corps_pt }}pt;
+    line-height: 1.25;
+  }
+  .feuille {
+    position: relative;
+    page-break-after: always;
+  }
+  .feuille:last-child { page-break-after: auto; }
+  .logo svg { width: 13mm; height: 13mm; vertical-align: middle; }
+  .titre {
+    font-size: 18pt;
+    font-weight: 700;
+    color: {{ s.couleur }};
+  }
+  .sous-titre { font-size: 10pt; font-weight: 700; }
+  .muted { color: #666; }
+  .petit { font-size: 0.86em; }
+  .fort { font-weight: 700; }
+  .accent { color: {{ s.couleur }}; }
+  .continuation {
+    position: absolute;
+    top: 0;
+    right: 0;
+    color: #666;
+    font-size: 7pt;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
+  th, td {
+    border: 0.25mm solid #444;
+    padding: 1.5mm;
+    vertical-align: middle;
+  }
+  th {
+    background: #eceff1;
+    font-weight: 700;
+    text-align: center;
+  }
+  /* Un paraphe est un tracé, pas un mot écrit dans une police cursive : la case ne porte
+     donc aucun texte à extraire. Le dessin est produit par paraphe_svg. */
+  .signature {
+    display: inline-block;
+    width: 100%;
+    max-width: 26mm;
+    vertical-align: middle;
+    transform: rotate(-2deg);
+  }
+  .signature svg {
+    display: block;
+    margin: 0 auto;
+    height: auto;
+  }
+  .annotation {
+    display: inline-block;
+    color: #243a8c;
+    font-family: "{{ s.police_manuscrite }}", cursive;
+    font-size: 11pt;
+    transform: rotate(-3deg);
+  }
+  .barre {
+    width: 90%;
+    margin: 0 auto;
+    border-top: 0.45mm solid #243a8c;
+    transform: rotate(-18deg);
+  }
+  .cachet {
+    display: inline-block;
+    min-width: 34mm;
+    padding: 2.5mm 4mm;
+    border: 0.7mm double {{ s.couleur }};
+    color: {{ s.couleur }};
+    font-weight: 700;
+    text-align: center;
+    transform: rotate(-2deg);
+  }
+  .pied {
+    margin-top: 4mm;
+    font-size: 7pt;
+    color: #555;
+  }
+{% block style %}{% endblock %}
+</style>
+</head>
+<body>
+{% block contenu %}{% endblock %}
+</body>
+</html>

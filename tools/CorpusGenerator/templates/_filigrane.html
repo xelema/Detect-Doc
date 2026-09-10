@@ -1,0 +1,56 @@
+{# Marque apposee sur un document, incluse par tous les templates de piece.
+
+   Trois formes, qui ne se comportent pas pareil face a un OCR :
+   - diagonale : un mot geant qui traverse la page, tres pale, sous le texte
+   - mosaique : le mot repete en trame sur toute la surface, encore plus pale
+   - tampon : un cachet a l'encre, franchement colore et opaque, qui se superpose au texte
+
+   Le tampon est le plus genant pour un OCR : il est dense, colore, et il recouvre
+   reellement des caracteres, la ou un filigrane pale les laisse lisibles.
+
+   `position: fixed` fait repeter la marque sur chaque page, comme sur un vrai document
+   imprime page a page. #}
+
+{% if s.filigrane %}
+  {% if s.filigrane_type == "tampon" %}
+
+    <div style="position: fixed; top: 118mm; right: 18mm;
+                transform: rotate(-13deg);
+                border: 3px double {{ s.filigrane_encre }};
+                border-radius: 3mm; padding: 3mm 6mm;
+                color: {{ s.filigrane_encre }}; opacity: 0.72;
+                text-align: center; font-family: 'Liberation Sans', sans-serif;">
+      <div style="font-size: 20pt; font-weight: bold; letter-spacing: 2px;">
+        {{ s.filigrane }}</div>
+      {# La date vient du contexte de rendu, pas du document : ce partiel doit rester
+         utilisable par n'importe quel type sans rien supposer de sa structure. #}
+      <div style="font-size: 9pt; letter-spacing: 1px;">
+        {{ date_marque | date_fr }}</div>
+    </div>
+
+  {% elif s.filigrane_type == "repete" %}
+
+    <div style="position: fixed; top: 0; left: -30mm; right: -30mm; bottom: 0;
+                transform: rotate(-24deg); opacity: 0.07;
+                color: {{ s.couleur or '#444444' }};
+                font-family: 'Liberation Sans', sans-serif;
+                font-weight: bold; font-size: 24pt; letter-spacing: 4px;">
+      {% for ligne in range(11) %}
+      <div style="white-space: nowrap; overflow: hidden; margin-bottom: 16mm;
+                  {{ 'padding-left: 40mm;' if ligne is odd }}">
+        {{ (s.filigrane ~ "    ") * 7 }}</div>
+      {% endfor %}
+    </div>
+
+  {% else %}
+
+    <div style="position: fixed; top: 50%; left: 50%;
+                transform: translate(-50%, -50%) rotate(-32deg);
+                white-space: nowrap; opacity: 0.11;
+                color: {{ s.couleur or '#333333' }};
+                font-family: 'Liberation Sans', sans-serif; font-weight: bold;
+                font-size: {{ s.filigrane_taille_pt }}pt; letter-spacing: 6px;">
+      {{ s.filigrane }}</div>
+
+  {% endif %}
+{% endif %}
