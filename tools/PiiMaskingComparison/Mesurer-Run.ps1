@@ -22,7 +22,7 @@ param(
     [Parameter(Mandatory)][string]$Moteur,
     [hashtable]$Variables = @{},
     [ValidateRange(1, 2147483647)][int]$Parallele = 1,
-    [ValidateRange(0.001, [double]::MaxValue)][double]$IntervalleSecondes = 1,
+    [ValidateRange(0.001, [double]::MaxValue)][double]$IntervalleSecondes = 0.5,
     [string]$Image = 'detectdoc-pii-comparison'
 )
 

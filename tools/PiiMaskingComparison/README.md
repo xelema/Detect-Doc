@@ -4,6 +4,8 @@ Compare des moteurs de détection de PII sur le corpus de `Detect-Doc`, work ite
 
 L'entrée mesurée est le **texte de référence du manifest**, pas une sortie d'OCR. La dégradation due à l'OCR est un facteur distinct, à mesurer séparément une fois la qualité du détecteur établie sur du texte propre.
 
+Les résultats et leur interprétation sont dans [rapport.md](rapport.md).
+
 ## Lancer un run
 
 Le conteneur est la façon de référence de produire un run : tous les moteurs y tourneront dans le même environnement, le prochain en amenant un runtime et un modèle qu'il vaut mieux ne pas installer sur le poste. Depuis ce dossier :
