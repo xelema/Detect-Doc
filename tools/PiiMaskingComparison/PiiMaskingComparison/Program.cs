@@ -30,22 +30,28 @@ var entrees = ManifestReader.ReadManifest(cheminManifest)
 // deux portent la même chaîne et ce texte pèse donc double dans les totaux.
 var derives = entrees.Count(e => e.DeriveDe is not null && entrees.Any(parent => parent.Id == e.DeriveDe));
 
+// Nombre de documents confiés au moteur en même temps, un modèle unique restant chargé.
+var concurrence = int.TryParse(Environment.GetEnvironmentVariable("PII_CONCURRENCE"), out var demandee)
+    ? Math.Max(1, demandee)
+    : 1;
+
 var cpuAvant = Process.GetCurrentProcess().TotalProcessorTime;
-var resultats = new List<ResultatDocument>();
+var horodatage = Stopwatch.GetTimestamp();
+var resultats = new BenchmarkRunner(moteur).Executer(entrees, concurrence);
+var dureeTotale = Stopwatch.GetElapsedTime(horodatage);
+var cpuMs = (Process.GetCurrentProcess().TotalProcessorTime - cpuAvant).TotalMilliseconds;
 
 using (var writer = new ResultWriter(Path.Combine(dossierRun, "resultats.jsonl")))
 {
-    foreach (var resultat in new BenchmarkRunner(moteur).Executer(entrees))
+    foreach (var resultat in resultats)
     {
         writer.Ecrire(resultat);
-        resultats.Add(resultat);
     }
 }
-
-var cpuMs = (Process.GetCurrentProcess().TotalProcessorTime - cpuAvant).TotalMilliseconds;
 // Lu avant la libération du moteur : le processus qui porte le modèle doit être encore vivant.
 File.WriteAllText(Path.Combine(dossierRun, "recap.md"),
-    ConstruireRecap(runId, metadata, resultats, cpuMs, derives, moteur.PicMemoireMoteurOctets));
+    ConstruireRecap(runId, metadata, resultats, cpuMs, derives, moteur.PicMemoireMoteurOctets,
+        concurrence, dureeTotale));
 
 Console.WriteLine($"Run écrit dans {dossierRun}");
 return;
@@ -67,8 +73,8 @@ static IPiiDetectionEngine CreerMoteur(string nom)
     };
 }
 
-static string ConstruireRecap(string runId, RunMetadata metadata, List<ResultatDocument> resultats,
-    double cpuMs, int derives, long? picMoteurOctets)
+static string ConstruireRecap(string runId, RunMetadata metadata, IReadOnlyList<ResultatDocument> resultats,
+    double cpuMs, int derives, long? picMoteurOctets, int concurrence, TimeSpan dureeTotale)
 {
     var mesures = resultats.Where(r => r.Statut == Statut.Ok).ToList();
     var occurrences = mesures.SelectMany(r => r.Occurrences).ToList();
@@ -183,6 +189,9 @@ static string ConstruireRecap(string runId, RunMetadata metadata, List<ResultatD
     recap.AppendLine("| | |");
     recap.AppendLine("|---|---|");
     recap.AppendLine($"| Documents mesurés | {mesures.Count} |");
+    recap.AppendLine($"| Documents traités en même temps | {concurrence} |");
+    recap.AppendLine($"| Durée du run | {dureeTotale.TotalSeconds:F1} s |");
+    recap.AppendLine($"| Débit | {mesures.Count / dureeTotale.TotalSeconds:F2} documents/s |");
     recap.AppendLine($"| Temps de détection total | {mesures.Sum(r => r.DureeMs):F0} ms |");
     recap.AppendLine($"| Temps médian par document | {Mediane(mesures.Select(r => r.DureeMs)):F2} ms |");
     recap.AppendLine($"| Temps du pire document | {mesures.Max(r => r.DureeMs):F1} ms |");

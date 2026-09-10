@@ -7,9 +7,23 @@ namespace PiiMaskingComparison.Benchmark;
 
 public sealed class BenchmarkRunner(IPiiDetectionEngine moteur)
 {
-    public IEnumerable<ResultatDocument> Executer(IEnumerable<ManifestEntry> manifestEntries)
+    /// <summary>
+    /// Au-delà d'un document à la fois, le moteur est sollicité en parallèle : c'est la
+    /// situation d'une API qui garde son modèle chargé et reçoit plusieurs requêtes. Les
+    /// résultats sont rendus dans l'ordre du manifest, quel que soit l'ordre d'arrivée.
+    /// </summary>
+    public IReadOnlyList<ResultatDocument> Executer(IReadOnlyList<ManifestEntry> manifestEntries, int concurrence)
     {
-        return manifestEntries.Select(Mesurer);
+        if (concurrence <= 1)
+        {
+            return manifestEntries.Select(Mesurer).ToList();
+        }
+
+        var resultats = new ResultatDocument[manifestEntries.Count];
+        Parallel.For(0, manifestEntries.Count, new ParallelOptions { MaxDegreeOfParallelism = concurrence },
+            i => resultats[i] = Mesurer(manifestEntries[i]));
+
+        return resultats;
     }
 
     private ResultatDocument Mesurer(ManifestEntry entree)

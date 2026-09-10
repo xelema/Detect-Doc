@@ -9,9 +9,16 @@ import contextlib
 import json
 import os
 import sys
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 LANGUE = "fr"
+
+# Référence au vrai canal de sortie, prise avant toute redirection : `redirect_stdout` échange le
+# `sys.stdout` global, donc en concurrence un thread qui redirige détournerait la réponse d'un
+# autre vers stderr, où l'appelant ne la lira jamais.
+SORTIE = sys.stdout
 
 CATEGORIES_PRESIDIO = {
     "PERSON": "Nom",
@@ -223,19 +230,20 @@ def main():
         print(json.dumps({"erreur": f"{type(erreur).__name__}: {erreur}"}), flush=True)
         raise SystemExit(1)
 
-    print(json.dumps({"chargement_ms": (time.perf_counter() - depart) * 1000, **description}), flush=True)
+    travailleurs = int(os.environ.get("PII_TRAVAILLEURS", "1"))
+    print(json.dumps({"chargement_ms": (time.perf_counter() - depart) * 1000,
+                      "travailleurs": travailleurs, **description}), file=SORTIE, flush=True)
 
-    for ligne in sys.stdin:
-        ligne = ligne.strip()
-        if not ligne:
-            continue
+    # Un verrou sur la sortie suffit : les travailleurs partagent le modèle, dont les poids sont
+    # chargés une fois, et n'ont à se coordonner que pour ne pas entrelacer deux lignes JSON.
+    verrou = threading.Lock()
 
+    def traiter(ligne):
         try:
-            texte = json.loads(ligne)["texte"]
+            requete = json.loads(ligne)
+            texte = requete["texte"]
             detections = []
-            with contextlib.redirect_stdout(sys.stderr):
-                trouvees = list(detecter(texte))
-            for categorie, regle, debut, fin in trouvees:
+            for categorie, regle, debut, fin in detecter(texte):
                 position, longueur = en_indices_utf16(texte, debut, fin)
                 detections.append({
                     "categorie": categorie,
@@ -243,11 +251,26 @@ def main():
                     "length": longueur,
                     "regle": regle,
                 })
-            reponse = {"detections": detections, "pic_memoire_octets": pic_memoire_octets()}
+            reponse = {"id": requete["id"], "detections": detections,
+                       "pic_memoire_octets": pic_memoire_octets()}
         except Exception as erreur:  # remonte au benchmark, qui classe le document en erreur
-            reponse = {"erreur": f"{type(erreur).__name__}: {erreur}"}
+            reponse = {"id": json.loads(ligne).get("id"),
+                       "erreur": f"{type(erreur).__name__}: {erreur}"}
 
-        print(json.dumps(reponse), flush=True)
+        with verrou:
+            print(json.dumps(reponse), file=SORTIE, flush=True)
+
+    lignes = (l.strip() for l in sys.stdin)
+    lignes = (l for l in lignes if l)
+
+    if travailleurs == 1:
+        for ligne in lignes:
+            traiter(ligne)
+        return
+
+    with ThreadPoolExecutor(max_workers=travailleurs) as reserve:
+        for ligne in lignes:
+            reserve.submit(traiter, ligne)
 
 
 if __name__ == "__main__":

@@ -46,6 +46,8 @@ Deux variables règlent ce moteur, en local comme dans le conteneur. Elles sont 
 | Variable | Défaut | Effet |
 |---|---|---|
 | `PII_PRESIDIO_MODELE` | `fr_core_news_sm` | modèle spaCy chargé, `fr_core_news_sm` ou `fr_core_news_md`, les deux dans l'image. La valeur `aucun` monte Presidio sur un pipeline spaCy vide : les reconnaisseurs de motifs fonctionnent, celui qui produit les noms n'a plus de modèle à interroger |
+| `PII_CONCURRENCE` | `1` | documents confiés au moteur en même temps, modèle chargé une seule fois |
+| `PII_TRAVAILLEURS` | `1` | threads du script Python qui partagent le modèle ; à aligner sur `PII_CONCURRENCE` |
 | `PII_PRESIDIO_EXCLURE` | tout sauf `tok2vec` et `ner` | composants spaCy à ne pas charger, séparés par des virgules. Le modèle en porte six et l'analyseur n'utilise que le NER ; les exclure gagne un quart du temps et 130 Mo. Passer une liste vide recharge le pipeline entier, avec son lemmatiseur et l'enrichissement par le contexte |
 | `PII_PRESIDIO_ENTITES` | toutes | liste d'entités Presidio séparées par des virgules, par exemple `PERSON,EMAIL_ADDRESS,PHONE_NUMBER,IBAN_CODE` |
 | `PII_GLINER_MODELE` | `urchade/gliner_multi_pii-v1` | poids GLiNER, figés à leur révision dans l'image |
@@ -57,16 +59,51 @@ Deux variables règlent ce moteur, en local comme dans le conteneur. Elles sont 
 
 ## Mesurer la consommation d'un run
 
-`docker stats` mesure le groupe de contrôle du conteneur, donc les deux processus, .NET et Python. C'est la seule mesure qui ne dépende pas de ce que les programmes déclarent d'eux-mêmes. `Mesurer-Run.ps1` lance le run en arrière-plan, échantillonne pendant toute son exécution et range le relevé horodaté dans le dossier du run.
+`docker stats` mesure le groupe de contrôle du conteneur, donc les deux processus, .NET et Python. C'est la seule mesure qui ne dépende pas de ce que les programmes déclarent d'eux-mêmes. `Mesurer-Run.ps1` lance le run en arrière-plan, échantillonne pendant toute son exécution et range le relevé dans le dossier du run.
 
 ```powershell
 .\Mesurer-Run.ps1 -Moteur hybride-gliner2
 .\Mesurer-Run.ps1 -Moteur presidio -Variables @{ PII_PRESIDIO_MODELE = 'fr_core_news_md' }
+.\Mesurer-Run.ps1 -Moteur presidio -Parallele 3
 ```
 
-Le fichier `stats.csv` porte une ligne par échantillon : horodatage, pourcentage processeur, mémoire du conteneur, nombre de processus. L'horodatage permet de séparer le chargement du modèle, qui domine le pic mémoire, du traitement des documents.
+Deux fichiers arrivent à côté de `recap.md`. `stats.csv` porte un échantillon par ligne, horodaté depuis le départ du run : seconde, conteneur, pourcentage processeur, mémoire en mégaoctets, nombre de processus. `stats.md` en donne le résumé, médiane et maximum par conteneur, plus une courbe où l'on voit le palier de chargement du modèle se détacher du régime de croisière.
+
+L'échantillonnage se fait par appels ponctuels à `docker stats --no-stream`. Le mode flux redessine un affichage vivant et sème des séquences ANSI dans le fichier, qui devient illisible.
+
+Deux formes de charge se mesurent, et elles ne coûtent pas la même chose.
+
+**`PII_CONCURRENCE` traite N documents à la fois avec un seul modèle chargé.** C'est la situation d'une API qui garde son moteur en mémoire et reçoit plusieurs requêtes. Les poids sont partagés, seules les activations se multiplient. `PII_TRAVAILLEURS` règle le nombre de threads côté script Python et doit valoir autant.
+
+**`-Parallele N` lance N conteneurs à la fois**, donc N copies du modèle : c'est le coût de N réplicas, pas celui de N requêtes simultanées. Le résumé ajoute alors le cumul de mémoire instant par instant.
+
+```powershell
+.\Mesurer-Run.ps1 -Moteur presidio -Variables @{ PII_CONCURRENCE = 4; PII_TRAVAILLEURS = 4 }
+```
 
 Deux précautions de lecture. Le pourcentage processeur est rapporté à un cœur, il dépasse donc 100 % dès que le moteur en utilise plusieurs. Et la première mesure d'une image fraîchement construite inclut la lecture des poids depuis le disque, plus lente que les suivantes où le cache du système les tient déjà.
+
+## Enchainer les mesures de référence
+
+`Mesurer-Suite.ps1` lance les sept configurations de référence l'une après l'autre, chacune dans son propre conteneur détruit avant le suivant, avec une pause entre deux pour que la machine retombe au repos. Aucune mesure de mémoire n'en recouvre une autre.
+
+```powershell
+.\Mesurer-Suite.ps1
+```
+
+| Ordre | Configuration |
+|---|---|
+| 1 | règles seules |
+| 2 | Presidio spaCy, 1 document à la fois |
+| 3 | hybride Presidio, 1 document |
+| 4 | hybride Presidio, 8 documents simultanés |
+| 5 | GLiNER2.5, 1 document |
+| 6 | hybride GLiNER2.5, 1 document |
+| 7 | hybride GLiNER2.5, 8 documents simultanés |
+
+Compter environ une heure, les deux tiers pris par GLiNER. Le tableau consolidé part dans `run/suite-<date>.md` : couverture, couverture hors vocabulaire, documents résiduels, débit, latence médiane, mémoire maximale et processeur médian et maximal, avec le dossier de chaque run.
+
+Le premier run GLiNER lit les poids depuis le disque ; le second les trouve dans le cache du système et charge plus vite. L'écart se voit dans `stats.md` et ne concerne que le démarrage.
 
 ## Ce qu'un run produit
 

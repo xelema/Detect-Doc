@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
@@ -14,6 +15,9 @@ public sealed class NerPiiEngine : IPiiDetectionEngine, IDisposable
     private readonly string _backend;
     private readonly Process _processus;
     private readonly Dictionary<string, JsonElement> _demarrage;
+    private readonly ConcurrentDictionary<int, TaskCompletionSource<Reponse>> _attentes = new();
+    private readonly Lock _envoi = new();
+    private int _prochainId;
 
     public NerPiiEngine(string backend)
     {
@@ -40,6 +44,10 @@ public sealed class NerPiiEngine : IPiiDetectionEngine, IDisposable
         {
             throw Echouer($"Chargement du modèle impossible : {erreur}");
         }
+
+        // Les réponses reviennent dans le désordre dès que le script a plusieurs travailleurs :
+        // une boucle de lecture unique les redistribue à l'appelant qui attend cet identifiant.
+        Task.Run(Distribuer);
     }
 
     public string Name => _backend;
@@ -66,20 +74,46 @@ public sealed class NerPiiEngine : IPiiDetectionEngine, IDisposable
 
     public IReadOnlyList<Detection> Detecter(string texte)
     {
-        _processus.StandardInput.WriteLine(JsonSerializer.Serialize(new { texte }));
-        _processus.StandardInput.Flush();
+        var id = Interlocked.Increment(ref _prochainId);
+        var attente = new TaskCompletionSource<Reponse>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _attentes[id] = attente;
 
-        var reponse = Lire<Reponse>();
-        if (reponse.Erreur is not null)
+        lock (_envoi)
         {
-            throw Echouer($"{_backend} : {reponse.Erreur}");
+            _processus.StandardInput.WriteLine(JsonSerializer.Serialize(new { id, texte }));
+            _processus.StandardInput.Flush();
         }
 
-        PicMemoireMoteurOctets = reponse.PicMemoireOctets ?? PicMemoireMoteurOctets;
+        var reponse = attente.Task.GetAwaiter().GetResult();
+        if (reponse.Erreur is not null)
+        {
+            throw new InvalidOperationException($"{_backend} : {reponse.Erreur}");
+        }
+
+        PicMemoireMoteurOctets = Math.Max(PicMemoireMoteurOctets ?? 0, reponse.PicMemoireOctets ?? 0);
 
         return reponse.Detections
             .Select(d => new Detection(Enum.Parse<CategoriePii>(d.Categorie), d.Regle, NatureRegle.Modele, d.Start, d.Length))
             .ToList();
+    }
+
+    private void Distribuer()
+    {
+        while (_processus.StandardOutput.ReadLine() is { } ligne)
+        {
+            var reponse = JsonSerializer.Deserialize<Reponse>(ligne);
+            if (reponse is not null && _attentes.TryRemove(reponse.Id, out var attente))
+            {
+                attente.SetResult(reponse);
+            }
+        }
+
+        // Flux fermé : personne ne recevra plus rien, il vaut mieux réveiller les appelants que
+        // les laisser attendre indéfiniment.
+        foreach (var attente in _attentes.Values)
+        {
+            attente.TrySetException(new InvalidOperationException($"Processus {_backend} interrompu."));
+        }
     }
 
     private T Lire<T>()
@@ -130,6 +164,7 @@ public sealed class NerPiiEngine : IPiiDetectionEngine, IDisposable
     }
 
     private sealed record Reponse(
+        [property: JsonPropertyName("id")] int Id,
         [property: JsonPropertyName("detections")] IReadOnlyList<DetectionPython> Detections,
         [property: JsonPropertyName("erreur")] string? Erreur,
         [property: JsonPropertyName("pic_memoire_octets")] long? PicMemoireOctets);
