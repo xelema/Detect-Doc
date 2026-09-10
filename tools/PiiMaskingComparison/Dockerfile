@@ -28,7 +28,7 @@ RUN python3 -m venv /opt/ner \
 # réseau, ni de ce que le dépôt distant contient le jour où il tourne.
 ENV HF_HOME=/opt/modeles
 ENV HF_HUB_DISABLE_XET=1
-RUN /opt/ner/bin/python -c "from huggingface_hub import snapshot_download; snapshot_download('urchade/gliner_multi_pii-v1', revision='1fcf13e85f4eef5394e1fcd406cf2ca9ea82351d'); snapshot_download('microsoft/mdeberta-v3-base', revision='a0484667b22365f84929a935b5e50a51f71f159d', allow_patterns=['*.json', 'spm.model', 'tokenizer*'])" \
+RUN /opt/ner/bin/python -c "from huggingface_hub import snapshot_download; snapshot_download('urchade/gliner_multi_pii-v1', revision='1fcf13e85f4eef5394e1fcd406cf2ca9ea82351d'); snapshot_download('fastino/gliner2.5-multi-v1', revision='aaecfe45db1d828c963717054ccb868e8ad1f1d5'); snapshot_download('microsoft/mdeberta-v3-base', revision='a0484667b22365f84929a935b5e50a51f71f159d', allow_patterns=['*.json', 'spm.model', 'tokenizer*'])" \
     && chown --recursive app:app /opt/modeles
 
 ENV PII_PYTHON=/opt/ner/bin/python

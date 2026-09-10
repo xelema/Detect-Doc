@@ -92,6 +92,36 @@ def charger_gliner():
     }
 
 
+def charger_gliner2():
+    from gliner2 import AutoExtractor
+
+    modele = os.environ.get("PII_GLINER2_MODELE", "fastino/gliner2.5-multi-v1")
+    demandes = os.environ.get("PII_GLINER2_LABELS")
+    labels = ([l.strip() for l in demandes.split(",") if l.strip() in CATEGORIES_GLINER]
+              if demandes else list(CATEGORIES_GLINER))
+    seuil = float(os.environ.get("PII_GLINER2_SEUIL", "0.5"))
+    budget = int(os.environ.get("PII_GLINER2_CARACTERES", "1200"))
+
+    model = AutoExtractor.from_pretrained(modele)
+
+    def detecter(texte):
+        for debut_bloc, bloc in decouper(texte, budget):
+            resultat = model.extract_entities(bloc, labels, threshold=seuil, include_spans=True)
+            for label, entites in resultat["entities"].items():
+                categorie = CATEGORIES_GLINER.get(label)
+                if not categorie:
+                    continue
+                for entite in entites:
+                    yield categorie, label, debut_bloc + entite["start"], debut_bloc + entite["end"]
+
+    return detecter, {
+        "modele": modele,
+        "entites": ", ".join(labels),
+        "seuil": seuil,
+        "caracteres_par_bloc": budget,
+    }
+
+
 def decouper(texte, budget):
     """Blocs bornés par la limite de tokens du modèle, coupés sur des fins de ligne.
 
@@ -118,7 +148,7 @@ def en_indices_utf16(texte, debut, fin):
     return depart, longueur
 
 
-BACKENDS = {"presidio": charger_presidio, "gliner": charger_gliner}
+BACKENDS = {"presidio": charger_presidio, "gliner": charger_gliner, "gliner2": charger_gliner2}
 
 
 def main():

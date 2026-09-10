@@ -25,9 +25,9 @@ dotnet run -c Release -- ..\..\..\corpus\manifest.jsonl regex
 
 Les deux chemins exécutent le même code et donnent la même couverture, qui est déterministe. **Les mesures de coût, elles, ne se comparent pas entre l'hôte et le conteneur** : un chiffre publié vient d'un run conteneurisé.
 
-Moteurs disponibles : `regex` (défaut), `presidio`, et `hybride` qui prend l'union de leurs plages sans arbitrage ni paramètre supplémentaire. Le split mesuré est `dev` ; le jeu `test` ne s'ouvre qu'au moment de produire une mesure destinée au rapport.
+Moteurs disponibles : `regex` (défaut), les moteurs NER `presidio`, `gliner` et `gliner2`, et les hybrides qui prennent l'union des plages des règles et d'un moteur NER, sans arbitrage ni paramètre supplémentaire. `hybride` compose avec Presidio, `hybride-gliner` et `hybride-gliner2` avec le moteur nommé. Le split mesuré est `dev` ; le jeu `test` ne s'ouvre qu'au moment de produire une mesure destinée au rapport.
 
-Le moteur `presidio` a besoin de son environnement Python. L'image le porte ; en local, il faut le créer une fois et dire au tool où le trouver :
+Les moteurs NER ont besoin de leur environnement Python. L'image le porte ; en local, il faut le créer une fois et dire au tool où le trouver :
 
 ```powershell
 python -m venv C:\Temp\pii-venv
@@ -45,6 +45,12 @@ Deux variables règlent ce moteur, en local comme dans le conteneur. Elles sont 
 |---|---|---|
 | `PII_PRESIDIO_MODELE` | `fr_core_news_sm` | modèle spaCy chargé, `fr_core_news_sm` ou `fr_core_news_md`, les deux dans l'image |
 | `PII_PRESIDIO_ENTITES` | toutes | liste d'entités Presidio séparées par des virgules, par exemple `PERSON,EMAIL_ADDRESS,PHONE_NUMBER,IBAN_CODE` |
+| `PII_GLINER_MODELE` | `urchade/gliner_multi_pii-v1` | poids GLiNER, figés à leur révision dans l'image |
+| `PII_GLINER_LABELS` | tous | labels demandés au modèle, parmi `person, organization, address, email, phone number, iban` |
+| `PII_GLINER_SEUIL` | `0.5` | score minimal d'une détection |
+| `PII_GLINER_CARACTERES` | `1200` | taille des blocs, coupés sur des fins de ligne |
+| `PII_GLINER2_MODELE` | `fastino/gliner2.5-multi-v1` | idem pour GLiNER2.5 |
+| `PII_GLINER2_LABELS`, `PII_GLINER2_SEUIL`, `PII_GLINER2_CARACTERES` | idem | mêmes réglages, appliqués au moteur `gliner2` |
 
 ## Ce qu'un run produit
 
@@ -122,7 +128,7 @@ Le fichier de résultats porte chaque détection avec sa plage, son texte et son
 | `VeriteTerrain/` | localisation des valeurs injectées dans le texte de référence |
 | `Benchmark/` | exécution d'un run, mesure du coût, écriture des résultats |
 
-Le moteur `presidio` parle à un processus Python tenu ouvert pour tout le run, un document par ligne sur stdin, ses plages sur stdout. Le modèle spaCy met trois à quatre secondes à charger : un processus par document rendrait le run inexploitable, et la poignée de main envoyée au démarrage sort ce chargement de la fenêtre chronométrée. Le script convertit ses positions en unités UTF-16 avant de les rendre, Python indexant en points de code.
+Les moteurs NER parlent à un processus Python tenu ouvert pour tout le run, un document par ligne sur stdin, ses plages sur stdout. Le modèle spaCy met trois à quatre secondes à charger : un processus par document rendrait le run inexploitable, et la poignée de main envoyée au démarrage sort ce chargement de la fenêtre chronométrée. Le script convertit ses positions en unités UTF-16 avant de les rendre, Python indexant en points de code. Les moteurs GLiNER découpent le texte en blocs bornés, coupés sur des fins de ligne : une entité à cheval sur deux blocs est perdue, ce que la coupure sur retour à la ligne rend rare sur ces documents.
 
 Les règles du moteur regex sont de deux familles. Les unes reconnaissent une forme qui se suffit à elle-même, un IBAN ou une adresse de courriel. Les autres partent d'un libellé du document, `BIC`, `RPPS`, `Formateur`, et ne retiennent que la valeur qui suit, capturée dans le groupe 1 : sans ce libellé, un BIC est huit majuscules et un ADELI neuf chiffres, deux formes trop banales pour être masquées à l'aveugle.
 
