@@ -1,0 +1,13 @@
+# Exemples métier fournis en entrée, un dossier par code de type. Ils peuvent porter des
+# données personnelles réelles et n'entrent jamais dans le dépôt : seule la fiche anonyme
+# qu'on en tire est versionnée.
+exemples/
+
+# Aperçus PDF et PNG de la boucle de mise au point. Jetables par construction.
+apercu/
+
+# Consignes aux agents, versionnées avec l'outil : il doit rester utilisable seul. Ces
+# deux noms sont exclus plus haut, à toute profondeur, pour les fichiers de la racine du
+# dépôt ; la règle la plus proche du fichier gagne, ces deux-ci sont donc bien suivis.
+!AGENTS.md
+!CLAUDE.md

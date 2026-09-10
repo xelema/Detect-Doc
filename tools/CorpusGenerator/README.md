@@ -448,7 +448,7 @@ Toute police ajoutée dans `documents/` doit donc l'être aussi au `Dockerfile` 
 
 **Ajouter une mise en page à la facture et au devis.** Écrire le template dans `templates/`, ajouter une fabrique dans `documents/piece.py` et l'inscrire dans `FABRIQUES_PIECE`. Le template est choisi en tournant sur la seed plutôt qu'au hasard, pour qu'aucune mise en page ne reste sous-représentée sur un corpus de taille modeste.
 
-**Ajouter un type de document.** Créer `documents/mon_type.py` sur le patron des fichiers existants (`documents/base.py` documente l'interface) : le modèle de données, sa génération par Faker à seed fixée, un ou plusieurs styles, une classe `MonTypeDocument(DocumentType)` dont `produire(numero)` rend le PDF et construit l'entrée de manifest, et l'instance `DOCUMENT` en bas du fichier. Puis :
+**Ajouter un type de document.** La chaîne complète, depuis un exemple reçu ou une simple description jusqu'aux documents générés, est décrite dans [AJOUTER-UN-TYPE.md](AJOUTER-UN-TYPE.md). Ce qui suit en est le cœur technique. Créer `documents/mon_type.py` sur le patron des fichiers existants (`documents/base.py` documente l'interface) : le modèle de données, sa génération par Faker à seed fixée, un ou plusieurs styles, une classe `MonTypeDocument(DocumentType)` dont `produire(numero)` rend le PDF et construit l'entrée de manifest, et l'instance `DOCUMENT` en bas du fichier. Puis :
 
 1. écrire le ou les templates dans `templates/` ;
 2. enregistrer `DOCUMENT` dans `TYPES` au début de `generer.py` ;
