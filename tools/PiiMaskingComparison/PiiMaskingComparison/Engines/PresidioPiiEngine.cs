@@ -34,6 +34,10 @@ public sealed class PresidioPiiEngine : IPiiDetectionEngine, IDisposable
         // cette poignée de main, les secondes de chargement tomberaient dans la mesure du
         // premier document.
         _demarrage = Lire<Demarrage>();
+        if (_demarrage.Erreur is not null)
+        {
+            throw Echouer($"Chargement du modèle impossible : {_demarrage.Erreur}");
+        }
     }
 
     public string Name => "presidio";
@@ -68,12 +72,35 @@ public sealed class PresidioPiiEngine : IPiiDetectionEngine, IDisposable
         var ligne = _processus.StandardOutput.ReadLine();
         if (ligne is null)
         {
-            var erreur = _processus.StandardError.ReadToEnd();
-            throw new InvalidOperationException($"Processus Python interrompu. {erreur}");
+            throw Echouer("Processus Python interrompu.");
         }
 
-        return JsonSerializer.Deserialize<T>(ligne)
-               ?? throw new InvalidOperationException($"Réponse Python illisible : {ligne}");
+        try
+        {
+            return JsonSerializer.Deserialize<T>(ligne)
+                   ?? throw Echouer($"Réponse Python vide : {ligne}");
+        }
+        catch (JsonException)
+        {
+            throw Echouer($"Réponse Python illisible : {ligne}");
+        }
+    }
+
+    /// <summary>
+    /// Le message d'erreur utile est dans la trace Python, sur stderr. La lire exige que le
+    /// processus soit fini, sans quoi l'appel attendrait indéfiniment un flux resté ouvert.
+    /// </summary>
+    private InvalidOperationException Echouer(string message)
+    {
+        _processus.StandardInput.Close();
+        _processus.WaitForExit(5000);
+        var trace = _processus.StandardError.ReadToEnd().TrimEnd();
+        if (trace.Length > 600)
+        {
+            trace = string.Concat("...", trace.AsSpan(trace.Length - 600));
+        }
+
+        return new InvalidOperationException($"{message} {trace}");
     }
 
     public void Dispose()
@@ -90,7 +117,8 @@ public sealed class PresidioPiiEngine : IPiiDetectionEngine, IDisposable
     private sealed record Demarrage(
         [property: JsonPropertyName("chargement_ms")] double ChargementMs,
         [property: JsonPropertyName("modele")] string Modele,
-        [property: JsonPropertyName("entites")] string Entites);
+        [property: JsonPropertyName("entites")] string Entites,
+        [property: JsonPropertyName("erreur")] string? Erreur);
 
     private sealed record Reponse(
         [property: JsonPropertyName("detections")] IReadOnlyList<DetectionPython> Detections,

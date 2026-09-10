@@ -5,6 +5,7 @@ le run plutôt qu'un appel par document. La poignée de main envoyée au démarr
 chargement de la fenêtre chronométrée par le benchmark.
 """
 
+import contextlib
 import json
 import os
 import sys
@@ -64,7 +65,15 @@ def en_indices_utf16(texte, debut, fin):
 
 def main():
     depart = time.perf_counter()
-    analyzer = creer_analyzer()
+    try:
+        # Le chargement écrit sur stdout, spaCy y imprime ses diagnostics : le détourner vers
+        # stderr garde le canal de sortie réservé au protocole, une ligne JSON par message.
+        with contextlib.redirect_stdout(sys.stderr):
+            analyzer = creer_analyzer()
+    except (Exception, SystemExit) as erreur:
+        print(json.dumps({"erreur": f"{type(erreur).__name__}: {erreur}"}), flush=True)
+        raise SystemExit(1)
+
     entites = entites_actives()
     print(json.dumps({
         "chargement_ms": (time.perf_counter() - depart) * 1000,

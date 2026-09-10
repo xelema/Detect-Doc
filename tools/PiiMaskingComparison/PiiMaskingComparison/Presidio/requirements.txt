@@ -1,3 +1,9 @@
 presidio-analyzer==2.2.364
 spacy==3.8.16
+
+# Modèles spaCy français, du plus léger au plus lourd : 16, 45 et 550 Mo. Les trois sont dans
+# l'image pour qu'un changement de modèle soit un changement de variable d'environnement, pas
+# une reconstruction. pip vérifie l'empreinte déclarée dans le fragment d'URL.
 https://github.com/explosion/spacy-models/releases/download/fr_core_news_sm-3.8.0/fr_core_news_sm-3.8.0-py3-none-any.whl#sha256=7d6ad14cd5078e53147bfbf70fb9d433c6a3865b695fda2657140bbc59a27e29
+https://github.com/explosion/spacy-models/releases/download/fr_core_news_md-3.8.0/fr_core_news_md-3.8.0-py3-none-any.whl#sha256=8a70d090a54ef77525c3ffa6a6195b9d365f2cf369ae1cd84ede93f3d709079e
+https://github.com/explosion/spacy-models/releases/download/fr_core_news_lg-3.8.0/fr_core_news_lg-3.8.0-py3-none-any.whl#sha256=da5bf7fc860af64293d88638b4416b3de3a29005b785bfff67d09b06c77345de
