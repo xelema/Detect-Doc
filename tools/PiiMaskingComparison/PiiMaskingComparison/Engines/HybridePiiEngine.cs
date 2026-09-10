@@ -14,6 +14,8 @@ public sealed class HybridePiiEngine(IPiiDetectionEngine regles, IPiiDetectionEn
             .Concat(modele.Parametres.Select(p => new KeyValuePair<string, object>($"{modele.Name}_{p.Key}", p.Value)))
             .ToDictionary(p => p.Key, p => p.Value);
 
+    public long? PicMemoireMoteurOctets => modele.PicMemoireMoteurOctets;
+
     public IReadOnlyList<Detection> Detecter(string texte) =>
         [.. regles.Detecter(texte), .. modele.Detecter(texte)];
 

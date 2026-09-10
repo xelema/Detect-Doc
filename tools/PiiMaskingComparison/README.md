@@ -25,6 +25,8 @@ dotnet run -c Release -- ..\..\..\corpus\manifest.jsonl regex
 
 Les deux chemins exécutent le même code et donnent la même couverture, qui est déterministe. **Les mesures de coût, elles, ne se comparent pas entre l'hôte et le conteneur** : un chiffre publié vient d'un run conteneurisé.
 
+Le récapitulatif distingue trois mémoires, et la seule qui compte pour un moteur NER est la dernière. Les compteurs de .NET ne voient que leur propre processus ; le modèle vit dans le processus Python, qui rapporte lui-même son pic de mémoire résidente à chaque réponse. Un moteur NER qui n'afficherait que les mégaoctets du processus .NET paraîtrait gratuit alors qu'il en occupe des milliers.
+
 Moteurs disponibles : `regex` (défaut), les moteurs NER `presidio`, `gliner` et `gliner2`, et les hybrides qui prennent l'union des plages des règles et d'un moteur NER, sans arbitrage ni paramètre supplémentaire. `hybride` compose avec Presidio, `hybride-gliner` et `hybride-gliner2` avec le moteur nommé. Le split mesuré est `dev` ; le jeu `test` ne s'ouvre qu'au moment de produire une mesure destinée au rapport.
 
 Les moteurs NER ont besoin de leur environnement Python. L'image le porte ; en local, il faut le créer une fois et dire au tool où le trouver :

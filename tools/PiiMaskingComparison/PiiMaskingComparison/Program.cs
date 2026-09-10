@@ -43,8 +43,9 @@ using (var writer = new ResultWriter(Path.Combine(dossierRun, "resultats.jsonl")
 }
 
 var cpuMs = (Process.GetCurrentProcess().TotalProcessorTime - cpuAvant).TotalMilliseconds;
+// Lu avant la libération du moteur : le processus qui porte le modèle doit être encore vivant.
 File.WriteAllText(Path.Combine(dossierRun, "recap.md"),
-    ConstruireRecap(runId, metadata, resultats, cpuMs, derives));
+    ConstruireRecap(runId, metadata, resultats, cpuMs, derives, moteur.PicMemoireMoteurOctets));
 
 Console.WriteLine($"Run écrit dans {dossierRun}");
 return;
@@ -67,7 +68,7 @@ static IPiiDetectionEngine CreerMoteur(string nom)
 }
 
 static string ConstruireRecap(string runId, RunMetadata metadata, List<ResultatDocument> resultats,
-    double cpuMs, int derives)
+    double cpuMs, int derives, long? picMoteurOctets)
 {
     var mesures = resultats.Where(r => r.Statut == Statut.Ok).ToList();
     var occurrences = mesures.SelectMany(r => r.Occurrences).ToList();
@@ -186,8 +187,12 @@ static string ConstruireRecap(string runId, RunMetadata metadata, List<ResultatD
     recap.AppendLine($"| Temps médian par document | {Mediane(mesures.Select(r => r.DureeMs)):F2} ms |");
     recap.AppendLine($"| Temps du pire document | {mesures.Max(r => r.DureeMs):F1} ms |");
     recap.AppendLine($"| CPU du processus sur le run | {cpuMs:F0} ms |");
-    recap.AppendLine($"| Alloué par la détection | {mesures.Sum(r => r.OctetsAlloues) / 1024.0 / 1024.0:F1} Mo |");
-    recap.AppendLine($"| Pic mémoire du processus | {Process.GetCurrentProcess().PeakWorkingSet64 / 1024.0 / 1024.0:F0} Mo |");
+    recap.AppendLine($"| Alloué côté .NET par la détection | {mesures.Sum(r => r.OctetsAlloues) / 1024.0 / 1024.0:F1} Mo |");
+    recap.AppendLine($"| Pic mémoire du processus .NET | {Process.GetCurrentProcess().PeakWorkingSet64 / 1024.0 / 1024.0:F0} Mo |");
+    if (picMoteurOctets is { } picMoteur)
+    {
+        recap.AppendLine($"| Pic mémoire du processus portant le modèle | {picMoteur / 1024.0 / 1024.0:F0} Mo |");
+    }
 
     return recap.ToString();
 }

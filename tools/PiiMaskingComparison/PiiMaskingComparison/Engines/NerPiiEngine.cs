@@ -53,6 +53,10 @@ public sealed class NerPiiEngine : IPiiDetectionEngine, IDisposable
         ["chargement_ms"] = Math.Round(_demarrage.ChargementMs)
     };
 
+    // Rapporté par le processus Python lui-même : les compteurs .NET ne voient pas l'espace
+    // d'un enfant, et publieraient quelques mégaoctets pour un modèle qui en occupe des milliers.
+    public long? PicMemoireMoteurOctets { get; private set; }
+
     public IReadOnlyList<Detection> Detecter(string texte)
     {
         _processus.StandardInput.WriteLine(JsonSerializer.Serialize(new { texte }));
@@ -61,8 +65,10 @@ public sealed class NerPiiEngine : IPiiDetectionEngine, IDisposable
         var reponse = Lire<Reponse>();
         if (reponse.Erreur is not null)
         {
-            throw new InvalidOperationException($"Presidio : {reponse.Erreur}");
+            throw Echouer($"{_backend} : {reponse.Erreur}");
         }
+
+        PicMemoireMoteurOctets = reponse.PicMemoireOctets ?? PicMemoireMoteurOctets;
 
         return reponse.Detections
             .Select(d => new Detection(Enum.Parse<CategoriePii>(d.Categorie), d.Regle, NatureRegle.Modele, d.Start, d.Length))
@@ -124,7 +130,8 @@ public sealed class NerPiiEngine : IPiiDetectionEngine, IDisposable
 
     private sealed record Reponse(
         [property: JsonPropertyName("detections")] IReadOnlyList<DetectionPython> Detections,
-        [property: JsonPropertyName("erreur")] string? Erreur);
+        [property: JsonPropertyName("erreur")] string? Erreur,
+        [property: JsonPropertyName("pic_memoire_octets")] long? PicMemoireOctets);
 
     private sealed record DetectionPython(
         [property: JsonPropertyName("categorie")] string Categorie,

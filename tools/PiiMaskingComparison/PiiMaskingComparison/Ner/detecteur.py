@@ -140,6 +140,49 @@ def decouper(texte, budget):
         yield debut, texte[debut:debut + courant]
 
 
+def pic_memoire_octets():
+    """Pic de mémoire résidente du processus, demandé au système d'exploitation.
+
+    C'est ce processus qui porte le modèle : les compteurs du benchmark, côté .NET, ne voient
+    que son propre espace et publieraient quelques mégaoctets pour un moteur qui en consomme
+    des milliers.
+    """
+    try:
+        if sys.platform == "win32":
+            import ctypes
+
+            class CompteursMemoire(ctypes.Structure):
+                _fields_ = [("cb", ctypes.c_uint32), ("PageFaultCount", ctypes.c_uint32)] + [
+                    (nom, ctypes.c_size_t) for nom in (
+                        "PeakWorkingSetSize", "WorkingSetSize", "QuotaPeakPagedPoolUsage",
+                        "QuotaPagedPoolUsage", "QuotaPeakNonPagedPoolUsage",
+                        "QuotaNonPagedPoolUsage", "PagefileUsage", "PeakPagefileUsage")]
+
+            kernel32 = ctypes.WinDLL("kernel32")
+            psapi = ctypes.WinDLL("psapi")
+            # Sans types déclarés, ctypes tronque la poignée de processus à 32 bits et l'appel
+            # échoue en rendant zéro, ce qui se lirait comme une mesure.
+            kernel32.GetCurrentProcess.restype = ctypes.c_void_p
+            psapi.GetProcessMemoryInfo.argtypes = [
+                ctypes.c_void_p, ctypes.POINTER(CompteursMemoire), ctypes.c_uint32]
+
+            compteurs = CompteursMemoire()
+            compteurs.cb = ctypes.sizeof(compteurs)
+            if psapi.GetProcessMemoryInfo(
+                    kernel32.GetCurrentProcess(), ctypes.byref(compteurs), compteurs.cb):
+                return int(compteurs.PeakWorkingSetSize)
+            return None
+
+        with open("/proc/self/status", encoding="utf-8") as statut:
+            for ligne in statut:
+                if ligne.startswith("VmHWM:"):
+                    return int(ligne.split()[1]) * 1024
+    except Exception:
+        return None
+
+    return None
+
+
 def en_indices_utf16(texte, debut, fin):
     """Python indexe en points de code, .NET en unités UTF-16. La conversion évite un décalage
     des plages dès qu'un caractère hors du plan de base apparaît avant une PII."""
@@ -183,7 +226,7 @@ def main():
                     "length": longueur,
                     "regle": regle,
                 })
-            reponse = {"detections": detections}
+            reponse = {"detections": detections, "pic_memoire_octets": pic_memoire_octets()}
         except Exception as erreur:  # remonte au benchmark, qui classe le document en erreur
             reponse = {"erreur": f"{type(erreur).__name__}: {erreur}"}
 

@@ -7,6 +7,13 @@ public interface IPiiDetectionEngine : IDisposable
     IReadOnlyDictionary<string, object> Parametres { get; }
 
     IReadOnlyList<Detection> Detecter(string texte);
+
+    /// <summary>
+    /// Pic mémoire du processus qui porte réellement le modèle, quand ce n'est pas celui du
+    /// benchmark. Les compteurs mémoire de .NET ignorent un processus enfant, où vivent le
+    /// runtime Python et les poids : sans cette valeur, un moteur NER paraîtrait gratuit.
+    /// </summary>
+    long? PicMemoireMoteurOctets => null;
 }
 
 public readonly record struct Detection(
