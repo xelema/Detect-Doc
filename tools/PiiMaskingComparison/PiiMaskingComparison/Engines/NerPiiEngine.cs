@@ -13,7 +13,7 @@ public sealed class NerPiiEngine : IPiiDetectionEngine, IDisposable
 {
     private readonly string _backend;
     private readonly Process _processus;
-    private readonly Demarrage _demarrage;
+    private readonly Dictionary<string, JsonElement> _demarrage;
 
     public NerPiiEngine(string backend)
     {
@@ -35,22 +35,29 @@ public sealed class NerPiiEngine : IPiiDetectionEngine, IDisposable
         // Le script signale la fin du chargement du modèle avant d'attendre un document : sans
         // cette poignée de main, les secondes de chargement tomberaient dans la mesure du
         // premier document.
-        _demarrage = Lire<Demarrage>();
-        if (_demarrage.Erreur is not null)
+        _demarrage = Lire<Dictionary<string, JsonElement>>();
+        if (_demarrage.TryGetValue("erreur", out var erreur))
         {
-            throw Echouer($"Chargement du modèle impossible : {_demarrage.Erreur}");
+            throw Echouer($"Chargement du modèle impossible : {erreur}");
         }
     }
 
     public string Name => _backend;
     public string Version => "1";
 
-    /// <summary>Décrits par le script lui-même, pour que le run dise ce qui a réellement tourné.</summary>
-    public IReadOnlyDictionary<string, object> Parametres => new Dictionary<string, object>
+    /// <summary>
+    /// Republiés tels que le script les déclare, sans liste de champs connue d'avance : un
+    /// réglage propre à un moteur doit se retrouver dans le run, sinon deux runs de
+    /// configurations différentes deviennent indiscernables.
+    /// </summary>
+    public IReadOnlyDictionary<string, object> Parametres =>
+        _demarrage.ToDictionary(p => p.Key, p => Lisible(p.Value));
+
+    private static object Lisible(JsonElement valeur) => valeur.ValueKind switch
     {
-        ["modele"] = _demarrage.Modele,
-        ["entites"] = _demarrage.Entites,
-        ["chargement_ms"] = Math.Round(_demarrage.ChargementMs)
+        JsonValueKind.Number => Math.Round(valeur.GetDouble(), 3),
+        JsonValueKind.True or JsonValueKind.False => valeur.GetBoolean(),
+        _ => valeur.ToString()
     };
 
     // Rapporté par le processus Python lui-même : les compteurs .NET ne voient pas l'espace
@@ -121,12 +128,6 @@ public sealed class NerPiiEngine : IPiiDetectionEngine, IDisposable
 
         _processus.Dispose();
     }
-
-    private sealed record Demarrage(
-        [property: JsonPropertyName("chargement_ms")] double ChargementMs,
-        [property: JsonPropertyName("modele")] string Modele,
-        [property: JsonPropertyName("entites")] string Entites,
-        [property: JsonPropertyName("erreur")] string? Erreur);
 
     private sealed record Reponse(
         [property: JsonPropertyName("detections")] IReadOnlyList<DetectionPython> Detections,

@@ -46,6 +46,7 @@ Deux variables règlent ce moteur, en local comme dans le conteneur. Elles sont 
 | Variable | Défaut | Effet |
 |---|---|---|
 | `PII_PRESIDIO_MODELE` | `fr_core_news_sm` | modèle spaCy chargé, `fr_core_news_sm` ou `fr_core_news_md`, les deux dans l'image. La valeur `aucun` monte Presidio sur un pipeline spaCy vide : les reconnaisseurs de motifs fonctionnent, celui qui produit les noms n'a plus de modèle à interroger |
+| `PII_PRESIDIO_EXCLURE` | rien | composants spaCy à ne pas charger, séparés par des virgules. Le modèle en porte six, l'analyseur n'utilise que `tok2vec` et `ner`, plus le lemmatiseur pour l'enrichissement par le contexte |
 | `PII_PRESIDIO_ENTITES` | toutes | liste d'entités Presidio séparées par des virgules, par exemple `PERSON,EMAIL_ADDRESS,PHONE_NUMBER,IBAN_CODE` |
 | `PII_GLINER_MODELE` | `urchade/gliner_multi_pii-v1` | poids GLiNER, figés à leur révision dans l'image |
 | `PII_GLINER_LABELS` | tous | labels demandés au modèle, parmi `person, organization, address, email, phone number, iban` |

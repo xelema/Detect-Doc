@@ -35,7 +35,7 @@ CATEGORIES_GLINER = {
 def charger_presidio():
     import spacy
     from presidio_analyzer import AnalyzerEngine, RecognizerRegistry
-    from presidio_analyzer.nlp_engine import NlpEngineProvider, SpacyNlpEngine
+    from presidio_analyzer.nlp_engine import SpacyNlpEngine
     from presidio_analyzer.predefined_recognizers import PhoneRecognizer
 
     modele = os.environ.get("PII_PRESIDIO_MODELE", "fr_core_news_sm")
@@ -43,21 +43,18 @@ def charger_presidio():
     entites = ([e.strip() for e in demandees.split(",") if e.strip() in CATEGORIES_PRESIDIO]
                if demandees else list(CATEGORIES_PRESIDIO))
 
-    if modele == "aucun":
-        # Pipeline spaCy vide : il tokenise et rien d'autre. Les neuf reconnaisseurs de motifs
-        # fonctionnent, le dixième, celui qui produit les noms, n'a plus de modèle à interroger.
-        # Mesure le plancher de Presidio, sans le gigaoctet du modèle.
-        class MoteurSansModele(SpacyNlpEngine):
-            def __init__(self):
-                super().__init__(models=[{"lang_code": LANGUE, "model_name": modele}])
-                self.nlp = {LANGUE: spacy.blank(LANGUE)}
+    # Le modèle charge six composants ; l'analyseur n'utilise que le NER et, pour l'enrichissement
+    # par le contexte, les lemmes. Exclure le reste allège la mémoire et le temps sans toucher aux
+    # détections. `aucun` va au bout de la logique : un pipeline vide, qui ne fait que tokeniser.
+    exclure = [c.strip() for c in os.environ.get("PII_PRESIDIO_EXCLURE", "").split(",") if c.strip()]
+    pipeline_spacy = spacy.blank(LANGUE) if modele == "aucun" else spacy.load(modele, exclude=exclure)
 
-        moteur_nlp = MoteurSansModele()
-    else:
-        moteur_nlp = NlpEngineProvider(nlp_configuration={
-            "nlp_engine_name": "spacy",
-            "models": [{"lang_code": LANGUE, "model_name": modele}],
-        }).create_engine()
+    class MoteurSpacy(SpacyNlpEngine):
+        def __init__(self):
+            super().__init__(models=[{"lang_code": LANGUE, "model_name": modele}])
+            self.nlp = {LANGUE: pipeline_spacy}
+
+    moteur_nlp = MoteurSpacy()
 
     registre = RecognizerRegistry(supported_languages=[LANGUE])
     registre.load_predefined_recognizers(languages=[LANGUE])
@@ -74,7 +71,11 @@ def charger_presidio():
         for resultat in analyzer.analyze(text=texte, language=LANGUE, entities=entites):
             yield CATEGORIES_PRESIDIO[resultat.entity_type], resultat.entity_type, resultat.start, resultat.end
 
-    return detecter, {"modele": modele, "entites": ", ".join(entites)}
+    return detecter, {
+        "modele": modele,
+        "entites": ", ".join(entites),
+        "composants": ", ".join(pipeline_spacy.pipe_names),
+    }
 
 
 def charger_gliner():
