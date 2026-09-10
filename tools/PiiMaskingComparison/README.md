@@ -50,7 +50,7 @@ Un dossier `run/<date>_<moteur>/` contenant trois fichiers :
 | Fichier | Contenu |
 |---|---|
 | `run.json` | conditions du run : moteur, version, paramètres, empreinte du manifest, machine |
-| `resultats.jsonl` | une ligne par document : occurrences attendues et leur couverture, faux positifs, coût |
+| `resultats.jsonl` | une ligne par document : occurrences attendues et leur couverture, détections avec leurs plages, coût |
 | `recap.md` | couverture par catégorie, détail par règle, chiffres globaux, coût |
 
 Le récapitulatif liste **toutes** les catégories, même celles qu'aucune valeur du split n'alimente et celles qu'aucune règle ne vise : un zéro affiché est une information, une ligne absente se lit comme un oubli. Une clé du manifest que le tool ne sait pas classer apparaît en `Inconnue` et demande une reprise du mapping.
@@ -77,12 +77,20 @@ La comparaison ne retient que les lettres et les chiffres, casse ignorée. Tout 
 
 Une valeur trouvée au milieu d'un mot ou d'un nombre plus long est écartée : sans cette garde, le numéro de déclaration d'activité d'un organisme contient un ADELI et deux mots voisins se recollent une fois la ponctuation retirée. Le voisinage se juge sur le texte d'origine, seul endroit où la séparation existe encore.
 
+Les accents sont ignorés comme la casse : un logo imprimé `ACADEMIE ROUEN` porte la même raison sociale que le manifest.
+
+Une valeur entièrement contenue dans une autre ne compte pas à part. Le nom du titulaire se retrouve dans son adresse de courriel, la raison sociale dans le domaine : ce sont les mêmes caractères et une seule fuite, et les compter deux fois gonflerait autant les occurrences attendues que les occurrences couvertes.
+
 Une occurrence n'est **couverte** que si toute sa plage est détectée. Une valeur à moitié couverte laisse de quoi identifier la personne, elle compte comme manquée.
+
+Le fichier de résultats porte chaque détection avec sa plage, son texte et son caractère faux, et chaque occurrence avec sa plage et sa couverture. Tout chiffre du récapitulatif est donc recalculable depuis le `resultats.jsonl` et le manifest, sans faire confiance au tool.
 
 ## Limites de cette mesure
 
 - **Les valeurs non localisées ne sont pas comptées**, ni en couvertes ni en manquées : le texte ne les porte pas sous la forme déclarée. C'est le cas des noms imprimés en capitales alors que le manifest les écrit en casse mixte. Leur volume, publié dans `recap.md`, est la marge d'incertitude du taux de couverture.
 - **La catégorie se déduit du nom de la clé** du manifest. Les clés qui ne contiennent ni `email`, ni `iban`, ni `telephone` tombent en `Autre` : leurs occurrences restent attendues, donc visibles en manquées, sans qu'aucune règle ne les vise encore.
+- **Dix des soixante-sept documents `dev` sont des dérivés**, des dégradations d'image dont le texte de référence est celui de leur parent. Tant que l'entrée mesurée est le manifest, ces textes pèsent double ; le récapitulatif le rappelle. Ils reprendront leur sens quand l'entrée sera une sortie d'OCR.
+- **Le taux de détections fausses se compte par plage masquée**, pas par règle déclenchée : deux règles qui tombent sur la même plage ne masquent qu'une fois. Le tableau par règle, lui, compte bien chaque déclenchement.
 - **Le corpus déclare ce qu'il a injecté, pas tout ce qu'il contient.** Une adresse de courriel figée dans un gabarit est une détection correcte comptée en faux positif, faute d'être déclarée. Relire les faux positifs du `resultats.jsonl` avant de conclure sur la précision d'un moteur.
 - **Une plage détectée compte pour la valeur qu'elle recouvre, quelle que soit sa catégorie.** Un moteur qui étiquette `Organisme` un BIC le masque quand même : la couverture le crédite, la colonne des catégories ne le dit pas. C'est voulu, le sujet est la fuite, pas l'étiquetage.
 - **Les noms sans libellé ne sont pas couverts par le moteur regex.** La baseline ne reconnaît un nom que s'il suit un libellé du document ou une civilité. Un nom en cellule de tableau d'émargement ou en en-tête de carte de visite n'a aucune forme distinctive : c'est la charge du détecteur suivant, pas d'une règle de plus.

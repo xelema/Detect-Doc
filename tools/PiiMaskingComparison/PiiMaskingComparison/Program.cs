@@ -26,6 +26,10 @@ var entrees = ManifestReader.ReadManifest(cheminManifest)
     .Where(e => string.Equals(e.Split, split))
     .ToList();
 
+// Un document dérivé est une dégradation d'image de son parent : sur le texte du manifest, les
+// deux portent la même chaîne et ce texte pèse donc double dans les totaux.
+var derives = entrees.Count(e => e.DeriveDe is not null && entrees.Any(parent => parent.Id == e.DeriveDe));
+
 var cpuAvant = Process.GetCurrentProcess().TotalProcessorTime;
 var resultats = new List<ResultatDocument>();
 
@@ -39,7 +43,8 @@ using (var writer = new ResultWriter(Path.Combine(dossierRun, "resultats.jsonl")
 }
 
 var cpuMs = (Process.GetCurrentProcess().TotalProcessorTime - cpuAvant).TotalMilliseconds;
-File.WriteAllText(Path.Combine(dossierRun, "recap.md"), ConstruireRecap(runId, metadata, resultats, cpuMs));
+File.WriteAllText(Path.Combine(dossierRun, "recap.md"),
+    ConstruireRecap(runId, metadata, resultats, cpuMs, derives));
 
 Console.WriteLine($"Run écrit dans {dossierRun}");
 return;
@@ -51,13 +56,18 @@ static IPiiDetectionEngine CreerMoteur(string nom) => nom.ToLowerInvariant() swi
     _ => throw new ArgumentException($"Moteur inconnu : {nom}. Attendu : regex ou presidio.")
 };
 
-static string ConstruireRecap(string runId, RunMetadata metadata, List<ResultatDocument> resultats, double cpuMs)
+static string ConstruireRecap(string runId, RunMetadata metadata, List<ResultatDocument> resultats,
+    double cpuMs, int derives)
 {
     var mesures = resultats.Where(r => r.Statut == Statut.Ok).ToList();
     var occurrences = mesures.SelectMany(r => r.Occurrences).ToList();
-    var fauxPositifs = mesures.SelectMany(r => r.FauxPositifs).ToList();
+    var detections = mesures
+        .SelectMany(r => r.Detections.Select(d => (Document: r.Id, Detection: d)))
+        .DistinctBy(d => (d.Document, d.Detection.Start, d.Detection.Length))
+        .Select(d => d.Detection)
+        .ToList();
+    var fauxPositifs = detections.Where(d => d.Fausse).ToList();
     var nonLocalisees = mesures.SelectMany(r => r.ValeursNonLocalisees).ToList();
-    var nbDetections = mesures.Sum(r => r.Detections.Count);
 
     var recap = new StringBuilder();
     recap.AppendLine($"# Run `{runId}`");
@@ -67,6 +77,13 @@ static string ConstruireRecap(string runId, RunMetadata metadata, List<ResultatD
     recap.AppendLine($"- **Moteur** : {metadata.Moteur.Nom} {metadata.Moteur.Version}");
     recap.AppendLine();
     recap.AppendLine("Mesuré sur le texte de référence du manifest, pas sur une sortie d'OCR.");
+    if (derives > 0)
+    {
+        recap.AppendLine();
+        recap.AppendLine(
+            $"Dont {derives} documents dérivés, dégradations d'image dont le texte est celui de leur " +
+            "parent : ces textes pèsent double dans les totaux tant que l'entrée mesurée est le manifest.");
+    }
     recap.AppendLine();
 
     recap.AppendLine("## Paramètres");
@@ -111,7 +128,7 @@ static string ConstruireRecap(string runId, RunMetadata metadata, List<ResultatD
     recap.AppendLine("| Métrique | Valeur |");
     recap.AppendLine("|---|---|");
     recap.AppendLine($"| Occurrences couvertes | {100.0 * totalCouvertes / occurrences.Count:F1} % ({totalCouvertes} / {occurrences.Count}) |");
-    recap.AppendLine($"| Détections fausses | {(nbDetections == 0 ? 0 : 100.0 * fauxPositifs.Count / nbDetections):F1} % ({fauxPositifs.Count} / {nbDetections}) |");
+    recap.AppendLine($"| Détections fausses | {(detections.Count == 0 ? 0 : 100.0 * fauxPositifs.Count / detections.Count):F1} % ({fauxPositifs.Count} / {detections.Count}) |");
     recap.AppendLine($"| Documents avec au moins une PII résiduelle | {docsAvecResiduel} / {mesures.Count} |");
     recap.AppendLine($"| Documents sans texte de référence | {resultats.Count(r => r.Statut == Statut.ReferenceAbsente)} |");
     recap.AppendLine($"| Documents en erreur | {resultats.Count(r => r.Statut == Statut.Erreur)} |");
@@ -136,9 +153,9 @@ static string ConstruireRecap(string runId, RunMetadata metadata, List<ResultatD
     recap.AppendLine();
     recap.AppendLine("| Règle | Détections | dont faux positifs |");
     recap.AppendLine("|---|---|---|");
-    foreach (var groupe in mesures.SelectMany(r => r.Detections).GroupBy(d => d).OrderBy(g => g.Key))
+    foreach (var groupe in mesures.SelectMany(r => r.Detections).GroupBy(d => d.Regle).OrderBy(g => g.Key))
     {
-        recap.AppendLine($"| {groupe.Key} | {groupe.Count()} | {fauxPositifs.Count(f => f.Regle == groupe.Key)} |");
+        recap.AppendLine($"| {groupe.Key} | {groupe.Count()} | {groupe.Count(d => d.Fausse)} |");
     }
     recap.AppendLine();
 

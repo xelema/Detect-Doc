@@ -11,5 +11,6 @@ public record ManifestEntry(
     [property: JsonPropertyName("type_attendu")] string TypeAttendu,
     [property: JsonPropertyName("texte_reference")] string? TexteReference,
     [property: JsonPropertyName("split")] string Split,
+    [property: JsonPropertyName("derive_de")] string? DeriveDe,
     [property: JsonPropertyName("pii_injectees")] IReadOnlyDictionary<string, JsonElement>? PiiInjectees
 );

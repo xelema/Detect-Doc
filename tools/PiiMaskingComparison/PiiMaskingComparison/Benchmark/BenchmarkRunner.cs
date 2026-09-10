@@ -20,7 +20,7 @@ public sealed class BenchmarkRunner(IPiiDetectionEngine moteur)
         // ligne pour ligne avec le corpus déclaré au manifest.
         if (string.IsNullOrWhiteSpace(texte))
         {
-            return Creer(entree, Statut.ReferenceAbsente, [], [], [], [], 0, 0);
+            return Creer(entree, Statut.ReferenceAbsente, [], [], [], 0, 0);
         }
 
         var (attendues, absentes) = VeriteTerrainDocument.Construire(entree, texte);
@@ -39,7 +39,7 @@ public sealed class BenchmarkRunner(IPiiDetectionEngine moteur)
         catch (Exception ex)
         {
             // Le temps passé avant l'échec fait partie de ce que coûte le moteur sur ce corpus.
-            return Creer(entree, Statut.Erreur, [], [], nonLocalisees, [],
+            return Creer(entree, Statut.Erreur, [], [], nonLocalisees,
                 Stopwatch.GetElapsedTime(horodatage).TotalMilliseconds,
                 GC.GetAllocatedBytesForCurrentThread() - allouesAvant,
                 $"{ex.GetType().Name}: {ex.Message}");
@@ -47,17 +47,16 @@ public sealed class BenchmarkRunner(IPiiDetectionEngine moteur)
 
         var duree = Stopwatch.GetElapsedTime(horodatage).TotalMilliseconds;
         var alloues = GC.GetAllocatedBytesForCurrentThread() - allouesAvant;
-        var (occurrences, fauxPositifs) = Confronter(texte, attendues, detections);
+        var (occurrences, enregistrees) = Confronter(texte, attendues, detections);
 
-        return Creer(entree, Statut.Ok, occurrences, fauxPositifs, nonLocalisees,
-            detections.Select(d => d.Regle).ToList(), duree, alloues);
+        return Creer(entree, Statut.Ok, occurrences, enregistrees, nonLocalisees, duree, alloues);
     }
 
     /// <summary>
     /// Confronte plages attendues et plages détectées caractère par caractère : deux moteurs
     /// peuvent couvrir la même valeur avec des bornes différentes, seule la couverture compte.
     /// </summary>
-    private static (List<OccurrencePii>, List<DetectionFausse>) Confronter(
+    private static (List<OccurrencePii>, List<DetectionEnregistree>) Confronter(
         string texte, List<OccurrenceAttendue> attendues, IReadOnlyList<Detection> detections)
     {
         var masque = Peindre(texte.Length, detections.Select(d => (d.Start, d.Length)));
@@ -70,12 +69,13 @@ public sealed class BenchmarkRunner(IPiiDetectionEngine moteur)
 
         // Est fausse la détection qui ne touche aucune PII attendue. Celle qui déborde d'une
         // valeur réelle masque du texte en trop, pas une personne inventée.
-        var fauxPositifs = detections
-            .Where(d => !Signifiants(texte, d.Start, d.Length).Any(i => sensible[i]))
-            .Select(d => new DetectionFausse(d.Categorie, d.Regle, texte.Substring(d.Start, d.Length)))
+        var enregistrees = detections
+            .Select(d => new DetectionEnregistree(d.Categorie, d.Regle, d.Start, d.Length,
+                texte.Substring(d.Start, d.Length),
+                Fausse: !Signifiants(texte, d.Start, d.Length).Any(i => sensible[i])))
             .ToList();
 
-        return (occurrences, fauxPositifs);
+        return (occurrences, enregistrees);
     }
 
     // Une adresse imprimée sur deux lignes est couverte par deux détections, et le retour à la
@@ -99,7 +99,7 @@ public sealed class BenchmarkRunner(IPiiDetectionEngine moteur)
     }
 
     private ResultatDocument Creer(ManifestEntry entree, Statut statut, List<OccurrencePii> occurrences,
-        List<DetectionFausse> fauxPositifs, List<ValeurNonLocalisee> nonLocalisees, List<string> detections,
+        List<DetectionEnregistree> detections, List<ValeurNonLocalisee> nonLocalisees,
         double dureeMs, long octetsAlloues, string? messageErreur = null)
     {
         return new ResultatDocument
@@ -111,9 +111,8 @@ public sealed class BenchmarkRunner(IPiiDetectionEngine moteur)
             Statut = statut,
             MessageErreur = messageErreur,
             Occurrences = occurrences,
-            FauxPositifs = fauxPositifs,
-            ValeursNonLocalisees = nonLocalisees,
             Detections = detections,
+            ValeursNonLocalisees = nonLocalisees,
             DureeMs = dureeMs,
             OctetsAlloues = octetsAlloues
         };

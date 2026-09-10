@@ -1,3 +1,7 @@
+using System.Globalization;
+using System.Text;
+using System.Globalization;
+using System.Text;
 using System.Text.Json;
 using PiiMaskingComparison.Engines;
 using PiiMaskingComparison.Manifest;
@@ -73,9 +77,27 @@ public static class VeriteTerrainDocument
             }
         }
 
-        return (attendues, absentes);
+        return (Maximales(attendues), absentes);
     }
     
+    /// <summary>
+    /// Une valeur entièrement contenue dans une autre ne compte pas à part : le nom du titulaire
+    /// se retrouve dans son adresse de courriel et la raison sociale dans le domaine. Ce sont les
+    /// mêmes caractères et une seule fuite ; les compter deux fois gonflerait autant le nombre
+    /// d'occurrences attendues que celui des occurrences couvertes.
+    /// </summary>
+    private static List<OccurrenceAttendue> Maximales(List<OccurrenceAttendue> occurrences)
+    {
+        return occurrences
+            .Where(o => !occurrences.Any(autre =>
+                (autre.Start, autre.Length) != (o.Start, o.Length)
+                && autre.Start <= o.Start
+                && autre.Start + autre.Length >= o.Start + o.Length))
+            .DistinctBy(o => (o.Start, o.Length))
+            .ToList();
+    }
+
+
     public static bool EstNonSignifiant(char c) => !char.IsLetterOrDigit(c);
 
     private static IEnumerable<string> Valeurs(JsonElement valeur) =>
@@ -100,7 +122,7 @@ public static class VeriteTerrainDocument
                 continue;
             }
 
-            compact[n] = char.ToLowerInvariant(texte[i]);
+            compact[n] = Normaliser(texte[i]);
             indices[n] = i;
             n++;
         }
@@ -115,7 +137,7 @@ public static class VeriteTerrainDocument
     private static IEnumerable<(int Start, int Length)> Localiser(
         string texte, string compact, int[] indices, string valeur)
     {
-        var recherche = new string(valeur.Where(c => !EstNonSignifiant(c)).Select(char.ToLowerInvariant).ToArray());
+        var recherche = new string(valeur.Where(c => !EstNonSignifiant(c)).Select(Normaliser).ToArray());
         if (recherche.Length == 0)
         {
             yield break;
@@ -134,11 +156,11 @@ public static class VeriteTerrainDocument
             var start = indices[trouve];
             var fin = indices[apres - 1];
 
-            // Une suite de chiffres prise au milieu d'une suite plus longue n'est pas la valeur
-            // cherchée : le numéro de déclaration d'activité d'un organisme contient par hasard un
-            // ADELI. Le voisinage se juge sur le texte d'origine, deux numéros de lignes voisines
-            // se touchant dans le texte compacté.
-            if (!Colle(texte, start - 1, recherche[0]) && !Colle(texte, fin + 1, recherche[^1]))
+            // Une valeur prise au milieu d'un mot ou d'un nombre plus long n'est pas la valeur
+            // cherchée : le numéro de déclaration d'activité d'un organisme contient les chiffres
+            // d'un ADELI, et deux mots voisins se recollent une fois la ponctuation retirée. Le
+            // voisinage se juge sur le texte d'origine, seul endroit où la séparation existe.
+            if (!Colle(texte, start - 1) && !Colle(texte, fin + 1))
             {
                 yield return (start, fin - start + 1);
             }
@@ -147,6 +169,30 @@ public static class VeriteTerrainDocument
         }
     }
 
-    private static bool Colle(string texte, int position, char bord) =>
-        position >= 0 && position < texte.Length && char.IsDigit(bord) && char.IsDigit(texte[position]);
+    /// <summary>
+    /// Minuscule et sans accent : un logo imprimé `ACADEMIE ROUEN` porte la même raison sociale
+    /// que le manifest, les capitales françaises perdant couramment leurs accents.
+    /// </summary>
+    private static char Normaliser(char c)
+    {
+        var minuscule = char.ToLowerInvariant(c);
+        if (minuscule < 128)
+        {
+            return minuscule;
+        }
+
+        foreach (var decompose in minuscule.ToString().Normalize(NormalizationForm.FormD))
+        {
+            if (CharUnicodeInfo.GetUnicodeCategory(decompose) != UnicodeCategory.NonSpacingMark)
+            {
+                return decompose;
+            }
+        }
+
+        return minuscule;
+    }
+
+
+    private static bool Colle(string texte, int position) =>
+        position >= 0 && position < texte.Length && char.IsLetterOrDigit(texte[position]);
 }
