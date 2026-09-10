@@ -6,20 +6,22 @@ using System.Text.Json.Serialization;
 namespace PiiMaskingComparison.Engines;
 
 /// <summary>
-/// Référence reconnue : Presidio et son moteur spaCy français, pilotés par un processus Python
-/// tenu ouvert pour tout le run. Un appel par document rechargerait le modèle à chaque fois.
+/// Moteur NER piloté par un processus Python tenu ouvert pour tout le run : un appel par
+/// document rechargerait le modèle à chaque fois. Le backend est le nom du moteur côté Python.
 /// </summary>
-public sealed class PresidioPiiEngine : IPiiDetectionEngine, IDisposable
+public sealed class NerPiiEngine : IPiiDetectionEngine, IDisposable
 {
+    private readonly string _backend;
     private readonly Process _processus;
     private readonly Demarrage _demarrage;
 
-    public PresidioPiiEngine()
+    public NerPiiEngine(string backend)
     {
+        _backend = backend;
         var python = Environment.GetEnvironmentVariable("PII_PYTHON") ?? "python3";
-        var script = Path.Combine(AppContext.BaseDirectory, "Presidio", "detecteur.py");
+        var script = Path.Combine(AppContext.BaseDirectory, "Ner", "detecteur.py");
 
-        _processus = Process.Start(new ProcessStartInfo(python, ["-u", script])
+        _processus = Process.Start(new ProcessStartInfo(python, ["-u", script, backend])
         {
             RedirectStandardInput = true,
             RedirectStandardOutput = true,
@@ -28,7 +30,7 @@ public sealed class PresidioPiiEngine : IPiiDetectionEngine, IDisposable
             // premier document arrive illisible côté Python.
             StandardOutputEncoding = new UTF8Encoding(false),
             StandardInputEncoding = new UTF8Encoding(false)
-        }) ?? throw new InvalidOperationException($"Processus Python non démarré : {python} {script}.");
+        }) ?? throw new InvalidOperationException($"Processus Python non démarré : {python} {script} {backend}.");
 
         // Le script signale la fin du chargement du modèle avant d'attendre un document : sans
         // cette poignée de main, les secondes de chargement tomberaient dans la mesure du
@@ -40,13 +42,13 @@ public sealed class PresidioPiiEngine : IPiiDetectionEngine, IDisposable
         }
     }
 
-    public string Name => "presidio";
+    public string Name => _backend;
     public string Version => "1";
 
+    /// <summary>Décrits par le script lui-même, pour que le run dise ce qui a réellement tourné.</summary>
     public IReadOnlyDictionary<string, object> Parametres => new Dictionary<string, object>
     {
         ["modele"] = _demarrage.Modele,
-        ["langue"] = "fr",
         ["entites"] = _demarrage.Entites,
         ["chargement_ms"] = Math.Round(_demarrage.ChargementMs)
     };

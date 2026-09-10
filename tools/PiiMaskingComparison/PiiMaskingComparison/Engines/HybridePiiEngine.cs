@@ -6,7 +6,7 @@ namespace PiiMaskingComparison.Engines;
 /// </summary>
 public sealed class HybridePiiEngine(IPiiDetectionEngine regles, IPiiDetectionEngine modele) : IPiiDetectionEngine
 {
-    public string Name => "hybride";
+    public string Name => $"hybride-{modele.Name}";
     public string Version => $"{regles.Name}{regles.Version}+{modele.Name}{modele.Version}";
 
     public IReadOnlyDictionary<string, object> Parametres =>

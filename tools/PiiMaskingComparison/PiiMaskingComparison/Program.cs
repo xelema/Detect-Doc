@@ -7,7 +7,7 @@ using PiiMaskingComparison.Manifest;
 
 if (args.Length is < 1 or > 2)
 {
-    Console.WriteLine("Usage: PiiMaskingComparison <chemin-du-manifest> [regex|presidio|hybride]");
+    Console.WriteLine("Usage: PiiMaskingComparison <chemin-du-manifest> [regex|presidio|gliner|hybride|hybride-gliner]");
     return;
 }
 
@@ -49,13 +49,22 @@ File.WriteAllText(Path.Combine(dossierRun, "recap.md"),
 Console.WriteLine($"Run écrit dans {dossierRun}");
 return;
 
-static IPiiDetectionEngine CreerMoteur(string nom) => nom.ToLowerInvariant() switch
+// Tout nom qui n'est pas `regex` ou `hybride` est celui d'un moteur NER, passé tel quel au
+// script Python qui le valide. `hybride-<moteur>` compose les règles avec ce moteur.
+static IPiiDetectionEngine CreerMoteur(string nom)
 {
-    "regex" => new RegexPiiEngine(),
-    "presidio" => new PresidioPiiEngine(),
-    "hybride" => new HybridePiiEngine(new RegexPiiEngine(), new PresidioPiiEngine()),
-    _ => throw new ArgumentException($"Moteur inconnu : {nom}. Attendu : regex, presidio ou hybride.")
-};
+    const string hybride = "hybride";
+    nom = nom.ToLowerInvariant();
+
+    return nom switch
+    {
+        "regex" => new RegexPiiEngine(),
+        hybride => new HybridePiiEngine(new RegexPiiEngine(), new NerPiiEngine("presidio")),
+        _ when nom.StartsWith($"{hybride}-") =>
+            new HybridePiiEngine(new RegexPiiEngine(), new NerPiiEngine(nom[(hybride.Length + 1)..])),
+        _ => new NerPiiEngine(nom)
+    };
+}
 
 static string ConstruireRecap(string runId, RunMetadata metadata, List<ResultatDocument> resultats,
     double cpuMs, int derives)

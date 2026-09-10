@@ -37,13 +37,13 @@ $env:PII_PYTHON = "C:\Temp\pii-venv\Scripts\python.exe"
 
 Le chemin est court à dessein : sous `%TEMP%`, l'arborescence de Presidio dépasse la limite de longueur de chemin de Windows et l'installation échoue en cours de route.
 
-Les trois modèles spaCy français sont épinglés dans `requirements.txt` avec leur empreinte, du plus léger au plus lourd, 16, 45 et 550 Mo. Les avoir tous dans l'image fait qu'en changer est un changement de variable, pas une reconstruction.
+Les modèles spaCy français sont épinglés dans `requirements.txt` avec leur empreinte, 16 et 45 Mo. Les avoir tous les deux dans l'image fait qu'en changer est un changement de variable, pas une reconstruction.
 
 Deux variables règlent ce moteur, en local comme dans le conteneur. Elles sont reportées dans `run.json` et dans le récapitulatif, un run dit donc toujours avec quoi il a été produit.
 
 | Variable | Défaut | Effet |
 |---|---|---|
-| `PII_PRESIDIO_MODELE` | `fr_core_news_sm` | modèle spaCy chargé, parmi `fr_core_news_sm`, `fr_core_news_md` et `fr_core_news_lg`, tous trois dans l'image |
+| `PII_PRESIDIO_MODELE` | `fr_core_news_sm` | modèle spaCy chargé, `fr_core_news_sm` ou `fr_core_news_md`, les deux dans l'image |
 | `PII_PRESIDIO_ENTITES` | toutes | liste d'entités Presidio séparées par des virgules, par exemple `PERSON,EMAIL_ADDRESS,PHONE_NUMBER,IBAN_CODE` |
 
 ## Ce qu'un run produit
