@@ -36,6 +36,13 @@ $env:PII_PYTHON = "C:\Temp\pii-venv\Scripts\python.exe"
 
 Le chemin est court à dessein : sous `%TEMP%`, l'arborescence de Presidio dépasse la limite de longueur de chemin de Windows et l'installation échoue en cours de route.
 
+Deux variables règlent ce moteur, en local comme dans le conteneur. Elles sont reportées dans `run.json` et dans le récapitulatif, un run dit donc toujours avec quoi il a été produit.
+
+| Variable | Défaut | Effet |
+|---|---|---|
+| `PII_PRESIDIO_MODELE` | `fr_core_news_sm` | modèle spaCy chargé ; `fr_core_news_md` doit être installé dans le venv pour être utilisable |
+| `PII_PRESIDIO_ENTITES` | toutes | liste d'entités Presidio séparées par des virgules, par exemple `PERSON,EMAIL_ADDRESS,PHONE_NUMBER,IBAN_CODE` |
+
 ## Ce qu'un run produit
 
 Un dossier `run/<date>_<moteur>/` contenant trois fichiers :
@@ -66,7 +73,9 @@ Le récapitulatif liste **toutes** les catégories, même celles qu'aucune valeu
 
 Le manifest déclare les valeurs synthétiques injectées dans chaque document, sous `pii_injectees`. Le benchmark les cherche dans le texte de référence et retient **une occurrence par emplacement trouvé** : c'est par occurrence que se compte une fuite, une valeur répétée pouvant être masquée à un endroit et pas à l'autre.
 
-La comparaison porte sur les seuls caractères signifiants, casse ignorée : le manifest porte l'IBAN d'un seul tenant quand le document l'imprime par groupes de quatre, l'adresse `12 rue X, 75000 Ville` s'imprime sur deux lignes sans virgule, et une carte de visite écrit le nom de famille en capitales. Ces écarts sont de mise en page, pas de contenu. Une suite de chiffres trouvée au milieu d'une suite plus longue est écartée : le numéro de déclaration d'activité d'un organisme contient par hasard un ADELI une fois les espaces retirés.
+La comparaison ne retient que les lettres et les chiffres, casse ignorée. Tout le reste appartient à la mise en page : le manifest porte l'IBAN d'un seul tenant quand le document l'imprime par groupes de quatre, écrit l'adresse `12 rue X, 75000 Ville` que le document coupe sur deux lignes ou sépare d'un point médian, et une carte de visite met le nom de famille en capitales. Ces écarts ne changent pas la valeur, et un détecteur qui la laisse passer laisse fuiter une PII.
+
+Une valeur trouvée au milieu d'un mot ou d'un nombre plus long est écartée : sans cette garde, le numéro de déclaration d'activité d'un organisme contient un ADELI et deux mots voisins se recollent une fois la ponctuation retirée. Le voisinage se juge sur le texte d'origine, seul endroit où la séparation existe encore.
 
 Une occurrence n'est **couverte** que si toute sa plage est détectée. Une valeur à moitié couverte laisse de quoi identifier la personne, elle compte comme manquée.
 

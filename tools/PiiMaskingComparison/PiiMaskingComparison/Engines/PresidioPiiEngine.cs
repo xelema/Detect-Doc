@@ -12,7 +12,7 @@ namespace PiiMaskingComparison.Engines;
 public sealed class PresidioPiiEngine : IPiiDetectionEngine, IDisposable
 {
     private readonly Process _processus;
-    private readonly double _chargementMs;
+    private readonly Demarrage _demarrage;
 
     public PresidioPiiEngine()
     {
@@ -33,7 +33,7 @@ public sealed class PresidioPiiEngine : IPiiDetectionEngine, IDisposable
         // Le script signale la fin du chargement du modèle avant d'attendre un document : sans
         // cette poignée de main, les secondes de chargement tomberaient dans la mesure du
         // premier document.
-        _chargementMs = Lire<Demarrage>().ChargementMs;
+        _demarrage = Lire<Demarrage>();
     }
 
     public string Name => "presidio";
@@ -41,10 +41,10 @@ public sealed class PresidioPiiEngine : IPiiDetectionEngine, IDisposable
 
     public IReadOnlyDictionary<string, object> Parametres => new Dictionary<string, object>
     {
-        ["modele"] = "fr_core_news_sm",
+        ["modele"] = _demarrage.Modele,
         ["langue"] = "fr",
-        ["entites"] = "PERSON, ORGANIZATION, LOCATION, EMAIL_ADDRESS, PHONE_NUMBER, IBAN_CODE",
-        ["chargement_ms"] = Math.Round(_chargementMs)
+        ["entites"] = _demarrage.Entites,
+        ["chargement_ms"] = Math.Round(_demarrage.ChargementMs)
     };
 
     public IReadOnlyList<Detection> Detecter(string texte)
@@ -87,7 +87,10 @@ public sealed class PresidioPiiEngine : IPiiDetectionEngine, IDisposable
         _processus.Dispose();
     }
 
-    private sealed record Demarrage([property: JsonPropertyName("chargement_ms")] double ChargementMs);
+    private sealed record Demarrage(
+        [property: JsonPropertyName("chargement_ms")] double ChargementMs,
+        [property: JsonPropertyName("modele")] string Modele,
+        [property: JsonPropertyName("entites")] string Entites);
 
     private sealed record Reponse(
         [property: JsonPropertyName("detections")] IReadOnlyList<DetectionPython> Detections,

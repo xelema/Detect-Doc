@@ -75,12 +75,8 @@ public static class VeriteTerrainDocument
 
         return (attendues, absentes);
     }
-
-    /// <summary>
-    /// Caractère qui ne porte rien à lui seul : le laisser en clair au milieu d'une valeur masquée
-    /// ne révèle personne. Exclu des deux côtés de la mesure, localisation et couverture.
-    /// </summary>
-    public static bool EstNonSignifiant(char c) => char.IsWhiteSpace(c) || c is ',' or '.' or '-' or '\'' or '’';
+    
+    public static bool EstNonSignifiant(char c) => !char.IsLetterOrDigit(c);
 
     private static IEnumerable<string> Valeurs(JsonElement valeur) =>
         (valeur.ValueKind switch

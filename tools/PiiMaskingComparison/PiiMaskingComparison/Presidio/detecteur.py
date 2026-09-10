@@ -6,6 +6,7 @@ chargement de la fenêtre chronométrée par le benchmark.
 """
 
 import json
+import os
 import sys
 import time
 
@@ -13,7 +14,7 @@ from presidio_analyzer import AnalyzerEngine, RecognizerRegistry
 from presidio_analyzer.nlp_engine import NlpEngineProvider
 from presidio_analyzer.predefined_recognizers import PhoneRecognizer
 
-MODELE = "fr_core_news_sm"
+MODELE = os.environ.get("PII_PRESIDIO_MODELE", "fr_core_news_sm")
 LANGUE = "fr"
 
 # Entités Presidio retenues et leur catégorie du comparatif. Ce qui n'est pas ici est ignoré :
@@ -26,6 +27,13 @@ CATEGORIES = {
     "PHONE_NUMBER": "Telephone",
     "IBAN_CODE": "Iban",
 }
+
+
+def entites_actives():
+    demandees = os.environ.get("PII_PRESIDIO_ENTITES")
+    if not demandees:
+        return list(CATEGORIES)
+    return [e.strip() for e in demandees.split(",") if e.strip() in CATEGORIES]
 
 
 def creer_analyzer():
@@ -57,7 +65,12 @@ def en_indices_utf16(texte, debut, fin):
 def main():
     depart = time.perf_counter()
     analyzer = creer_analyzer()
-    print(json.dumps({"chargement_ms": (time.perf_counter() - depart) * 1000}), flush=True)
+    entites = entites_actives()
+    print(json.dumps({
+        "chargement_ms": (time.perf_counter() - depart) * 1000,
+        "modele": MODELE,
+        "entites": ", ".join(entites),
+    }), flush=True)
 
     for ligne in sys.stdin:
         ligne = ligne.strip()
@@ -66,7 +79,7 @@ def main():
 
         try:
             texte = json.loads(ligne)["texte"]
-            resultats = analyzer.analyze(text=texte, language=LANGUE, entities=list(CATEGORIES))
+            resultats = analyzer.analyze(text=texte, language=LANGUE, entities=entites)
             detections = []
             for resultat in resultats:
                 debut, longueur = en_indices_utf16(texte, resultat.start, resultat.end)
