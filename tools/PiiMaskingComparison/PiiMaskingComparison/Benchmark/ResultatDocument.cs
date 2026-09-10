@@ -24,12 +24,17 @@ public sealed record ResultatDocument
 /// Vrai seulement si toute la plage est masquée : une occurrence à moitié couverte laisse de quoi
 /// identifier la personne, elle compte comme manquée.
 /// </param>
+/// <param name="CouverteHorsVocabulaire">
+/// La même chose en ignorant les règles bâties sur une liste de mots du corpus. L'écart entre les
+/// deux est la part du score qui ne survivrait pas à un changement de corpus.
+/// </param>
 public readonly record struct OccurrencePii(
-    CategoriePii Categorie, string Cle, string Valeur, int Start, int Length, bool Couverte);
+    CategoriePii Categorie, string Cle, string Valeur, int Start, int Length,
+    bool Couverte, bool CouverteHorsVocabulaire);
 
 /// <param name="Fausse">La plage ne recouvre aucune occurrence attendue.</param>
 public readonly record struct DetectionEnregistree(
-    CategoriePii Categorie, string Regle, int Start, int Length, string Texte, bool Fausse);
+    CategoriePii Categorie, string Regle, NatureRegle Nature, int Start, int Length, string Texte, bool Fausse);
 
 public readonly record struct ValeurNonLocalisee(CategoriePii Categorie, string Cle, string Valeur);
 

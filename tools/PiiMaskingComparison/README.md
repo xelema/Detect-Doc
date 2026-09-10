@@ -12,6 +12,7 @@ Le conteneur est la façon de référence de produire un run : tous les moteurs 
 docker build --tag detectdoc-pii-comparison .
 docker run --rm --volume "$((Resolve-Path ..\..\corpus).Path):/corpus:ro" --volume "${PWD}\PiiMaskingComparison\run:/work/run" detectdoc-pii-comparison /corpus/manifest.jsonl regex
 docker run --rm --volume "$((Resolve-Path ..\..\corpus).Path):/corpus:ro" --volume "${PWD}\PiiMaskingComparison\run:/work/run" detectdoc-pii-comparison /corpus/manifest.jsonl presidio
+docker run --rm --volume "$((Resolve-Path ..\..\corpus).Path):/corpus:ro" --volume "${PWD}\PiiMaskingComparison\run:/work/run" detectdoc-pii-comparison /corpus/manifest.jsonl hybride
 ```
 
 Le corpus est monté en lecture seule, `run/` en écriture : les résultats atterrissent dans le même dossier que les runs lancés en local. Le moteur est le dernier argument. Le `Resolve-Path` donne au démon le chemin absolu qu'il attend, un `..` dans une source de montage ne passant pas partout.
@@ -24,7 +25,7 @@ dotnet run -c Release -- ..\..\..\corpus\manifest.jsonl regex
 
 Les deux chemins exécutent le même code et donnent la même couverture, qui est déterministe. **Les mesures de coût, elles, ne se comparent pas entre l'hôte et le conteneur** : un chiffre publié vient d'un run conteneurisé.
 
-Moteurs disponibles : `regex` (défaut) et `presidio`. Le split mesuré est `dev` ; le jeu `test` ne s'ouvre qu'au moment de produire une mesure destinée au rapport.
+Moteurs disponibles : `regex` (défaut), `presidio`, et `hybride` qui prend l'union de leurs plages sans arbitrage ni paramètre supplémentaire. Le split mesuré est `dev` ; le jeu `test` ne s'ouvre qu'au moment de produire une mesure destinée au rapport.
 
 Le moteur `presidio` a besoin de son environnement Python. L'image le porte ; en local, il faut le créer une fois et dire au tool où le trouver :
 
@@ -52,6 +53,17 @@ Un dossier `run/<date>_<moteur>/` contenant trois fichiers :
 | `run.json` | conditions du run : moteur, version, paramètres, empreinte du manifest, machine |
 | `resultats.jsonl` | une ligne par document : occurrences attendues et leur couverture, détections avec leurs plages, coût |
 | `recap.md` | couverture par catégorie, détail par règle, chiffres globaux, coût |
+
+Chaque règle porte sa **nature**, reprise dans le récapitulatif et dans le fichier de résultats. Elle dit sur quoi la règle s'appuie, donc ce qui survivrait à un changement de corpus.
+
+| Nature | Ce sur quoi la règle s'appuie | Exemples |
+|---|---|---|
+| `Specification` | une forme normée, indépendante du document | IBAN, SIRET, courriel, téléphone, adresse postale |
+| `Libelle` | une valeur annoncée par un libellé du document | `BIC`, `RPPS`, `RUM`, `Formateur :`, `Titulaire du compte` |
+| `Vocabulaire` | une liste de mots relevée dans ce corpus | raisons sociales en `Institut`, `Industrie`, `Conseil` |
+| `Modele` | un modèle appris hors du projet | toutes les entités Presidio |
+
+Le récapitulatif publie donc deux couvertures : la couverture réelle, et la **couverture hors règles de vocabulaire**. L'écart entre les deux est la part du score qui appartient au générateur de corpus et ne se transposerait pas à des documents de production. Une règle de vocabulaire n'est pas interdite, elle doit juste être comptée à part.
 
 Le récapitulatif liste **toutes** les catégories, même celles qu'aucune valeur du split n'alimente et celles qu'aucune règle ne vise : un zéro affiché est une information, une ligne absente se lit comme un oubli. Une clé du manifest que le tool ne sait pas classer apparaît en `Inconnue` et demande une reprise du mapping.
 
@@ -94,7 +106,8 @@ Le fichier de résultats porte chaque détection avec sa plage, son texte et son
 - **Le corpus déclare ce qu'il a injecté, pas tout ce qu'il contient.** Une adresse de courriel figée dans un gabarit est une détection correcte comptée en faux positif, faute d'être déclarée. Relire les faux positifs du `resultats.jsonl` avant de conclure sur la précision d'un moteur.
 - **Une plage détectée compte pour la valeur qu'elle recouvre, quelle que soit sa catégorie.** Un moteur qui étiquette `Organisme` un BIC le masque quand même : la couverture le crédite, la colonne des catégories ne le dit pas. C'est voulu, le sujet est la fuite, pas l'étiquetage.
 - **Les noms sans libellé ne sont pas couverts par le moteur regex.** La baseline ne reconnaît un nom que s'il suit un libellé du document ou une civilité. Un nom en cellule de tableau d'émargement ou en en-tête de carte de visite n'a aucune forme distinctive : c'est la charge du détecteur suivant, pas d'une règle de plus.
-- **Les listes de mots-clés ne généralisent pas.** Les règles qui reconnaissent une raison sociale à `Institut`, `Industrie` ou `Conseil` attrapent ce que le générateur produit, pas ce qu'écrit un client.
+- **Les listes de mots-clés ne généralisent pas.** Les règles qui reconnaissent une raison sociale à `Institut`, `Industrie` ou `Conseil` attrapent ce que le générateur produit, pas ce qu'écrit un client. C'est ce que mesure la couverture hors vocabulaire.
+- **Le jeu `test` scellé ne protège pas de ce risque.** Il vient du même générateur, des mêmes gabarits et du même vocabulaire : il mesure la généralisation à de nouveaux tirages, pas à des documents de production.
 - Les durées ne sont pas comparables d'un run à l'autre sans moyenner plusieurs exécutions. La couverture, elle, est déterministe.
 
 ## Structure

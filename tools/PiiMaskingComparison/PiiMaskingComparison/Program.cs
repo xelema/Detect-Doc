@@ -7,7 +7,7 @@ using PiiMaskingComparison.Manifest;
 
 if (args.Length is < 1 or > 2)
 {
-    Console.WriteLine("Usage: PiiMaskingComparison <chemin-du-manifest> [regex|presidio]");
+    Console.WriteLine("Usage: PiiMaskingComparison <chemin-du-manifest> [regex|presidio|hybride]");
     return;
 }
 
@@ -53,7 +53,8 @@ static IPiiDetectionEngine CreerMoteur(string nom) => nom.ToLowerInvariant() swi
 {
     "regex" => new RegexPiiEngine(),
     "presidio" => new PresidioPiiEngine(),
-    _ => throw new ArgumentException($"Moteur inconnu : {nom}. Attendu : regex ou presidio.")
+    "hybride" => new HybridePiiEngine(new RegexPiiEngine(), new PresidioPiiEngine()),
+    _ => throw new ArgumentException($"Moteur inconnu : {nom}. Attendu : regex, presidio ou hybride.")
 };
 
 static string ConstruireRecap(string runId, RunMetadata metadata, List<ResultatDocument> resultats,
@@ -130,6 +131,14 @@ static string ConstruireRecap(string runId, RunMetadata metadata, List<ResultatD
     recap.AppendLine($"| Occurrences couvertes | {100.0 * totalCouvertes / occurrences.Count:F1} % ({totalCouvertes} / {occurrences.Count}) |");
     recap.AppendLine($"| Détections fausses | {(detections.Count == 0 ? 0 : 100.0 * fauxPositifs.Count / detections.Count):F1} % ({fauxPositifs.Count} / {detections.Count}) |");
     recap.AppendLine($"| Documents avec au moins une PII résiduelle | {docsAvecResiduel} / {mesures.Count} |");
+
+    // Ce que le score deviendrait si les listes de mots relevées dans ce corpus ne se
+    // transposaient pas : l'écart est la part du chiffre qui appartient au générateur.
+    var horsVocabulaire = occurrences.Count(o => o.CouverteHorsVocabulaire);
+    if (horsVocabulaire != totalCouvertes)
+    {
+        recap.AppendLine($"| Occurrences couvertes hors règles de vocabulaire | {100.0 * horsVocabulaire / occurrences.Count:F1} % ({horsVocabulaire} / {occurrences.Count}) |");
+    }
     recap.AppendLine($"| Documents sans texte de référence | {resultats.Count(r => r.Statut == Statut.ReferenceAbsente)} |");
     recap.AppendLine($"| Documents en erreur | {resultats.Count(r => r.Statut == Statut.Erreur)} |");
     recap.AppendLine();
@@ -151,11 +160,11 @@ static string ConstruireRecap(string runId, RunMetadata metadata, List<ResultatD
 
     recap.AppendLine("## Détections par règle");
     recap.AppendLine();
-    recap.AppendLine("| Règle | Détections | dont faux positifs |");
-    recap.AppendLine("|---|---|---|");
-    foreach (var groupe in mesures.SelectMany(r => r.Detections).GroupBy(d => d.Regle).OrderBy(g => g.Key))
+    recap.AppendLine("| Règle | Nature | Détections | dont faux positifs |");
+    recap.AppendLine("|---|---|---|---|");
+    foreach (var groupe in mesures.SelectMany(r => r.Detections).GroupBy(d => (d.Regle, d.Nature)).OrderBy(g => g.Key.Regle))
     {
-        recap.AppendLine($"| {groupe.Key} | {groupe.Count()} | {groupe.Count(d => d.Fausse)} |");
+        recap.AppendLine($"| {groupe.Key.Regle} | {groupe.Key.Nature} | {groupe.Count()} | {groupe.Count(d => d.Fausse)} |");
     }
     recap.AppendLine();
 

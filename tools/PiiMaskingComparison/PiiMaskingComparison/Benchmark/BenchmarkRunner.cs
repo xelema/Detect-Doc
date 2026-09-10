@@ -60,17 +60,21 @@ public sealed class BenchmarkRunner(IPiiDetectionEngine moteur)
         string texte, List<OccurrenceAttendue> attendues, IReadOnlyList<Detection> detections)
     {
         var masque = Peindre(texte.Length, detections.Select(d => (d.Start, d.Length)));
+        var masqueHorsVocabulaire = Peindre(texte.Length, detections
+            .Where(d => d.Nature != NatureRegle.Vocabulaire)
+            .Select(d => (d.Start, d.Length)));
         var sensible = Peindre(texte.Length, attendues.Select(a => (a.Start, a.Length)));
 
         var occurrences = attendues
             .Select(a => new OccurrencePii(a.Categorie, a.Cle, a.Valeur, a.Start, a.Length,
-                Couverte: Signifiants(texte, a.Start, a.Length).All(i => masque[i])))
+                Couverte: Signifiants(texte, a.Start, a.Length).All(i => masque[i]),
+                CouverteHorsVocabulaire: Signifiants(texte, a.Start, a.Length).All(i => masqueHorsVocabulaire[i])))
             .ToList();
 
         // Est fausse la détection qui ne touche aucune PII attendue. Celle qui déborde d'une
         // valeur réelle masque du texte en trop, pas une personne inventée.
         var enregistrees = detections
-            .Select(d => new DetectionEnregistree(d.Categorie, d.Regle, d.Start, d.Length,
+            .Select(d => new DetectionEnregistree(d.Categorie, d.Regle, d.Nature, d.Start, d.Length,
                 texte.Substring(d.Start, d.Length),
                 Fausse: !Signifiants(texte, d.Start, d.Length).Any(i => sensible[i])))
             .ToList();

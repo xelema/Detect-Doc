@@ -59,7 +59,7 @@ public sealed class PresidioPiiEngine : IPiiDetectionEngine, IDisposable
         }
 
         return reponse.Detections
-            .Select(d => new Detection(Enum.Parse<CategoriePii>(d.Categorie), d.Start, d.Length, d.Regle))
+            .Select(d => new Detection(Enum.Parse<CategoriePii>(d.Categorie), d.Regle, NatureRegle.Modele, d.Start, d.Length))
             .ToList();
     }
 

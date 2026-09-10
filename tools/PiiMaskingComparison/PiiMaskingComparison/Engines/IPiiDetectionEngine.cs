@@ -9,8 +9,31 @@ public interface IPiiDetectionEngine : IDisposable
     IReadOnlyList<Detection> Detecter(string texte);
 }
 
-public readonly record struct Detection(CategoriePii Categorie, int Start, int Length, string Regle);
+public readonly record struct Detection(
+    CategoriePii Categorie, string Regle, NatureRegle Nature, int Start, int Length);
 
+/// <summary>
+/// Ce sur quoi une règle s'appuie, donc ce qui survivra ou non à un changement de corpus.
+/// </summary>
+public enum NatureRegle
+{
+    /// <summary>Forme normée, indépendante du document : IBAN, SIRET, adresse de courriel.</summary>
+    Specification,
+
+    /// <summary>Valeur annoncée par un libellé du document, plus ou moins standard selon le champ.</summary>
+    Libelle,
+
+    /// <summary>Liste de mots relevée dans le corpus. Ce que le générateur produit, pas ce qu'écrit un client.</summary>
+    Vocabulaire,
+
+    /// <summary>Modèle appris hors du projet, qui ne doit rien au corpus.</summary>
+    Modele
+}
+
+/// <remarks>
+/// Une catégorie par nature de valeur, pas par rôle dans le document : le manifest distingue
+/// `email` et `email_emetteur`, la protection à mesurer est la même.
+/// </remarks>
 public enum CategoriePii
 {
     // Clé du manifest qu'aucune catégorie ne couvre encore : un run qui en compte demande une
