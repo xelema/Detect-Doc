@@ -11,6 +11,7 @@ Le conteneur est la façon de référence de produire un run : tous les moteurs 
 ```powershell
 docker build --tag detectdoc-pii-comparison .
 docker run --rm --volume "$((Resolve-Path ..\..\corpus).Path):/corpus:ro" --volume "${PWD}\PiiMaskingComparison\run:/work/run" detectdoc-pii-comparison /corpus/manifest.jsonl regex
+docker run --rm --volume "$((Resolve-Path ..\..\corpus).Path):/corpus:ro" --volume "${PWD}\PiiMaskingComparison\run:/work/run" detectdoc-pii-comparison /corpus/manifest.jsonl presidio
 ```
 
 Le corpus est monté en lecture seule, `run/` en écriture : les résultats atterrissent dans le même dossier que les runs lancés en local. Le moteur est le dernier argument. Le `Resolve-Path` donne au démon le chemin absolu qu'il attend, un `..` dans une source de montage ne passant pas partout.
@@ -23,7 +24,17 @@ dotnet run -c Release -- ..\..\..\corpus\manifest.jsonl regex
 
 Les deux chemins exécutent le même code et donnent la même couverture, qui est déterministe. **Les mesures de coût, elles, ne se comparent pas entre l'hôte et le conteneur** : un chiffre publié vient d'un run conteneurisé.
 
-Moteur disponible : `regex` (défaut). Le split mesuré est `dev` ; le jeu `test` ne s'ouvre qu'au moment de produire une mesure destinée au rapport.
+Moteurs disponibles : `regex` (défaut) et `presidio`. Le split mesuré est `dev` ; le jeu `test` ne s'ouvre qu'au moment de produire une mesure destinée au rapport.
+
+Le moteur `presidio` a besoin de son environnement Python. L'image le porte ; en local, il faut le créer une fois et dire au tool où le trouver :
+
+```powershell
+python -m venv C:\Temp\pii-venv
+C:\Temp\pii-venv\Scripts\python.exe -m pip install --requirement PiiMaskingComparison\Presidio\requirements.txt
+$env:PII_PYTHON = "C:\Temp\pii-venv\Scripts\python.exe"
+```
+
+Le chemin est court à dessein : sous `%TEMP%`, l'arborescence de Presidio dépasse la limite de longueur de chemin de Windows et l'installation échoue en cours de route.
 
 ## Ce qu'un run produit
 
@@ -64,7 +75,8 @@ Une occurrence n'est **couverte** que si toute sa plage est détectée. Une vale
 - **Les valeurs non localisées ne sont pas comptées**, ni en couvertes ni en manquées : le texte ne les porte pas sous la forme déclarée. C'est le cas des noms imprimés en capitales alors que le manifest les écrit en casse mixte. Leur volume, publié dans `recap.md`, est la marge d'incertitude du taux de couverture.
 - **La catégorie se déduit du nom de la clé** du manifest. Les clés qui ne contiennent ni `email`, ni `iban`, ni `telephone` tombent en `Autre` : leurs occurrences restent attendues, donc visibles en manquées, sans qu'aucune règle ne les vise encore.
 - **Le corpus déclare ce qu'il a injecté, pas tout ce qu'il contient.** Une adresse de courriel figée dans un gabarit est une détection correcte comptée en faux positif, faute d'être déclarée. Relire les faux positifs du `resultats.jsonl` avant de conclure sur la précision d'un moteur.
-- **Les noms sans libellé ne sont pas couverts.** La baseline ne reconnaît un nom que s'il suit un libellé du document ou une civilité. Un nom en cellule de tableau d'émargement ou en en-tête de carte de visite n'a aucune forme distinctive : c'est la charge du détecteur suivant, pas d'une règle de plus.
+- **Une plage détectée compte pour la valeur qu'elle recouvre, quelle que soit sa catégorie.** Un moteur qui étiquette `Organisme` un BIC le masque quand même : la couverture le crédite, la colonne des catégories ne le dit pas. C'est voulu, le sujet est la fuite, pas l'étiquetage.
+- **Les noms sans libellé ne sont pas couverts par le moteur regex.** La baseline ne reconnaît un nom que s'il suit un libellé du document ou une civilité. Un nom en cellule de tableau d'émargement ou en en-tête de carte de visite n'a aucune forme distinctive : c'est la charge du détecteur suivant, pas d'une règle de plus.
 - **Les listes de mots-clés ne généralisent pas.** Les règles qui reconnaissent une raison sociale à `Institut`, `Industrie` ou `Conseil` attrapent ce que le générateur produit, pas ce qu'écrit un client.
 - Les durées ne sont pas comparables d'un run à l'autre sans moyenner plusieurs exécutions. La couverture, elle, est déterministe.
 
@@ -73,9 +85,12 @@ Une occurrence n'est **couverte** que si toute sa plage est détectée. Une vale
 | Dossier | Rôle |
 |---|---|
 | `Engines/` | un moteur par famille, derrière `IPiiDetectionEngine`. Un moteur rend des plages, il ne masque rien |
+| `Presidio/` | le pont Python du moteur `presidio` et ses dépendances épinglées |
 | `Manifest/` | lecture de `corpus/manifest.jsonl` |
 | `VeriteTerrain/` | localisation des valeurs injectées dans le texte de référence |
 | `Benchmark/` | exécution d'un run, mesure du coût, écriture des résultats |
+
+Le moteur `presidio` parle à un processus Python tenu ouvert pour tout le run, un document par ligne sur stdin, ses plages sur stdout. Le modèle spaCy met trois à quatre secondes à charger : un processus par document rendrait le run inexploitable, et la poignée de main envoyée au démarrage sort ce chargement de la fenêtre chronométrée. Le script convertit ses positions en unités UTF-16 avant de les rendre, Python indexant en points de code.
 
 Les règles du moteur regex sont de deux familles. Les unes reconnaissent une forme qui se suffit à elle-même, un IBAN ou une adresse de courriel. Les autres partent d'un libellé du document, `BIC`, `RPPS`, `Formateur`, et ne retiennent que la valeur qui suit, capturée dans le groupe 1 : sans ce libellé, un BIC est huit majuscules et un ADELI neuf chiffres, deux formes trop banales pour être masquées à l'aveugle.
 

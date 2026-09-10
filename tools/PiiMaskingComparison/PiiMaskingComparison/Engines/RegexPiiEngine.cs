@@ -99,4 +99,8 @@ public sealed class RegexPiiEngine : IPiiDetectionEngine
 
     private static Regex Motif(string motif, RegexOptions options = RegexOptions.None) =>
         new(motif, options | RegexOptions.CultureInvariant, Timeout);
+
+    public void Dispose()
+    {
+    }
 }

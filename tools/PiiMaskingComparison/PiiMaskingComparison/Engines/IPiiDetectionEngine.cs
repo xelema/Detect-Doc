@@ -1,6 +1,6 @@
 namespace PiiMaskingComparison.Engines;
 
-public interface IPiiDetectionEngine
+public interface IPiiDetectionEngine : IDisposable
 {
     string Name { get; }
     string Version { get; }

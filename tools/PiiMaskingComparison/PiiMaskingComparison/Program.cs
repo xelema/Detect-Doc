@@ -7,13 +7,13 @@ using PiiMaskingComparison.Manifest;
 
 if (args.Length is < 1 or > 2)
 {
-    Console.WriteLine("Usage: PiiMaskingComparison <chemin-du-manifest> [regex]");
+    Console.WriteLine("Usage: PiiMaskingComparison <chemin-du-manifest> [regex|presidio]");
     return;
 }
 
 const string split = "dev";
 var cheminManifest = args[0];
-var moteur = CreerMoteur(args.Length >= 2 ? args[1] : "regex");
+using var moteur = CreerMoteur(args.Length >= 2 ? args[1] : "regex");
 
 var runId = $"{DateTime.Now:yyyy-MM-dd_HH-mm-ss}_{moteur.Name.ToLowerInvariant()}";
 var dossierRun = Directory.CreateDirectory(Path.Combine("run", runId)).FullName;
@@ -47,7 +47,8 @@ return;
 static IPiiDetectionEngine CreerMoteur(string nom) => nom.ToLowerInvariant() switch
 {
     "regex" => new RegexPiiEngine(),
-    _ => throw new ArgumentException($"Moteur inconnu : {nom}. Attendu : regex.")
+    "presidio" => new PresidioPiiEngine(),
+    _ => throw new ArgumentException($"Moteur inconnu : {nom}. Attendu : regex ou presidio.")
 };
 
 static string ConstruireRecap(string runId, RunMetadata metadata, List<ResultatDocument> resultats, double cpuMs)
