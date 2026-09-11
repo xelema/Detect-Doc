@@ -19,7 +19,6 @@ public static class ClassificationEndpoints
             PdfPigNativeTextEngine pdfPig,
             IServiceProvider services,
             IDocumentClassifier classifieur,
-            PiiTextMasker piiTextMasker,
             CancellationToken cancellationToken) =>
         {
             var total = Stopwatch.StartNew();
@@ -112,6 +111,7 @@ public static class ClassificationEndpoints
             string maskedText;
             try
             {
+                var piiTextMasker = services.GetRequiredService<PiiTextMasker>();
                 maskedText = await piiTextMasker.MaskAsync(texte, cancellationToken);
             }
             catch (Exception) when (!cancellationToken.IsCancellationRequested)
