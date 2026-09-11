@@ -137,7 +137,10 @@ public class DemarrageTests
             .WithWebHostBuilder(builder =>
             {
                 builder.ConfigureServices(services =>
-                    services.AddSingleton<IDocumentClassifier>(new ClassifieurEnEchec(exception)));
+                {
+                    services.AddSingleton<IDocumentClassifier>(new ClassifieurEnEchec(exception));
+                    services.AddSingleton<IPiiDetector>(new PiiDetectorVide());
+                });
                 builder.ConfigureLogging(logging => logging.ClearProviders());
             });
         using var client = application.CreateClient();
@@ -280,6 +283,27 @@ public class DemarrageTests
     }
 
     [Fact]
+    public async Task MasqueLesPiiAvantFlowiseEtMesureLaDuree()
+    {
+        var classifieur = new ClassifieurDeTest((_, _) => new ClassificationResult("RIB", 0.9));
+        await using var application = CreerApplication(
+            "Development",
+            classifieur,
+            new PiiDetectorDeTest());
+        using var client = application.CreateClient();
+        using var contenu = CreerPdfMultipart("Contact : Jean Dupont");
+        contenu.Add(new StringContent("[\"RIB\"]"), "types");
+        contenu.Add(new StringContent("pdfpig"), "engine");
+
+        using var response = await client.PostAsync("/api/documents/classify", contenu);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("Contact : [PERSON]", classifieur.DernierTexte);
+        using var resultat = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.True(resultat.RootElement.GetProperty("piiMaskingMs").GetInt64() >= 0);
+    }
+
+    [Fact]
     public async Task ReprendApresUneErreurFlowiseEtAccepteDeuxRequetes()
     {
         var classifieur = new ClassifieurDeTest((appel, _) => appel == 1
@@ -379,11 +403,14 @@ public class DemarrageTests
 
     private static WebApplicationFactory<Program> CreerApplication(
         string environnement,
-        IDocumentClassifier? classifieur = null) =>
+        IDocumentClassifier? classifieur = null,
+        IPiiDetector? piiDetector = null) =>
         new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder =>
             {
                 builder.UseEnvironment(environnement);
+                builder.ConfigureServices(services =>
+                    services.AddSingleton(piiDetector ?? new PiiDetectorVide()));
                 if (classifieur is not null)
                 {
                     builder.ConfigureServices(services => services.AddSingleton(classifieur));
@@ -425,6 +452,14 @@ public class DemarrageTests
                 [new PiiDetection(PiiCategory.Name, "PERSON", PiiDetectionKind.Model, 10, 11)]);
     }
 
+    private sealed class PiiDetectorVide : IPiiDetector
+    {
+        public Task<IReadOnlyList<PiiDetection>> DetectAsync(
+            string text,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<PiiDetection>>([]);
+    }
+
     private sealed class PiiDetectorAvecChevauchements : IPiiDetector
     {
         public Task<IReadOnlyList<PiiDetection>> DetectAsync(
@@ -456,11 +491,14 @@ public class DemarrageTests
 
         public IReadOnlyCollection<string>? DerniersTypes { get; private set; }
 
+        public string? DernierTexte { get; private set; }
+
         public Task<ClassificationResult> ClassifyAsync(
             string texte,
             IReadOnlyCollection<string> types,
             CancellationToken cancellationToken = default)
         {
+            DernierTexte = texte;
             DerniersTypes = types;
             // Les tests envoient des requêtes concurrentes sur la même instance : sans incrément
             // atomique, un appel se perd et le compteur devient intermittent.

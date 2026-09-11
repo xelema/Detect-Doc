@@ -13,6 +13,7 @@ public sealed record ResultatClassificationDocumentHttp(
     string Moteur,
     int PagesTraitees,
     long ExtractionMs,
+    long PiiMaskingMs,
     long ClassificationMs,
     long TotalMs,
     string? ExecutionId);
