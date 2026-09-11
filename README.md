@@ -22,6 +22,7 @@ dotnet run --project src/DetectDoc.Api -- --environment Development --urls http:
 | Route | Réponse | Disponibilité |
 |---|---|---|
 | [/health](http://localhost:5080/health) | HTTP 200, `{"statut":"ok"}` | Tous les environnements |
+| `POST /api/dev/pii/detect` | Plages de PII détectées par les règles et Presidio | Development |
 | `POST /api/dev/extract/{engine}` | Texte extrait page par page | Development |
 | `POST /api/dev/classify` | Classification d'un texte par Flowise | Development |
 | `POST /api/documents/classify` | Extraction puis classification d'un PDF | Tous les environnements |
@@ -31,6 +32,14 @@ dotnet run --project src/DetectDoc.Api -- --environment Development --urls http:
 `/health` indique que l'application répond. En Development, Swagger permet d'envoyer un PDF à la route d'extraction avec `pdfpig` ou `ppocr-tiny`. Le démarrage fonctionne sans secret ni service externe. Arrêter le serveur avec `Ctrl+C`.
 
 Avant le premier lancement local, exécuter `./Get-Modeles.ps1` depuis la racine du dépôt. Le script installe les modèles dans `models/`, vérifie leurs empreintes SHA-256, puis le build copie PP-OCRv6 tiny vers le dossier de sortie de l’API. Pour utiliser un autre répertoire en développement, définir `PpOcr__ModelsDirectory` sur le dossier qui contient `v6/`, puis lancer l'API. Le modèle d'orientation fourni par RapidOcrNet reste copié à côté du binaire. `PpOcr__ReconnaissancesParalleles` vaut `1` par défaut et règle le nombre de lignes reconnues simultanément.
+
+La route `POST /api/dev/pii/detect` attend `{"text":"..."}` et retourne les plages détectées, leur catégorie, leur règle et leur valeur. Elle utilise les règles du comparatif avec Presidio et `fr_core_news_md`. Installer son environnement Python local, puis indiquer son exécutable avant de démarrer l'API :
+
+```powershell
+python -m venv "$env:TEMP\detect-doc-pii"
+& "$env:TEMP\detect-doc-pii\Scripts\python.exe" -m pip install -r src/DetectDoc.Infrastructure/Pii/Ner/requirements.txt
+$env:PII_PYTHON = "$env:TEMP\detect-doc-pii\Scripts\python.exe"
+```
 
 La route `POST /api/dev/classify` attend `{"texte":"...","types":["RIB","FEUILLE_EMAR"]}`. Elle appelle le flow configuré par `Flowise__BaseUrl` et `Flowise__FlowId`, sans authentification dans cet essai. Par exemple :
 
@@ -48,7 +57,7 @@ La réponse porte aussi le moteur effectivement utilisé, `extractionMs`, `class
 
 ## Conteneur Docker
 
-Le `Dockerfile` à la racine utilise le SDK Linux .NET 10.0.302 pour construire l'application et le runtime Linux .NET 10.0.10 pour l'exécuter. La phase de build exécute les tests, télécharge les trois fichiers du modèle PP-OCRv6 tiny et vérifie leur empreinte SHA-256. L'image finale contient l'API, ce modèle et s'exécute avec un utilisateur non privilégié.
+Le `Dockerfile` à la racine utilise le SDK Linux .NET 10.0.302 pour construire l'application et le runtime Linux .NET 10.0.10 pour l'exécuter. La phase de build exécute les tests, télécharge les trois fichiers du modèle PP-OCRv6 tiny et vérifie leur empreinte SHA-256. L'image finale contient aussi Python, Presidio et `fr_core_news_md`, puis s'exécute avec un utilisateur non privilégié.
 
 ```powershell
 docker build --tag detect-doc:local .

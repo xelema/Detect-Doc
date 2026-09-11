@@ -14,7 +14,8 @@ RUN dotnet test DetectDoc.slnx --no-restore --filter "Category!=Corpus"
 RUN dotnet publish src/DetectDoc.Api/DetectDoc.Api.csproj --configuration Release --no-restore --output /app/publish /p:UseAppHost=false
 
 FROM build AS models
-RUN apt-get update \
+RUN sed --in-place 's|http://archive.ubuntu.com|https://archive.ubuntu.com|g; s|http://security.ubuntu.com|https://security.ubuntu.com|g' /etc/apt/sources.list.d/ubuntu.sources \
+    && apt-get update \
     && apt-get install --yes --no-install-recommends ca-certificates curl \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /models/v6 \
@@ -27,10 +28,22 @@ RUN apt-get update \
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0.10-noble AS final
 WORKDIR /app
+
+RUN sed --in-place 's|http://archive.ubuntu.com|https://archive.ubuntu.com|g; s|http://security.ubuntu.com|https://security.ubuntu.com|g' /etc/apt/sources.list.d/ubuntu.sources \
+    && apt-get update \
+    && apt-get install --yes --no-install-recommends python3 python3-venv \
+    && rm -rf /var/lib/apt/lists/* \
+    && python3 -m venv /opt/pii
+
+COPY src/DetectDoc.Infrastructure/Pii/Ner/requirements.txt /tmp/pii-requirements.txt
+RUN /opt/pii/bin/pip install --no-cache-dir --requirement /tmp/pii-requirements.txt \
+    && rm /tmp/pii-requirements.txt
+
 COPY --from=build --chown=app:app /app/publish .
 COPY --from=models --chown=app:app /models ./models
 
 USER app
 EXPOSE 8080
 ENV ASPNETCORE_HTTP_PORTS=8080
+ENV PII_PYTHON=/opt/pii/bin/python
 ENTRYPOINT ["dotnet", "DetectDoc.Api.dll"]

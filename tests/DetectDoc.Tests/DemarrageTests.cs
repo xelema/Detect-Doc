@@ -1,7 +1,9 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Text.Json;
 using DetectDoc.Core.Classification;
+using DetectDoc.Core.Pii;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
@@ -306,15 +308,42 @@ public class DemarrageTests
     }
 
     [Fact]
-    public async Task NExposePasLaRouteDExtractionEnProduction()
+    public async Task NExposePasLesRoutesDeDiagnosticEnProduction()
     {
         await using var application = CreerApplication("Production");
         using var client = application.CreateClient();
         using var contenu = CreerPdfMultipart("contenu");
 
         using var response = await client.PostAsync("/api/dev/extract/pdfpig", contenu);
+        using var piiResponse = await client.PostAsJsonAsync(
+            "/api/dev/pii/detect",
+            new { text = "Jean Dupont" });
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, piiResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task DetecteLesPiiEnDevelopment()
+    {
+        await using var application = new WebApplicationFactory<Program>()
+            .WithWebHostBuilder(builder =>
+            {
+                builder.UseEnvironment("Development");
+                builder.ConfigureServices(services => services.AddSingleton<IPiiDetector>(new PiiDetectorDeTest()));
+                builder.ConfigureLogging(logging => logging.ClearProviders());
+            });
+        using var client = application.CreateClient();
+
+        using var response = await client.PostAsJsonAsync(
+            "/api/dev/pii/detect",
+            new { text = "Contact : Jean Dupont" });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var result = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var detection = Assert.Single(result.RootElement.EnumerateArray());
+        Assert.Equal("Name", detection.GetProperty("category").GetString());
+        Assert.Equal("Jean Dupont", detection.GetProperty("value").GetString());
     }
 
     private static WebApplicationFactory<Program> CreerApplication(
@@ -354,6 +383,15 @@ public class DemarrageTests
             string texte,
             IReadOnlyCollection<string> types,
             CancellationToken cancellationToken = default) => Task.FromException<ClassificationResult>(exception);
+    }
+
+    private sealed class PiiDetectorDeTest : IPiiDetector
+    {
+        public Task<IReadOnlyList<PiiDetection>> DetectAsync(
+            string text,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<PiiDetection>>(
+                [new PiiDetection(PiiCategory.Name, "PERSON", PiiDetectionKind.Model, 10, 11)]);
     }
 
     private sealed class ClassifieurDeTest(
