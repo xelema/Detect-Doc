@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using DetectDoc.Core.Classification;
 using DetectDoc.Core.Pii;
+using DetectDoc.Infrastructure.Classification;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
@@ -285,7 +286,11 @@ public class DemarrageTests
     [Fact]
     public async Task MasqueLesPiiAvantFlowiseEtMesureLaDuree()
     {
-        var classifieur = new ClassifieurDeTest((_, _) => new ClassificationResult("RIB", 0.9));
+        var flowise = new FlowiseCaptureHandler();
+        using var flowiseClient = new HttpClient(flowise);
+        var classifieur = new FlowiseDocumentClassifier(
+            flowiseClient,
+            new FlowiseOptions("https://flowise.test", "flow-test"));
         await using var application = CreerApplication(
             "Development",
             classifieur,
@@ -298,9 +303,38 @@ public class DemarrageTests
         using var response = await client.PostAsync("/api/documents/classify", contenu);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal("Contact : [PERSON]", classifieur.DernierTexte);
+        Assert.Equal(1, flowise.Appels);
+        Assert.DoesNotContain("Jean Dupont", flowise.DernierCorps);
+        using var payload = JsonDocument.Parse(flowise.DernierCorps!);
+        Assert.Equal(
+            "Contact : [PERSON]",
+            payload.RootElement.GetProperty("form").GetProperty("texte").GetString());
         using var resultat = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.True(resultat.RootElement.GetProperty("piiMaskingMs").GetInt64() >= 0);
+    }
+
+    [Fact]
+    public async Task NAppellePasFlowiseQuandLaDetectionPiiEchoue()
+    {
+        var flowise = new FlowiseCaptureHandler();
+        using var flowiseClient = new HttpClient(flowise);
+        var classifieur = new FlowiseDocumentClassifier(
+            flowiseClient,
+            new FlowiseOptions("https://flowise.test", "flow-test"));
+        await using var application = CreerApplication(
+            "Development",
+            classifieur,
+            new PiiDetectorEnEchec());
+        using var client = application.CreateClient();
+        using var contenu = CreerPdfMultipart("Contact : Jean Dupont");
+        contenu.Add(new StringContent("[\"RIB\"]"), "types");
+        contenu.Add(new StringContent("pdfpig"), "engine");
+
+        using var response = await client.PostAsync("/api/documents/classify", contenu);
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Equal(0, flowise.Appels);
+        Assert.DoesNotContain("Jean Dupont", await response.Content.ReadAsStringAsync());
     }
 
     [Fact]
@@ -460,6 +494,15 @@ public class DemarrageTests
             Task.FromResult<IReadOnlyList<PiiDetection>>([]);
     }
 
+    private sealed class PiiDetectorEnEchec : IPiiDetector
+    {
+        public Task<IReadOnlyList<PiiDetection>> DetectAsync(
+            string text,
+            CancellationToken cancellationToken = default) =>
+            Task.FromException<IReadOnlyList<PiiDetection>>(
+                new InvalidOperationException("Détecteur indisponible."));
+    }
+
     private sealed class PiiDetectorAvecChevauchements : IPiiDetector
     {
         public Task<IReadOnlyList<PiiDetection>> DetectAsync(
@@ -482,6 +525,28 @@ public class DemarrageTests
         }
     }
 
+    private sealed class FlowiseCaptureHandler : HttpMessageHandler
+    {
+        public int Appels { get; private set; }
+
+        public string? DernierCorps { get; private set; }
+
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            Appels++;
+            DernierCorps = await request.Content!.ReadAsStringAsync(cancellationToken);
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(new
+                {
+                    text = """{"type":"RIB","confiance":0.9}"""
+                })
+            };
+        }
+    }
+
     private sealed class ClassifieurDeTest(
         Func<int, IReadOnlyCollection<string>, ClassificationResult> resultFactory) : IDocumentClassifier
     {
@@ -491,14 +556,11 @@ public class DemarrageTests
 
         public IReadOnlyCollection<string>? DerniersTypes { get; private set; }
 
-        public string? DernierTexte { get; private set; }
-
         public Task<ClassificationResult> ClassifyAsync(
             string texte,
             IReadOnlyCollection<string> types,
             CancellationToken cancellationToken = default)
         {
-            DernierTexte = texte;
             DerniersTypes = types;
             // Les tests envoient des requêtes concurrentes sur la même instance : sans incrément
             // atomique, un appel se perd et le compteur devient intermittent.
