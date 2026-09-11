@@ -318,9 +318,13 @@ public class DemarrageTests
         using var piiResponse = await client.PostAsJsonAsync(
             "/api/dev/pii/detect",
             new { text = "Jean Dupont" });
+        using var maskingResponse = await client.PostAsJsonAsync(
+            "/api/dev/pii/mask",
+            new { text = "Jean Dupont" });
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, piiResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, maskingResponse.StatusCode);
     }
 
     [Fact]
@@ -344,6 +348,33 @@ public class DemarrageTests
         var detection = Assert.Single(result.RootElement.EnumerateArray());
         Assert.Equal("Name", detection.GetProperty("category").GetString());
         Assert.Equal("Jean Dupont", detection.GetProperty("value").GetString());
+    }
+
+    [Fact]
+    public async Task MasqueLesPiiSansDupliquerLesDetections()
+    {
+        await using var application = new WebApplicationFactory<Program>()
+            .WithWebHostBuilder(builder =>
+            {
+                builder.UseEnvironment("Development");
+                builder.ConfigureServices(services =>
+                    services.AddSingleton<IPiiDetector>(new PiiDetectorAvecChevauchements()));
+                builder.ConfigureLogging(logging => logging.ClearProviders());
+            });
+        using var client = application.CreateClient();
+
+        using var response = await client.PostAsJsonAsync(
+            "/api/dev/pii/mask",
+            new
+            {
+                text = "Contact : Jean Dupont, IBAN FR76 3000 6000 0112 3456 7890 189, téléphone : 06 12 34 56 78."
+            });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var result = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(
+            "Contact : [PERSON], IBAN [IBAN], téléphone : [PHONE].",
+            result.RootElement.GetProperty("text").GetString());
     }
 
     private static WebApplicationFactory<Program> CreerApplication(
@@ -392,6 +423,28 @@ public class DemarrageTests
             CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<PiiDetection>>(
                 [new PiiDetection(PiiCategory.Name, "PERSON", PiiDetectionKind.Model, 10, 11)]);
+    }
+
+    private sealed class PiiDetectorAvecChevauchements : IPiiDetector
+    {
+        public Task<IReadOnlyList<PiiDetection>> DetectAsync(
+            string text,
+            CancellationToken cancellationToken = default)
+        {
+            var nameStart = text.IndexOf("Jean Dupont", StringComparison.Ordinal);
+            var ibanStart = text.IndexOf("FR76", StringComparison.Ordinal);
+            var addressStart = text.IndexOf("IBAN FR76", StringComparison.Ordinal);
+            var phoneStart = text.IndexOf("06 12 34 56 78", StringComparison.Ordinal);
+            return Task.FromResult<IReadOnlyList<PiiDetection>>(
+            [
+                new(PiiCategory.Name, "NomApresLibelle", PiiDetectionKind.Label, nameStart, 11),
+                new(PiiCategory.Name, "PERSON", PiiDetectionKind.Model, nameStart, 11),
+                new(PiiCategory.Iban, "Iban", PiiDetectionKind.Specification, ibanStart, 33),
+                new(PiiCategory.Iban, "IBAN_CODE", PiiDetectionKind.Model, ibanStart, 33),
+                new(PiiCategory.Address, "LOCATION", PiiDetectionKind.Model, addressStart, 9),
+                new(PiiCategory.Phone, "Telephone", PiiDetectionKind.Specification, phoneStart, 14)
+            ]);
+        }
     }
 
     private sealed class ClassifieurDeTest(

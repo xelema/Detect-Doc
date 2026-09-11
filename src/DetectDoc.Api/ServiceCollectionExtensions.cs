@@ -32,6 +32,7 @@ public static class ServiceCollectionExtensions
             fournisseur.GetRequiredService<PdfPigNativeTextEngine>(),
             () => fournisseur.GetRequiredService<PpOcrEngine>()));
         services.AddSingleton<IPiiDetector, HybridPresidioPiiDetector>();
+        services.AddSingleton<PiiTextMasker>();
         services.AddSingleton(new FlowiseOptions(
             configuration["Flowise:BaseUrl"],
             configuration["Flowise:FlowId"]));

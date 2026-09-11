@@ -23,6 +23,7 @@ dotnet run --project src/DetectDoc.Api -- --environment Development --urls http:
 |---|---|---|
 | [/health](http://localhost:5080/health) | HTTP 200, `{"statut":"ok"}` | Tous les environnements |
 | `POST /api/dev/pii/detect` | Plages de PII détectées par les règles et Presidio | Development |
+| `POST /api/dev/pii/mask` | Texte avec les PII remplacées par des marqueurs | Development |
 | `POST /api/dev/extract/{engine}` | Texte extrait page par page | Development |
 | `POST /api/dev/classify` | Classification d'un texte par Flowise | Development |
 | `POST /api/documents/classify` | Extraction puis classification d'un PDF | Tous les environnements |
@@ -33,7 +34,7 @@ dotnet run --project src/DetectDoc.Api -- --environment Development --urls http:
 
 Avant le premier lancement local, exécuter `./Get-Modeles.ps1` depuis la racine du dépôt. Le script installe les modèles dans `models/`, vérifie leurs empreintes SHA-256, puis le build copie PP-OCRv6 tiny vers le dossier de sortie de l’API. Pour utiliser un autre répertoire en développement, définir `PpOcr__ModelsDirectory` sur le dossier qui contient `v6/`, puis lancer l'API. Le modèle d'orientation fourni par RapidOcrNet reste copié à côté du binaire. `PpOcr__ReconnaissancesParalleles` vaut `1` par défaut et règle le nombre de lignes reconnues simultanément.
 
-La route `POST /api/dev/pii/detect` attend `{"text":"..."}` et retourne les plages détectées, leur catégorie, leur règle et leur valeur. Elle utilise les règles du comparatif avec Presidio et `fr_core_news_md`. Installer son environnement Python local, puis indiquer son exécutable avant de démarrer l'API :
+Les routes `POST /api/dev/pii/detect` et `POST /api/dev/pii/mask` attendent `{"text":"..."}`. La première retourne les plages détectées, leur catégorie, leur règle et leur valeur. La seconde retourne `{"text":"..."}` avec les PII remplacées par les marqueurs qui seront envoyés à Flowise. Elles utilisent les règles du comparatif avec Presidio et `fr_core_news_md`. Installer son environnement Python local, puis indiquer son exécutable avant de démarrer l'API :
 
 ```powershell
 python -m venv "$env:TEMP\detect-doc-pii"

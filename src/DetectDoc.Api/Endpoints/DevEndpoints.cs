@@ -11,6 +11,32 @@ public static class DevEndpoints
 {
     public static void MapDevEndpoints(this WebApplication app)
     {
+        app.MapPost("/api/dev/pii/mask", async Task<IResult> (
+            PiiDetectionHttpRequest? request,
+            IServiceProvider services,
+            CancellationToken cancellationToken) =>
+        {
+            if (string.IsNullOrWhiteSpace(request?.Text))
+            {
+                return InvalidPiiRequest();
+            }
+
+            try
+            {
+                var masker = services.GetRequiredService<PiiTextMasker>();
+                return Results.Ok(new PiiMaskingHttpResponse(
+                    await masker.MaskAsync(request.Text, cancellationToken)));
+            }
+            catch (Exception) when (!cancellationToken.IsCancellationRequested)
+            {
+                return PiiUnavailable("Le masquage des données personnelles n'a pas abouti.");
+            }
+        })
+            .WithSummary("Masque les données personnelles dans un texte.")
+            .Produces<PiiMaskingHttpResponse>()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
+
         app.MapPost("/api/dev/pii/detect", async Task<IResult> (
             PiiDetectionHttpRequest? request,
             IServiceProvider services,
@@ -18,10 +44,7 @@ public static class DevEndpoints
         {
             if (string.IsNullOrWhiteSpace(request?.Text))
             {
-                return Results.Problem(
-                    title: "Requête invalide.",
-                    detail: "Un texte non vide est requis.",
-                    statusCode: StatusCodes.Status400BadRequest);
+                return InvalidPiiRequest();
             }
 
             try
@@ -38,10 +61,7 @@ public static class DevEndpoints
             }
             catch (Exception) when (!cancellationToken.IsCancellationRequested)
             {
-                return Results.Problem(
-                    title: "Détecteur PII indisponible.",
-                    detail: "La détection des données personnelles n'a pas abouti.",
-                    statusCode: StatusCodes.Status503ServiceUnavailable);
+                return PiiUnavailable("La détection des données personnelles n'a pas abouti.");
             }
         })
             .WithSummary("Détecte les données personnelles dans un texte.")
@@ -123,9 +143,21 @@ public static class DevEndpoints
             .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
             .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
     }
+
+    private static IResult InvalidPiiRequest() => Results.Problem(
+        title: "Requête invalide.",
+        detail: "Un texte non vide est requis.",
+        statusCode: StatusCodes.Status400BadRequest);
+
+    private static IResult PiiUnavailable(string detail) => Results.Problem(
+        title: "Traitement PII indisponible.",
+        detail: detail,
+        statusCode: StatusCodes.Status503ServiceUnavailable);
 }
 
 public sealed record PiiDetectionHttpRequest(string? Text);
+
+public sealed record PiiMaskingHttpResponse(string Text);
 
 public sealed record PiiDetectionHttpResponse(
     string Category,
