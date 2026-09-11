@@ -42,6 +42,8 @@ python -m venv "$env:TEMP\detect-doc-pii"
 $env:PII_PYTHON = "$env:TEMP\detect-doc-pii\Scripts\python.exe"
 ```
 
+La couverture mesurée, les faux positifs et les cas non couverts sont détaillés dans le [rapport du comparatif PII](tools/PiiMaskingComparison/rapport.md#limites-et-cas-non-couverts-dans-lapi).
+
 La route `POST /api/dev/classify` attend `{"texte":"...","types":["RIB","FEUILLE_EMAR"]}`. Elle appelle le flow configuré par `Flowise__BaseUrl` et `Flowise__FlowId`, sans authentification dans cet essai. Par exemple :
 
 ```powershell

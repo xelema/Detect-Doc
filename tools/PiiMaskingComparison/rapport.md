@@ -146,6 +146,27 @@ Le choix relève donc de la latence acceptable pour la route de classification, 
 
 **Ne pas déployer de pool de processus Python** : chacun rechargerait sa propre copie du modèle, multipliant les gigaoctets sans gagner de débit, le processeur étant déjà saturé par un seul document.
 
+## Limites et cas non couverts dans l'API
+
+Le masquage réduit les données personnelles présentes dans `form.texte` avant Flowise. Il ne constitue pas une anonymisation et ne garantit pas qu'une personne ne puisse plus être reconnue à partir du contexte restant.
+
+| Limite | Conséquence |
+|---|---|
+| Détection probabiliste des noms, organismes et lieux | Un nom rare, isolé, mal segmenté ou confondu avec un mot courant peut rester dans le texte. |
+| Règles dépendantes de la forme et du contexte | Un identifiant sans libellé, avec une mise en forme inconnue ou fortement altéré par l'OCR peut ne pas être reconnu. |
+| Entrée mesurée sur du texte synthétique propre | Les taux publiés ne prouvent pas la même couverture sur une sortie OCR ni sur des documents de production. |
+| Catégories limitées | Dates de naissance, données médicales libres, numéros de carte bancaire, plaques d'immatriculation, adresses IP et informations biométriques ne disposent pas de catégorie dédiée. |
+| Sur-masquage du NER | Des mots comme `Assistant`, `Signature`, `Fils` ou `Émargements` peuvent être remplacés à tort et retirer des indices utiles à la classification. |
+| Marqueurs typés fondés sur la catégorie détectée | Une catégorie erronée peut produire un marqueur trompeur pour le LLM, même lorsque la valeur sensible est bien retirée. |
+| Protection limitée au texte envoyé | Le document original, les images, signatures, QR codes, métadonnées et fichiers stockés restent sensibles dans les systèmes qui les détiennent. L'API n'envoie pas le document à Flowise. |
+| Champs hors `form.texte` | La liste libre `types` n'est pas masquée. Elle doit contenir uniquement des identifiants documentaires sans donnée personnelle. |
+| Routes de diagnostic | Les routes `/api/dev/extract` et `/api/dev/pii/detect` exposent volontairement du texte brut en réponse. Elles sont disponibles uniquement en environnement Development. |
+| Journaux et traces | Un proxy, une journalisation HTTP ou un outil d'observabilité peut conserver les prompts. Les validations Langfuse utilisent exclusivement des valeurs synthétiques et les traces conservées doivent rester conformes à la politique d'accès et de rétention. |
+
+Le traitement échoue de manière fermée : si la détection ou le remplacement n'aboutit pas, la route retourne HTTP 503 et n'appelle pas Flowise. Un test capture aussi le corps HTTP sérialisé par le vrai client Flowise et vérifie que la valeur synthétique brute est absente tandis que son marqueur est présent.
+
+La preuve jusqu'au fournisseur s'effectue avec un document synthétique portant des valeurs canaris uniques. La trace Langfuse du nœud Mistral doit montrer les marqueurs attendus et aucune valeur canari, puis son identifiant, sa date, le flow et les versions du modèle et de l'image API sont consignés avec le résultat. Cette recette vérifie un chemin observé ; elle ne transforme pas le masquage probabiliste en garantie universelle.
+
 ## Limites de ces mesures
 
 L'entrée est le texte propre du manifest, pas une sortie d'OCR : la dégradation due à la reconnaissance est un facteur distinct, non mesuré ici.
