@@ -114,12 +114,10 @@ public static class ClassificationEndpoints
                 var piiTextMasker = services.GetRequiredService<PiiTextMasker>();
                 maskedText = await piiTextMasker.MaskAsync(texte, cancellationToken);
             }
-            catch (Exception) when (!cancellationToken.IsCancellationRequested)
+            catch (Exception exception) when (HttpProblems.ForPii(
+                exception, cancellationToken, "La détection et le masquage des données personnelles n'ont pas abouti.") is { } probleme)
             {
-                return Results.Problem(
-                    title: "Traitement PII indisponible.",
-                    detail: "La détection et le masquage des données personnelles n'ont pas abouti.",
-                    statusCode: StatusCodes.Status503ServiceUnavailable);
+                return probleme;
             }
 
             piiMasking.Stop();

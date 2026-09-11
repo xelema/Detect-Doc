@@ -53,4 +53,16 @@ internal static class HttpProblems
             statusCode: StatusCodes.Status503ServiceUnavailable),
         _ => null
     };
+
+    // Échecs du masquage et de la détection PII : sous-processus Presidio absent, non démarré ou
+    // interrompu. Une exception d'un autre type est un bug et doit remonter tel quel au framework.
+    public static IResult? ForPii(Exception exception, CancellationToken cancellationToken, string detail) => exception switch
+    {
+        OperationCanceledException when cancellationToken.IsCancellationRequested => null,
+        InvalidDataException or InvalidOperationException or IOException or TimeoutException => Results.Problem(
+            title: "Traitement PII indisponible.",
+            detail: detail,
+            statusCode: StatusCodes.Status503ServiceUnavailable),
+        _ => null
+    };
 }

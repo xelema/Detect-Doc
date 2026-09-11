@@ -27,9 +27,10 @@ public static class DevEndpoints
                 return Results.Ok(new PiiMaskingHttpResponse(
                     await masker.MaskAsync(request.Text, cancellationToken)));
             }
-            catch (Exception) when (!cancellationToken.IsCancellationRequested)
+            catch (Exception exception) when (HttpProblems.ForPii(
+                exception, cancellationToken, "Le masquage des données personnelles n'a pas abouti.") is { } probleme)
             {
-                return PiiUnavailable("Le masquage des données personnelles n'a pas abouti.");
+                return probleme;
             }
         })
             .WithSummary("Masque les données personnelles dans un texte.")
@@ -59,9 +60,10 @@ public static class DevEndpoints
                     detection.Length,
                     request.Text.Substring(detection.Start, detection.Length))));
             }
-            catch (Exception) when (!cancellationToken.IsCancellationRequested)
+            catch (Exception exception) when (HttpProblems.ForPii(
+                exception, cancellationToken, "La détection des données personnelles n'a pas abouti.") is { } probleme)
             {
-                return PiiUnavailable("La détection des données personnelles n'a pas abouti.");
+                return probleme;
             }
         })
             .WithSummary("Détecte les données personnelles dans un texte.")
@@ -148,11 +150,6 @@ public static class DevEndpoints
         title: "Requête invalide.",
         detail: "Un texte non vide est requis.",
         statusCode: StatusCodes.Status400BadRequest);
-
-    private static IResult PiiUnavailable(string detail) => Results.Problem(
-        title: "Traitement PII indisponible.",
-        detail: detail,
-        statusCode: StatusCodes.Status503ServiceUnavailable);
 }
 
 public sealed record PiiDetectionHttpRequest(string? Text);
