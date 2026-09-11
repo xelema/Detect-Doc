@@ -177,18 +177,33 @@ public sealed class HybridPresidioPiiDetector : IPiiDetector, IDisposable
 
         private async Task DistributeAsync()
         {
-            while (await _process.StandardOutput.ReadLineAsync() is { } line)
+            try
             {
-                var response = JsonSerializer.Deserialize<Response>(line);
-                if (response is not null && _pending.TryRemove(response.Id, out var completion))
+                while (await _process.StandardOutput.ReadLineAsync() is { } line)
                 {
-                    completion.SetResult(response);
+                    Response? response;
+                    try
+                    {
+                        response = JsonSerializer.Deserialize<Response>(line);
+                    }
+                    catch (JsonException)
+                    {
+                        // Une ligne stdout illisible ne doit pas arrêter la distribution des réponses suivantes.
+                        continue;
+                    }
+
+                    if (response is not null && _pending.TryRemove(response.Id, out var completion))
+                    {
+                        completion.SetResult(response);
+                    }
                 }
             }
-
-            foreach (var completion in _pending.Values)
+            finally
             {
-                completion.TrySetException(new InvalidOperationException("Le processus Presidio s'est interrompu."));
+                foreach (var completion in _pending.Values)
+                {
+                    completion.TrySetException(new InvalidOperationException("Le processus Presidio s'est interrompu."));
+                }
             }
         }
 
