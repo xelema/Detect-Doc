@@ -19,4 +19,6 @@ dotnet run -- --self-check
 
 Chaque run crée `run/<date>_classification/` avec les conditions d'exécution, les résultats individuels, le récapitulatif et la matrice de confusion. Les factures et devis restent dans le lot comme distracteurs et ne participent pas aux métriques de classification fermée lorsque la liste par défaut est utilisée.
 
+Le runner affiche les étapes de préparation, d'envoi du lot, de réception de la réponse et d'écriture du rapport. L'API traite le lot avant de répondre, il n'existe donc pas de progression fiable par document.
+
 Les tokens, le coût Mistral, la version du flow et l'empreinte du prompt ne sont pas publiés par l'API. Ils ne figurent donc pas dans le rapport généré.

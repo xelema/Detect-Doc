@@ -12,6 +12,7 @@ if (args.SequenceEqual(["--self-check"]))
 }
 
 var options = RunnerOptions.Parse(args);
+Console.WriteLine($"Lecture du manifest, split {options.Split}.");
 var entries = ReadManifest(options.ManifestPath)
     .Where(entry => string.Equals(entry.Split, options.Split, StringComparison.Ordinal))
     .ToList();
@@ -34,6 +35,7 @@ if (documents.Select(document => Path.GetFileName(document.Path)).Distinct(Strin
 {
     throw new InvalidOperationException("Les noms de fichiers du lot doivent être uniques.");
 }
+Console.WriteLine($"{documents.Count} document(s) prêt(s), envoi à {options.ApiUrl}.");
 
 using var content = new MultipartFormDataContent();
 foreach (var document in documents)
@@ -54,6 +56,7 @@ if (batchResults.Count != documents.Count)
 {
     throw new InvalidDataException("Le nombre de résultats ne correspond pas au nombre de documents envoyés.");
 }
+Console.WriteLine($"Réponse reçue, {batchResults.Count} résultat(s). Écriture du rapport.");
 
 var resultsByName = batchResults.ToDictionary(result => result.FileName, StringComparer.OrdinalIgnoreCase);
 if (resultsByName.Count != batchResults.Count || documents.Any(document => !resultsByName.ContainsKey(Path.GetFileName(document.Path))))
@@ -78,7 +81,7 @@ await using (var writer = File.CreateText(Path.Combine(runDirectory, "resultats.
 
 await File.WriteAllTextAsync(Path.Combine(runDirectory, "recap.md"), Metrics.BuildReport(runId, metadata, results));
 await File.WriteAllTextAsync(Path.Combine(runDirectory, "matrice-confusion.csv"), Metrics.BuildConfusionCsv(results, options.Types));
-Console.WriteLine($"Run écrit dans {runDirectory}");
+Console.WriteLine($"Terminé, run écrit dans {runDirectory}");
 
 static IEnumerable<ManifestEntry> ReadManifest(string path) => File.ReadLines(path).Select((line, index) =>
     JsonSerializer.Deserialize<ManifestEntry>(line)
