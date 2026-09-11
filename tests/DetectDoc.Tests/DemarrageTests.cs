@@ -284,6 +284,60 @@ public class DemarrageTests
     }
 
     [Fact]
+    public async Task ClassifieUnLotDeDocuments()
+    {
+        var classifieur = new ClassifieurDeTest((appel, _) => appel == 1
+            ? new ClassificationResult("RIB", 0.91)
+            : new ClassificationResult("DEVIS", 0.82));
+        await using var application = CreerApplication("Development", classifieur);
+        using var client = application.CreateClient();
+        using var contenu = CreerLotMultipart(
+            ("rib.pdf", "Relevé d'identité bancaire"),
+            ("devis.pdf", "Demande de devis"));
+
+        using var response = await client.PostAsync("/api/documents/classify-batch", contenu);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var payload = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var resultats = payload.RootElement.EnumerateArray().ToArray();
+        Assert.Equal(2, resultats.Length);
+        Assert.Equal("rib.pdf", resultats[0].GetProperty("nomFichier").GetString());
+        Assert.Equal("RIB", resultats[0].GetProperty("resultat").GetProperty("type").GetString());
+        Assert.Equal(JsonValueKind.Null, resultats[0].GetProperty("erreur").ValueKind);
+        Assert.Equal("devis.pdf", resultats[1].GetProperty("nomFichier").GetString());
+        Assert.Equal("DEVIS", resultats[1].GetProperty("resultat").GetProperty("type").GetString());
+
+        using var openApi = await client.GetAsync("/openapi/v1.json");
+        using var contrat = JsonDocument.Parse(await openApi.Content.ReadAsStringAsync());
+        Assert.True(contrat.RootElement.GetProperty("paths")
+            .TryGetProperty("/api/documents/classify-batch", out _));
+    }
+
+    [Fact]
+    public async Task ContinueUnLotQuandUnDocumentEchoue()
+    {
+        var classifieur = new ClassifieurDeTest((appel, _) => appel == 1
+            ? throw new HttpRequestException("Flowise indisponible.")
+            : new ClassificationResult("RIB", 0.9));
+        await using var application = CreerApplication("Development", classifieur);
+        using var client = application.CreateClient();
+        using var contenu = CreerLotMultipart(
+            ("echec.pdf", "Premier document"),
+            ("succes.pdf", "Second document"));
+
+        using var response = await client.PostAsync("/api/documents/classify-batch", contenu);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var payload = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var resultats = payload.RootElement.EnumerateArray().ToArray();
+        Assert.Equal(JsonValueKind.Null, resultats[0].GetProperty("resultat").ValueKind);
+        Assert.Equal(503, resultats[0].GetProperty("erreur").GetProperty("status").GetInt32());
+        Assert.Equal("RIB", resultats[1].GetProperty("resultat").GetProperty("type").GetString());
+        Assert.Equal(JsonValueKind.Null, resultats[1].GetProperty("erreur").ValueKind);
+        Assert.Equal(2, classifieur.Appels);
+    }
+
+    [Fact]
     public async Task MasqueLesPiiAvantFlowiseEtMesureLaDuree()
     {
         var flowise = new FlowiseCaptureHandler();
@@ -490,6 +544,23 @@ public class DemarrageTests
         fichier.Headers.ContentType = new MediaTypeHeaderValue("application/pdf");
         var contenu = new MultipartFormDataContent();
         contenu.Add(fichier, "file", "document.pdf");
+        return contenu;
+    }
+
+    private static MultipartFormDataContent CreerLotMultipart(
+        params (string NomFichier, string Texte)[] documents)
+    {
+        var contenu = new MultipartFormDataContent();
+        foreach (var document in documents)
+        {
+            contenu.Add(
+                new ByteArrayContent(PdfDeTest.Construire(document.Texte)),
+                "files",
+                document.NomFichier);
+        }
+
+        contenu.Add(new StringContent("[\"RIB\",\"DEVIS\"]"), "types");
+        contenu.Add(new StringContent("pdfpig"), "engine");
         return contenu;
     }
 

@@ -1,5 +1,7 @@
 namespace DetectDoc.Api;
 
+using Microsoft.AspNetCore.Mvc;
+
 public sealed record ResultatExtractionPageHttp(
     int NumeroPage,
     string Texte,
@@ -17,3 +19,8 @@ public sealed record ResultatClassificationDocumentHttp(
     long ClassificationMs,
     long TotalMs,
     string? ExecutionId);
+
+public sealed record ResultatClassificationLotDocumentHttp(
+    string NomFichier,
+    ResultatClassificationDocumentHttp? Resultat,
+    ProblemDetails? Erreur);
