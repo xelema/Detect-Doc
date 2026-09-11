@@ -1,5 +1,6 @@
 using DetectDoc.Core.Classification;
 using DetectDoc.Core.Engines;
+using DetectDoc.Core.Pii;
 using DetectDoc.Infrastructure.Engines;
 
 namespace DetectDoc.Api.Endpoints;
@@ -10,6 +11,66 @@ public static class DevEndpoints
 {
     public static void MapDevEndpoints(this WebApplication app)
     {
+        app.MapPost("/api/dev/pii/mask", async Task<IResult> (
+            PiiDetectionHttpRequest? request,
+            IServiceProvider services,
+            CancellationToken cancellationToken) =>
+        {
+            if (string.IsNullOrWhiteSpace(request?.Text))
+            {
+                return InvalidPiiRequest();
+            }
+
+            try
+            {
+                var masker = services.GetRequiredService<PiiTextMasker>();
+                return Results.Ok(new PiiMaskingHttpResponse(
+                    await masker.MaskAsync(request.Text, cancellationToken)));
+            }
+            catch (Exception exception) when (HttpProblems.ForPii(
+                exception, cancellationToken, "Le masquage des données personnelles n'a pas abouti.") is { } probleme)
+            {
+                return probleme;
+            }
+        })
+            .WithSummary("Masque les données personnelles dans un texte.")
+            .Produces<PiiMaskingHttpResponse>()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
+
+        app.MapPost("/api/dev/pii/detect", async Task<IResult> (
+            PiiDetectionHttpRequest? request,
+            IServiceProvider services,
+            CancellationToken cancellationToken) =>
+        {
+            if (string.IsNullOrWhiteSpace(request?.Text))
+            {
+                return InvalidPiiRequest();
+            }
+
+            try
+            {
+                var detector = services.GetRequiredService<IPiiDetector>();
+                var detections = await detector.DetectAsync(request.Text, cancellationToken);
+                return Results.Ok(detections.Select(detection => new PiiDetectionHttpResponse(
+                    detection.Category.ToString(),
+                    detection.Rule,
+                    detection.Kind.ToString(),
+                    detection.Start,
+                    detection.Length,
+                    request.Text.Substring(detection.Start, detection.Length))));
+            }
+            catch (Exception exception) when (HttpProblems.ForPii(
+                exception, cancellationToken, "La détection des données personnelles n'a pas abouti.") is { } probleme)
+            {
+                return probleme;
+            }
+        })
+            .WithSummary("Détecte les données personnelles dans un texte.")
+            .Produces<IEnumerable<PiiDetectionHttpResponse>>()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
+
         app.MapPost("/api/dev/classify", async Task<IResult> (
             ClassificationHttpRequest? requete,
             IDocumentClassifier classifieur,
@@ -84,4 +145,21 @@ public static class DevEndpoints
             .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
             .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
     }
+
+    private static IResult InvalidPiiRequest() => Results.Problem(
+        title: "Requête invalide.",
+        detail: "Un texte non vide est requis.",
+        statusCode: StatusCodes.Status400BadRequest);
 }
+
+public sealed record PiiDetectionHttpRequest(string? Text);
+
+public sealed record PiiMaskingHttpResponse(string Text);
+
+public sealed record PiiDetectionHttpResponse(
+    string Category,
+    string Rule,
+    string Kind,
+    int Start,
+    int Length,
+    string Value);

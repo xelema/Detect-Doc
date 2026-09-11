@@ -1,7 +1,10 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Text.Json;
 using DetectDoc.Core.Classification;
+using DetectDoc.Core.Pii;
+using DetectDoc.Infrastructure.Classification;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
@@ -135,7 +138,10 @@ public class DemarrageTests
             .WithWebHostBuilder(builder =>
             {
                 builder.ConfigureServices(services =>
-                    services.AddSingleton<IDocumentClassifier>(new ClassifieurEnEchec(exception)));
+                {
+                    services.AddSingleton<IDocumentClassifier>(new ClassifieurEnEchec(exception));
+                    services.AddSingleton<IPiiDetector>(new PiiDetectorVide());
+                });
                 builder.ConfigureLogging(logging => logging.ClearProviders());
             });
         using var client = application.CreateClient();
@@ -278,6 +284,60 @@ public class DemarrageTests
     }
 
     [Fact]
+    public async Task MasqueLesPiiAvantFlowiseEtMesureLaDuree()
+    {
+        var flowise = new FlowiseCaptureHandler();
+        using var flowiseClient = new HttpClient(flowise);
+        var classifieur = new FlowiseDocumentClassifier(
+            flowiseClient,
+            new FlowiseOptions("https://flowise.test", "flow-test"));
+        await using var application = CreerApplication(
+            "Development",
+            classifieur,
+            new PiiDetectorDeTest());
+        using var client = application.CreateClient();
+        using var contenu = CreerPdfMultipart("Contact : Jean Dupont");
+        contenu.Add(new StringContent("[\"RIB\"]"), "types");
+        contenu.Add(new StringContent("pdfpig"), "engine");
+
+        using var response = await client.PostAsync("/api/documents/classify", contenu);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(1, flowise.Appels);
+        Assert.DoesNotContain("Jean Dupont", flowise.DernierCorps);
+        using var payload = JsonDocument.Parse(flowise.DernierCorps!);
+        Assert.Equal(
+            "Contact : [PERSON]",
+            payload.RootElement.GetProperty("form").GetProperty("texte").GetString());
+        using var resultat = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.True(resultat.RootElement.GetProperty("piiMaskingMs").GetInt64() >= 0);
+    }
+
+    [Fact]
+    public async Task NAppellePasFlowiseQuandLaDetectionPiiEchoue()
+    {
+        var flowise = new FlowiseCaptureHandler();
+        using var flowiseClient = new HttpClient(flowise);
+        var classifieur = new FlowiseDocumentClassifier(
+            flowiseClient,
+            new FlowiseOptions("https://flowise.test", "flow-test"));
+        await using var application = CreerApplication(
+            "Development",
+            classifieur,
+            new PiiDetectorEnEchec());
+        using var client = application.CreateClient();
+        using var contenu = CreerPdfMultipart("Contact : Jean Dupont");
+        contenu.Add(new StringContent("[\"RIB\"]"), "types");
+        contenu.Add(new StringContent("pdfpig"), "engine");
+
+        using var response = await client.PostAsync("/api/documents/classify", contenu);
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Equal(0, flowise.Appels);
+        Assert.DoesNotContain("Jean Dupont", await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
     public async Task ReprendApresUneErreurFlowiseEtAccepteDeuxRequetes()
     {
         var classifieur = new ClassifieurDeTest((appel, _) => appel == 1
@@ -306,24 +366,109 @@ public class DemarrageTests
     }
 
     [Fact]
-    public async Task NExposePasLaRouteDExtractionEnProduction()
+    public async Task NExposePasLesRoutesDeDiagnosticEnProduction()
     {
         await using var application = CreerApplication("Production");
         using var client = application.CreateClient();
         using var contenu = CreerPdfMultipart("contenu");
 
         using var response = await client.PostAsync("/api/dev/extract/pdfpig", contenu);
+        using var piiResponse = await client.PostAsJsonAsync(
+            "/api/dev/pii/detect",
+            new { text = "Jean Dupont" });
+        using var maskingResponse = await client.PostAsJsonAsync(
+            "/api/dev/pii/mask",
+            new { text = "Jean Dupont" });
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, piiResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, maskingResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task DetecteLesPiiEnDevelopment()
+    {
+        await using var application = new WebApplicationFactory<Program>()
+            .WithWebHostBuilder(builder =>
+            {
+                builder.UseEnvironment("Development");
+                builder.ConfigureServices(services => services.AddSingleton<IPiiDetector>(new PiiDetectorDeTest()));
+                builder.ConfigureLogging(logging => logging.ClearProviders());
+            });
+        using var client = application.CreateClient();
+
+        using var response = await client.PostAsJsonAsync(
+            "/api/dev/pii/detect",
+            new { text = "Contact : Jean Dupont" });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var result = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var detection = Assert.Single(result.RootElement.EnumerateArray());
+        Assert.Equal("Name", detection.GetProperty("category").GetString());
+        Assert.Equal("Jean Dupont", detection.GetProperty("value").GetString());
+    }
+
+    [Fact]
+    public async Task MasqueLesPiiSansDupliquerLesDetections()
+    {
+        await using var application = new WebApplicationFactory<Program>()
+            .WithWebHostBuilder(builder =>
+            {
+                builder.UseEnvironment("Development");
+                builder.ConfigureServices(services =>
+                    services.AddSingleton<IPiiDetector>(new PiiDetectorAvecChevauchements()));
+                builder.ConfigureLogging(logging => logging.ClearProviders());
+            });
+        using var client = application.CreateClient();
+
+        using var response = await client.PostAsJsonAsync(
+            "/api/dev/pii/mask",
+            new
+            {
+                text = "Contact : Jean Dupont, IBAN FR76 3000 6000 0112 3456 7890 189, téléphone : 06 12 34 56 78."
+            });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var result = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(
+            "Contact : [PERSON], IBAN [IBAN], téléphone : [PHONE].",
+            result.RootElement.GetProperty("text").GetString());
+    }
+
+    [Fact]
+    public async Task EtendLeMasqueQuandLeModeleDepasseUneReglePourLaMemeCategorie()
+    {
+        await using var application = new WebApplicationFactory<Program>()
+            .WithWebHostBuilder(builder =>
+            {
+                builder.UseEnvironment("Development");
+                builder.ConfigureServices(services =>
+                    services.AddSingleton<IPiiDetector>(new PiiDetectorAvecModelePlusLarge()));
+                builder.ConfigureLogging(logging => logging.ClearProviders());
+            });
+        using var client = application.CreateClient();
+
+        using var response = await client.PostAsJsonAsync(
+            "/api/dev/pii/mask",
+            new { text = "Contact : Jean Dupont Martin." });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var result = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(
+            "Contact : [PERSON].",
+            result.RootElement.GetProperty("text").GetString());
     }
 
     private static WebApplicationFactory<Program> CreerApplication(
         string environnement,
-        IDocumentClassifier? classifieur = null) =>
+        IDocumentClassifier? classifieur = null,
+        IPiiDetector? piiDetector = null) =>
         new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder =>
             {
                 builder.UseEnvironment(environnement);
+                builder.ConfigureServices(services =>
+                    services.AddSingleton(piiDetector ?? new PiiDetectorVide()));
                 if (classifieur is not null)
                 {
                     builder.ConfigureServices(services => services.AddSingleton(classifieur));
@@ -354,6 +499,91 @@ public class DemarrageTests
             string texte,
             IReadOnlyCollection<string> types,
             CancellationToken cancellationToken = default) => Task.FromException<ClassificationResult>(exception);
+    }
+
+    private sealed class PiiDetectorDeTest : IPiiDetector
+    {
+        public Task<IReadOnlyList<PiiDetection>> DetectAsync(
+            string text,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<PiiDetection>>(
+                [new PiiDetection(PiiCategory.Name, "PERSON", PiiDetectionKind.Model, 10, 11)]);
+    }
+
+    private sealed class PiiDetectorVide : IPiiDetector
+    {
+        public Task<IReadOnlyList<PiiDetection>> DetectAsync(
+            string text,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<PiiDetection>>([]);
+    }
+
+    private sealed class PiiDetectorEnEchec : IPiiDetector
+    {
+        public Task<IReadOnlyList<PiiDetection>> DetectAsync(
+            string text,
+            CancellationToken cancellationToken = default) =>
+            Task.FromException<IReadOnlyList<PiiDetection>>(
+                new InvalidOperationException("Détecteur indisponible."));
+    }
+
+    private sealed class PiiDetectorAvecChevauchements : IPiiDetector
+    {
+        public Task<IReadOnlyList<PiiDetection>> DetectAsync(
+            string text,
+            CancellationToken cancellationToken = default)
+        {
+            var nameStart = text.IndexOf("Jean Dupont", StringComparison.Ordinal);
+            var ibanStart = text.IndexOf("FR76", StringComparison.Ordinal);
+            var addressStart = text.IndexOf("IBAN FR76", StringComparison.Ordinal);
+            var phoneStart = text.IndexOf("06 12 34 56 78", StringComparison.Ordinal);
+            return Task.FromResult<IReadOnlyList<PiiDetection>>(
+            [
+                new(PiiCategory.Name, "NomApresLibelle", PiiDetectionKind.Label, nameStart, 11),
+                new(PiiCategory.Name, "PERSON", PiiDetectionKind.Model, nameStart, 11),
+                new(PiiCategory.Iban, "Iban", PiiDetectionKind.Specification, ibanStart, 33),
+                new(PiiCategory.Iban, "IBAN_CODE", PiiDetectionKind.Model, ibanStart, 33),
+                new(PiiCategory.Address, "LOCATION", PiiDetectionKind.Model, addressStart, 9),
+                new(PiiCategory.Phone, "Telephone", PiiDetectionKind.Specification, phoneStart, 14)
+            ]);
+        }
+    }
+
+    private sealed class PiiDetectorAvecModelePlusLarge : IPiiDetector
+    {
+        public Task<IReadOnlyList<PiiDetection>> DetectAsync(
+            string text,
+            CancellationToken cancellationToken = default)
+        {
+            var nameStart = text.IndexOf("Jean Dupont Martin", StringComparison.Ordinal);
+            return Task.FromResult<IReadOnlyList<PiiDetection>>(
+            [
+                new(PiiCategory.Name, "NomApresLibelle", PiiDetectionKind.Label, nameStart, "Jean Dupont".Length),
+                new(PiiCategory.Name, "PERSON", PiiDetectionKind.Model, nameStart, "Jean Dupont Martin".Length)
+            ]);
+        }
+    }
+
+    private sealed class FlowiseCaptureHandler : HttpMessageHandler
+    {
+        public int Appels { get; private set; }
+
+        public string? DernierCorps { get; private set; }
+
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            Appels++;
+            DernierCorps = await request.Content!.ReadAsStringAsync(cancellationToken);
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(new
+                {
+                    text = """{"type":"RIB","confiance":0.9}"""
+                })
+            };
+        }
     }
 
     private sealed class ClassifieurDeTest(

@@ -1,7 +1,9 @@
 using DetectDoc.Core.Classification;
 using DetectDoc.Core.Engines;
+using DetectDoc.Core.Pii;
 using DetectDoc.Infrastructure.Classification;
 using DetectDoc.Infrastructure.Engines;
+using DetectDoc.Infrastructure.Pii;
 
 namespace DetectDoc.Api;
 
@@ -29,6 +31,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(fournisseur => new AutomaticExtraction(
             fournisseur.GetRequiredService<PdfPigNativeTextEngine>(),
             () => fournisseur.GetRequiredService<PpOcrEngine>()));
+        services.AddSingleton<IPiiDetector, HybridPresidioPiiDetector>();
+        services.AddSingleton<PiiTextMasker>();
         services.AddSingleton(new FlowiseOptions(
             configuration["Flowise:BaseUrl"],
             configuration["Flowise:FlowId"]));

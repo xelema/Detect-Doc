@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using DetectDoc.Core.Classification;
 using DetectDoc.Core.Engines;
+using DetectDoc.Core.Pii;
 using DetectDoc.Infrastructure.Engines;
 using Microsoft.AspNetCore.Mvc;
 
@@ -106,11 +107,25 @@ public static class ClassificationEndpoints
                     statusCode: StatusCodes.Status422UnprocessableEntity);
             }
 
+            var piiMasking = Stopwatch.StartNew();
+            string maskedText;
+            try
+            {
+                var piiTextMasker = services.GetRequiredService<PiiTextMasker>();
+                maskedText = await piiTextMasker.MaskAsync(texte, cancellationToken);
+            }
+            catch (Exception exception) when (HttpProblems.ForPii(
+                exception, cancellationToken, "La détection et le masquage des données personnelles n'ont pas abouti.") is { } probleme)
+            {
+                return probleme;
+            }
+
+            piiMasking.Stop();
             var classification = Stopwatch.StartNew();
             ClassificationResult resultat;
             try
             {
-                resultat = await classifieur.ClassifyAsync(texte, typesValides, cancellationToken);
+                resultat = await classifieur.ClassifyAsync(maskedText, typesValides, cancellationToken);
             }
             catch (Exception exception) when (HttpProblems.ForFlowise(exception, cancellationToken) is { } probleme)
             {
@@ -126,12 +141,13 @@ public static class ClassificationEndpoints
                 moteurEffectif,
                 pages.Count,
                 extraction.ElapsedMilliseconds,
+                piiMasking.ElapsedMilliseconds,
                 classification.ElapsedMilliseconds,
                 total.ElapsedMilliseconds,
                 resultat.ExecutionId));
         })
             .DisableAntiforgery()
-            .WithSummary("Extrait puis classe un PDF avec le moteur choisi.")
+            .WithSummary("Extrait, masque les PII puis classe un PDF avec le moteur choisi.")
             .Produces<ResultatClassificationDocumentHttp>()
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status422UnprocessableEntity)

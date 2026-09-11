@@ -23,3 +23,6 @@ obj/
 .vs/
 .idea/
 *.user
+
+# Sorties d'execution du comparatif de masquage PII, un dossier par run.
+tools/PiiMaskingComparison/PiiMaskingComparison/run/
