@@ -9,7 +9,9 @@ public sealed class PiiTextMasker(IPiiDetector detector)
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(text);
-        if (text.Length == 0)
+        // Aligné sur la garde du détecteur (ArgumentException.ThrowIfNullOrWhiteSpace) : un texte
+        // uniquement composé d'espaces n'a rien à masquer, il ne doit pas lever d'exception.
+        if (string.IsNullOrWhiteSpace(text))
         {
             return text;
         }
