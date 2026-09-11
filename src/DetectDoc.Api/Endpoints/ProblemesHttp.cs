@@ -1,4 +1,5 @@
 using UglyToad.PdfPig.Core;
+using Microsoft.AspNetCore.Mvc;
 
 namespace DetectDoc.Api.Endpoints;
 
@@ -9,60 +10,67 @@ internal static class HttpProblems
 {
     // Échecs des moteurs d'extraction : ils décrivent une entrée que l'appelant contrôle, sauf le
     // moteur dont les modèles manquent, qui est un défaut de déploiement.
-    public static IResult? ForExtraction(Exception exception) => exception switch
+    public static ProblemDetails? ForExtraction(Exception exception) => exception switch
     {
-        InvalidDataException => Results.Problem(
-            title: "PDF invalide.",
-            detail: exception.Message,
-            statusCode: StatusCodes.Status422UnprocessableEntity),
+        InvalidDataException => Create(
+            StatusCodes.Status422UnprocessableEntity,
+            "PDF invalide.",
+            exception.Message),
         // PdfPig accepte l'en-tête puis échoue sur la structure : la signature validée en amont ne
         // garantit pas un document ouvrable.
-        PdfDocumentFormatException => Results.Problem(
-            title: "PDF invalide.",
-            detail: "Le fichier ne contient pas un PDF lisible.",
-            statusCode: StatusCodes.Status422UnprocessableEntity),
-        ArgumentException => Results.Problem(
-            title: "Moteur inconnu.",
-            detail: exception.Message,
-            statusCode: StatusCodes.Status400BadRequest),
-        InvalidOperationException => Results.Problem(
-            title: "Moteur indisponible.",
-            detail: exception.Message,
-            statusCode: StatusCodes.Status503ServiceUnavailable),
+        PdfDocumentFormatException => Create(
+            StatusCodes.Status422UnprocessableEntity,
+            "PDF invalide.",
+            "Le fichier ne contient pas un PDF lisible."),
+        ArgumentException => Create(StatusCodes.Status400BadRequest, "Moteur inconnu.", exception.Message),
+        InvalidOperationException => Create(
+            StatusCodes.Status503ServiceUnavailable,
+            "Moteur indisponible.",
+            exception.Message),
         _ => null
     };
 
     // Échecs de l'appel à Flowise. Une annulation demandée par le client n'en fait pas partie :
     // elle remonte telle quelle plutôt que de se faire passer pour un dépassement de délai.
-    public static IResult? ForFlowise(Exception exception, CancellationToken cancellationToken) => exception switch
+    public static ProblemDetails? ForFlowise(Exception exception, CancellationToken cancellationToken) => exception switch
     {
-        InvalidDataException => Results.Problem(
-            title: "Réponse Flowise invalide.",
-            detail: exception.Message,
-            statusCode: StatusCodes.Status502BadGateway),
-        HttpRequestException => Results.Problem(
-            title: "Flowise indisponible.",
-            detail: exception.Message,
-            statusCode: StatusCodes.Status503ServiceUnavailable),
-        TaskCanceledException when !cancellationToken.IsCancellationRequested => Results.Problem(
-            title: "Flowise a dépassé le délai d'appel.",
-            statusCode: StatusCodes.Status504GatewayTimeout),
-        InvalidOperationException => Results.Problem(
-            title: "Flowise non configuré.",
-            detail: exception.Message,
-            statusCode: StatusCodes.Status503ServiceUnavailable),
+        InvalidDataException => Create(
+            StatusCodes.Status502BadGateway,
+            "Réponse Flowise invalide.",
+            exception.Message),
+        HttpRequestException => Create(
+            StatusCodes.Status503ServiceUnavailable,
+            "Flowise indisponible.",
+            exception.Message),
+        TaskCanceledException when !cancellationToken.IsCancellationRequested => Create(
+            StatusCodes.Status504GatewayTimeout,
+            "Flowise a dépassé le délai d'appel."),
+        InvalidOperationException => Create(
+            StatusCodes.Status503ServiceUnavailable,
+            "Flowise non configuré.",
+            exception.Message),
         _ => null
     };
 
     // Échecs du masquage et de la détection PII : sous-processus Presidio absent, non démarré ou
     // interrompu. Une exception d'un autre type est un bug et doit remonter tel quel au framework.
-    public static IResult? ForPii(Exception exception, CancellationToken cancellationToken, string detail) => exception switch
+    public static ProblemDetails? ForPii(
+        Exception exception,
+        CancellationToken cancellationToken,
+        string detail) => exception switch
     {
         OperationCanceledException when cancellationToken.IsCancellationRequested => null,
-        InvalidDataException or InvalidOperationException or IOException or TimeoutException => Results.Problem(
-            title: "Traitement PII indisponible.",
-            detail: detail,
-            statusCode: StatusCodes.Status503ServiceUnavailable),
+        InvalidDataException or InvalidOperationException or IOException or TimeoutException => Create(
+            StatusCodes.Status503ServiceUnavailable,
+            "Traitement PII indisponible.",
+            detail),
         _ => null
+    };
+
+    private static ProblemDetails Create(int status, string title, string? detail = null) => new()
+    {
+        Status = status,
+        Title = title,
+        Detail = detail
     };
 }

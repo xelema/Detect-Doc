@@ -27,6 +27,7 @@ dotnet run --project src/DetectDoc.Api -- --environment Development --urls http:
 | `POST /api/dev/extract/{engine}` | Texte extrait page par page | Development |
 | `POST /api/dev/classify` | Classification d'un texte par Flowise | Development |
 | `POST /api/documents/classify` | Extraction puis classification d'un PDF | Tous les environnements |
+| `POST /api/documents/classify-batch` | Extraction puis classification d'un lot de PDF | Tous les environnements |
 | [/openapi/v1.json](http://localhost:5080/openapi/v1.json) | Description OpenAPI des routes | Development |
 | [/swagger](http://localhost:5080/swagger) | Interface interactive des routes | Development |
 
@@ -55,6 +56,8 @@ Pour un test local contre un certificat HTTPS interne non reconnu, définir auss
 
 `POST /api/documents/classify` est un formulaire multipart avec `file`, `types` et `engine`. `types` accepte un tableau JSON, par exemple `["RIB","FEUILLE_EMAR"]`, ou la liste séparée par des virgules envoyée par Swagger, par exemple `RIB,FEUILLE_EMAR`. `engine` est optionnel et vaut `auto` par défaut : l’API extrait une fois avec PdfPig, puis utilise PP-OCR tiny si au moins une page ne contient pas de texte natif. `pdfpig` et `ppocr-tiny` conservent un choix explicite pour un essai reproductible.
 Avant l'appel à Flowise, le texte extrait passe par le masqueur PII. La réponse porte aussi le moteur effectivement utilisé, `extractionMs`, `piiMaskingMs`, `classificationMs`, `totalMs` et l’`executionId` retourné par Flowise lorsqu’il est disponible. Le champ `moteur` emploie les identifiants de `engine`, `pdfpig` ou `ppocr-tiny`, y compris après un choix `auto` : la valeur reçue peut être renvoyée telle quelle pour rejouer l’extraction avec un moteur explicite.
+
+`POST /api/documents/classify-batch` accepte le même formulaire avec plusieurs champs `files` à la place de `file`. La réponse contient, dans l'ordre reçu, le nom et le résultat ou l'erreur de chaque document. L'échec d'un document n'interrompt pas le lot.
 
 `src/DetectDoc.Api/Program.cs` assemble l'application ; `ServiceCollectionExtensions.cs` enregistre les services et `Endpoints/` porte les routes, écrites avec les Minimal APIs d'ASP.NET Core. `tests/DetectDoc.Tests` démarre un serveur en mémoire et vérifie les réponses HTTP en Development et en Production.
 

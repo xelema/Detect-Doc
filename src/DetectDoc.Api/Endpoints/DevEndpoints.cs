@@ -30,7 +30,7 @@ public static class DevEndpoints
             catch (Exception exception) when (HttpProblems.ForPii(
                 exception, cancellationToken, "Le masquage des données personnelles n'a pas abouti.") is { } probleme)
             {
-                return probleme;
+                return Results.Problem(probleme);
             }
         })
             .WithSummary("Masque les données personnelles dans un texte.")
@@ -63,7 +63,7 @@ public static class DevEndpoints
             catch (Exception exception) when (HttpProblems.ForPii(
                 exception, cancellationToken, "La détection des données personnelles n'a pas abouti.") is { } probleme)
             {
-                return probleme;
+                return Results.Problem(probleme);
             }
         })
             .WithSummary("Détecte les données personnelles dans un texte.")
@@ -91,7 +91,7 @@ public static class DevEndpoints
             }
             catch (Exception exception) when (HttpProblems.ForFlowise(exception, cancellationToken) is { } probleme)
             {
-                return probleme;
+                return Results.Problem(probleme);
             }
         })
             .WithSummary("Classifie un texte avec Flowise.")
@@ -135,7 +135,7 @@ public static class DevEndpoints
             }
             catch (Exception exception) when (HttpProblems.ForExtraction(exception) is { } probleme)
             {
-                return probleme;
+                return Results.Problem(probleme);
             }
         })
             .DisableAntiforgery()
