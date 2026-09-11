@@ -141,6 +141,7 @@ public sealed class HybridPresidioPiiDetector : IPiiDetector, IDisposable
             var completion = new TaskCompletionSource<Response>(TaskCreationOptions.RunContinuationsAsynchronously);
             _pending[id] = completion;
 
+            Response response;
             try
             {
                 lock (_sendLock)
@@ -148,14 +149,16 @@ public sealed class HybridPresidioPiiDetector : IPiiDetector, IDisposable
                     _process.StandardInput.WriteLine(JsonSerializer.Serialize(new { id, texte = text }));
                     _process.StandardInput.Flush();
                 }
+
+                response = await completion.Task.WaitAsync(cancellationToken);
             }
-            catch
+            finally
             {
+                // Retire l'entrée dans tous les cas : réponse reçue, échec d'écriture ou annulation
+                // par l'appelant, pour ne jamais laisser une requête abandonnée dans la table.
                 _pending.TryRemove(id, out _);
-                throw;
             }
 
-            var response = await completion.Task.WaitAsync(cancellationToken);
             if (response.Error is not null)
             {
                 throw new InvalidOperationException($"Presidio : {response.Error}");
