@@ -435,6 +435,30 @@ public class DemarrageTests
             result.RootElement.GetProperty("text").GetString());
     }
 
+    [Fact]
+    public async Task EtendLeMasqueQuandLeModeleDepasseUneReglePourLaMemeCategorie()
+    {
+        await using var application = new WebApplicationFactory<Program>()
+            .WithWebHostBuilder(builder =>
+            {
+                builder.UseEnvironment("Development");
+                builder.ConfigureServices(services =>
+                    services.AddSingleton<IPiiDetector>(new PiiDetectorAvecModelePlusLarge()));
+                builder.ConfigureLogging(logging => logging.ClearProviders());
+            });
+        using var client = application.CreateClient();
+
+        using var response = await client.PostAsJsonAsync(
+            "/api/dev/pii/mask",
+            new { text = "Contact : Jean Dupont Martin." });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var result = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(
+            "Contact : [PERSON].",
+            result.RootElement.GetProperty("text").GetString());
+    }
+
     private static WebApplicationFactory<Program> CreerApplication(
         string environnement,
         IDocumentClassifier? classifieur = null,
@@ -521,6 +545,21 @@ public class DemarrageTests
                 new(PiiCategory.Iban, "IBAN_CODE", PiiDetectionKind.Model, ibanStart, 33),
                 new(PiiCategory.Address, "LOCATION", PiiDetectionKind.Model, addressStart, 9),
                 new(PiiCategory.Phone, "Telephone", PiiDetectionKind.Specification, phoneStart, 14)
+            ]);
+        }
+    }
+
+    private sealed class PiiDetectorAvecModelePlusLarge : IPiiDetector
+    {
+        public Task<IReadOnlyList<PiiDetection>> DetectAsync(
+            string text,
+            CancellationToken cancellationToken = default)
+        {
+            var nameStart = text.IndexOf("Jean Dupont Martin", StringComparison.Ordinal);
+            return Task.FromResult<IReadOnlyList<PiiDetection>>(
+            [
+                new(PiiCategory.Name, "NomApresLibelle", PiiDetectionKind.Label, nameStart, "Jean Dupont".Length),
+                new(PiiCategory.Name, "PERSON", PiiDetectionKind.Model, nameStart, "Jean Dupont Martin".Length)
             ]);
         }
     }

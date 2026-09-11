@@ -24,9 +24,13 @@ public sealed class PiiTextMasker(IPiiDetector detector)
         }
 
         var structuredDetections = detections.Where(detection => detection.Kind != PiiDetectionKind.Model).ToArray();
+        // Une détection modèle qui chevauche une règle d'une AUTRE catégorie est un faux positif probable
+        // et on l'écarte. Une détection modèle qui chevauche une règle de la MÊME catégorie est conservée :
+        // la fusion ci-dessous étend alors le masque à toute son étendue au lieu de la tronquer.
         var ranges = detections
             .Where(detection => detection.Kind != PiiDetectionKind.Model
-                || !structuredDetections.Any(structured => Overlaps(detection, structured)))
+                || !structuredDetections.Any(structured =>
+                    structured.Category != detection.Category && Overlaps(detection, structured)))
             .GroupBy(detection => (detection.Start, detection.Length))
             .Select(group => group.OrderBy(detection => detection.Kind).First())
             .OrderBy(detection => detection.Start)
