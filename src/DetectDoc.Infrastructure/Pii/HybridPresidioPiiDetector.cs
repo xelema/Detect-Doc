@@ -19,10 +19,14 @@ public sealed class HybridPresidioPiiDetector : IPiiDetector, IDisposable
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(text);
 
+        // Le scan regex est un calcul CPU sans état partagé : il n'a besoin d'aucune synchronisation,
+        // contrairement à l'appel Presidio qui reste sérialisé derrière le sémaphore ci-dessous.
+        var detectionsRegex = RegexPiiDetector.Detect(text);
+
         await _gate.WaitAsync(cancellationToken);
         try
         {
-            return [.. RegexPiiDetector.Detect(text), .. await _presidio.DetectAsync(text, cancellationToken)];
+            return [.. detectionsRegex, .. await _presidio.DetectAsync(text, cancellationToken)];
         }
         finally
         {
