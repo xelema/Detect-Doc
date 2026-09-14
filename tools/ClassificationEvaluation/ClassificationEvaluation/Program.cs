@@ -52,9 +52,7 @@ Console.WriteLine($"{documents.Count} document(s) prêt(s), envoi à {options.Ap
 
 object typesPayload = descriptions is null
     ? options.Types
-    : options.Types
-        .Select(type => new TypeSoumis(type, descriptions[type].Libelle, descriptions[type].Description))
-        .ToList();
+    : options.Types.Select(type => descriptions[type]).ToList();
 
 using var content = new MultipartFormDataContent();
 foreach (var document in documents)
@@ -106,23 +104,27 @@ static IEnumerable<ManifestEntry> ReadManifest(string path) => File.ReadLines(pa
     JsonSerializer.Deserialize<ManifestEntry>(line)
     ?? throw new InvalidDataException($"Manifest illisible, ligne {index + 1}."));
 
-static Dictionary<string, DescriptionType> ReadDescriptions(string path)
+static Dictionary<string, TypeSoumis> ReadDescriptions(string path)
 {
-    var descriptions = JsonSerializer.Deserialize<Dictionary<string, DescriptionType>>(
+    var descriptions = JsonSerializer.Deserialize<List<TypeSoumis>>(
         File.ReadAllText(path), Json.Options);
     if (descriptions is null || descriptions.Count == 0)
     {
         throw new InvalidDataException($"Fichier de descriptions vide ou illisible : {path}.");
     }
-    return descriptions;
+    var parId = new Dictionary<string, TypeSoumis>(StringComparer.Ordinal);
+    foreach (var type in descriptions)
+    {
+        if (string.IsNullOrWhiteSpace(type.Id) || !parId.TryAdd(type.Id, type))
+        {
+            throw new InvalidDataException($"Fichier de descriptions invalide, id absent ou en double : {path}.");
+        }
+    }
+    return parId;
 }
 
 public sealed record TypeSoumis(
     [property: JsonPropertyName("id")] string Id,
-    [property: JsonPropertyName("libelle")] string? Libelle,
-    [property: JsonPropertyName("description")] string? Description);
-
-public sealed record DescriptionType(
     [property: JsonPropertyName("libelle")] string? Libelle,
     [property: JsonPropertyName("description")] string? Description);
 

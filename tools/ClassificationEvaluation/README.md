@@ -17,7 +17,7 @@ dotnet run -- --corpus ..\..\..\corpus --manifest ..\..\..\corpus\manifest.jsonl
 dotnet run -- --self-check
 ```
 
-`--descriptions <chemin>` soumet chaque type sous la forme objet `{id, libelle, description}` lue dans un fichier JSON `{code: {libelle, description}}`, par exemple `descriptions-types.json` à côté de ce README. Chaque type soumis doit y être décrit, et son sha256 est enregistré dans `run.json` pour la comparabilité. Sans l'option, le runner envoie les identifiants seuls comme avant.
+`--descriptions <chemin>` soumet chaque type sous la forme objet `{id, libelle, description}` lue dans un fichier JSON `[{id, libelle, description}]`, par exemple `descriptions-types.json` à côté de ce README. Chaque type soumis doit y être décrit, et son sha256 est enregistré dans `run.json` pour la comparabilité. Sans l'option, le runner envoie les identifiants seuls comme avant.
 
 Pour évaluer le [prompt Flowise de référence](../../docs/flowise-classification.md) avec les six types décrits, depuis le même dossier, adapter l'URL à l'API démarrée :
 
