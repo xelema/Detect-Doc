@@ -1,4 +1,6 @@
+using System.Runtime.ExceptionServices;
 using UglyToad.PdfPig.Core;
+using DetectDoc.Core.Classification;
 using Microsoft.AspNetCore.Mvc;
 
 namespace DetectDoc.Api.Endpoints;
@@ -22,7 +24,13 @@ internal static class HttpProblems
             StatusCodes.Status422UnprocessableEntity,
             "PDF invalide.",
             "Le fichier ne contient pas un PDF lisible."),
-        ArgumentException => Create(StatusCodes.Status400BadRequest, "Moteur inconnu.", exception.Message),
+        // Seul le jeton `engine` est une erreur de l'appelant. Toute autre ArgumentException
+        // (flux non rejouable, option d'un moteur, activation DI invalide) est un défaut
+        // serveur : elle doit remonter en 500, pas être rapportée en erreur client.
+        ArgumentException { ParamName: "engine" } => Create(
+            StatusCodes.Status400BadRequest,
+            "Moteur inconnu.",
+            exception.Message),
         InvalidOperationException => Create(
             StatusCodes.Status503ServiceUnavailable,
             "Moteur indisponible.",
@@ -66,6 +74,40 @@ internal static class HttpProblems
             detail),
         _ => null
     };
+
+    // Traduit l'issue du pipeline en ProblemDetails. Une exception non reconnue par la fabrique de
+    // son étape est relancée avec sa pile : c'est un bug, pas une erreur du contrat HTTP.
+    public static ProblemDetails ForOutcome(
+        DocumentClassificationOutcome outcome,
+        CancellationToken cancellationToken) => outcome switch
+    {
+        DocumentClassificationOutcome.Rejected(var reason) => reason switch
+        {
+            ClassificationRejection.EmptyText => Create(
+                StatusCodes.Status422UnprocessableEntity,
+                "Texte inexploitable.",
+                "L'extraction ne retourne aucun texte."),
+            _ => Create(
+                StatusCodes.Status422UnprocessableEntity,
+                "Document non classifiable."),
+        },
+        DocumentClassificationOutcome.Faulted(var stage, var exception) => (stage switch
+        {
+            ClassificationStage.Extraction => ForExtraction(exception),
+            ClassificationStage.PiiMasking => ForPii(
+                exception,
+                cancellationToken,
+                "La détection et le masquage des données personnelles n'ont pas abouti."),
+            _ => ForFlowise(exception, cancellationToken),
+        }) ?? Rethrow(exception),
+        _ => throw new InvalidOperationException("Une classification réussie n'a pas d'erreur à traduire.")
+    };
+
+    private static ProblemDetails Rethrow(Exception exception)
+    {
+        ExceptionDispatchInfo.Capture(exception).Throw();
+        return null!;
+    }
 
     private static ProblemDetails Create(int status, string title, string? detail = null) => new()
     {

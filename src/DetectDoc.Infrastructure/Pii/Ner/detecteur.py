@@ -54,10 +54,11 @@ def load_detector():
     return detect, {"modele": model, "entites": ", ".join(entities)}
 
 
-def utf16_range(text, start, end):
-    position = len(text[:start].encode("utf-16-le")) // 2
-    length = len(text[start:end].encode("utf-16-le")) // 2
-    return position, length
+def utf16_offsets(text):
+    offsets = [0]
+    for ch in text:
+        offsets.append(offsets[-1] + (2 if ord(ch) > 0xFFFF else 1))
+    return offsets
 
 
 def main():
@@ -73,20 +74,23 @@ def main():
         if not line.strip():
             continue
 
-        request = json.loads(line)
+        request = None
         try:
+            request = json.loads(line)
+            text = request["texte"]
+            offsets = utf16_offsets(text)
             detections = []
-            for category, rule, start, end in detect(request["texte"]):
-                position, length = utf16_range(request["texte"], start, end)
+            for category, rule, start, end in detect(text):
                 detections.append({
                     "categorie": category,
-                    "start": position,
-                    "length": length,
+                    "start": offsets[start],
+                    "length": offsets[end] - offsets[start],
                     "regle": rule,
                 })
             response = {"id": request["id"], "detections": detections}
         except Exception as error:
-            response = {"id": request.get("id"),
+            request_id = request.get("id") if isinstance(request, dict) else None
+            response = {"id": request_id,
                         "erreur": f"{type(error).__name__}: {error}"}
 
         print(json.dumps(response), file=OUTPUT, flush=True)

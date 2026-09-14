@@ -71,7 +71,7 @@ public sealed class FlowiseDocumentClassifier(HttpClient httpClient, FlowiseOpti
     {
         ({ } libelle, { } description) => $"{type.Id} | {libelle} | {description}",
         ({ } libelle, null) => $"{type.Id} | {libelle}",
-        (null, { } description) => $"{type.Id} | {description}",
+        (null, { } description) => $"{type.Id} |  | {description}",
         _ => type.Id
     };
 

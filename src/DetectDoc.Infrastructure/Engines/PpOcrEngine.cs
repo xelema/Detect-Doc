@@ -1,7 +1,7 @@
 using DetectDoc.Core.Engines;
 using PDFtoImage;
+using PDFtoImage.Exceptions;
 using RapidOcrNet;
-using UglyToad.PdfPig;
 
 namespace DetectDoc.Infrastructure.Engines;
 
@@ -13,6 +13,9 @@ public sealed class PpOcrEngine : ITextExtractionEngine, IDisposable
     private readonly RapidOcr _ocr = new();
     private readonly RapidOcrOptions _optionsOcr;
     private readonly string _taille;
+    // La thread-safety de RapidOcrNet n'est pas démontrée : les inférences sont sérialisées
+    // tant que le test de charge n'a pas tranché.
+    private readonly Lock _verrouOcr = new();
 
     public PpOcrEngine(string taille, string repertoireModeles, int reconnaissancesParalleles = 1)
     {
@@ -35,35 +38,43 @@ public sealed class PpOcrEngine : ITextExtractionEngine, IDisposable
         PdfStream.Validate(fluxDocument);
         cancellationToken.ThrowIfCancellationRequested();
 
-        int nombrePages;
-        using (var document = PdfDocument.Open(fluxDocument))
+        var pages = new List<PageExtractionResult>();
+        try
         {
-            nombrePages = document.NumberOfPages;
-        }
-
-        var pages = new List<PageExtractionResult>(nombrePages);
-        for (var numeroPage = 0; numeroPage < nombrePages; numeroPage++)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            fluxDocument.Position = 0;
-
-            // Une page rendue est libérée avant la suivante : le PDF entier ne tient jamais en mémoire.
-            using var image = Conversion.ToImage(
+            // ToImages produit les rendus à la demande : le PDF n'est parsé qu'une fois et une
+            // page rendue est libérée avant la suivante, le document entier ne tient pas en mémoire.
+            foreach (var image in Conversion.ToImages(
                 fluxDocument,
-                numeroPage,
                 leaveOpen: true,
                 password: null,
-                options: new RenderOptions(Dpi: Dpi));
-            var blocs = _ocr.Detect(image, _optionsOcr).TextBlocks;
-            var confiances = blocs
-                .Where(bloc => bloc.CharScores is { Length: > 0 })
-                .SelectMany(bloc => bloc.CharScores!)
-                .ToArray();
+                options: new RenderOptions(Dpi: Dpi)))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                using (image)
+                {
+                    OcrResult resultat;
+                    lock (_verrouOcr)
+                    {
+                        resultat = _ocr.Detect(image, _optionsOcr);
+                    }
+                    var blocs = resultat.TextBlocks;
+                    var confiances = blocs
+                        .Where(bloc => bloc.CharScores is { Length: > 0 })
+                        .SelectMany(bloc => bloc.CharScores!)
+                        .ToArray();
 
-            pages.Add(new PageExtractionResult(
-                numeroPage + 1,
-                string.Join(" ", blocs.Select(bloc => bloc.Text)),
-                confiances.Length > 0 ? confiances.Average() : null));
+                    pages.Add(new PageExtractionResult(
+                        pages.Count + 1,
+                        string.Join(" ", blocs.Select(bloc => bloc.Text)),
+                        confiances.Length > 0 ? confiances.Average() : null));
+                }
+            }
+        }
+        catch (PdfException exception)
+        {
+            // Un PDF que la signature ouvre peut tout de même échouer au rendu PDFium : l'erreur
+            // est celle du document, elle remonte comme les autres PDF invalides (422).
+            throw new InvalidDataException("Le PDF n'a pas pu être rendu en image.", exception);
         }
 
         return pages;

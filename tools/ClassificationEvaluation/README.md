@@ -7,14 +7,14 @@ Client de mesure de la chaîne complète de classification. Il transmet les PDF 
 Depuis `tools/ClassificationEvaluation/ClassificationEvaluation` :
 
 ```powershell
-dotnet run -- --corpus ..\..\..\corpus --manifest ..\..\..\corpus\manifest.jsonl
+dotnet run --corpus <chemin_corpus> --manifest <chemin_manifest>
 ```
 
 L'API doit être démarrée et configurée avec Flowise. Le runner utilise `http://localhost:5080`, le moteur `auto`, le split `dev` et les six types ciblés par défaut : `carte_visite`, `feuille_emar`, `offre_emploi`, `rib`, `rib_sepa`, `sepa`.
 
 ```powershell
-dotnet run -- --corpus ..\..\..\corpus --manifest ..\..\..\corpus\manifest.jsonl --api http://localhost:5080 --engine ppocr-tiny --types carte_visite,feuille_emar,offre_emploi,rib,rib_sepa,sepa --split dev
-dotnet run -- --self-check
+dotnet run --corpus <chemin_corpus> --manifest <chemin_manifest> --api http://localhost:5080 --engine ppocr-tiny --types carte_visite,feuille_emar,offre_emploi,rib,rib_sepa,sepa --split dev
+dotnet run --self-check
 ```
 
 `--descriptions <chemin>` soumet chaque type sous la forme objet `{id, libelle, description}` lue dans un fichier JSON `[{id, libelle, description}]`, par exemple `descriptions-types.json` à côté de ce README. Chaque type soumis doit y être décrit, et son sha256 est enregistré dans `run.json` pour la comparabilité. Sans l'option, le runner envoie les identifiants seuls comme avant.
@@ -22,7 +22,7 @@ dotnet run -- --self-check
 Pour évaluer le [prompt Flowise de référence](../../docs/flowise-classification.md) avec les six types décrits, depuis le même dossier, adapter l'URL à l'API démarrée :
 
 ```powershell
-dotnet run -- --corpus ..\..\..\corpus --manifest ..\..\..\corpus\manifest.jsonl --api http://localhost:8080 --engine auto --split dev --types carte_visite,feuille_emar,offre_emploi,rib,rib_sepa,sepa --descriptions ..\descriptions-types.json
+dotnet run --corpus <chemin_corpus> --manifest <chemin_manifest> --api http://localhost:8080 --engine auto --split dev --types carte_visite,feuille_emar,offre_emploi,rib,rib_sepa,sepa --descriptions ..\descriptions-types.json
 ```
 
 Chaque run crée `run/<date>_classification/` avec les conditions d'exécution, les résultats individuels, le récapitulatif et la matrice de confusion. Les factures et devis restent dans le lot comme distracteurs et ne participent pas aux métriques de classification fermée lorsque la liste par défaut est utilisée.

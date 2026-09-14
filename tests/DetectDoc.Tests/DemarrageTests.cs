@@ -2,11 +2,13 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using DetectDoc.Core.Classification;
 using DetectDoc.Core.Pii;
 using DetectDoc.Infrastructure.Classification;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Xunit;
@@ -220,6 +222,53 @@ public class DemarrageTests
         Assert.Equal(
             "RIB | Relevé d'identité bancaire | Coordonnées du compte.\nSEPA",
             payload.RootElement.GetProperty("form").GetProperty("types").GetString());
+    }
+
+    [Fact]
+    public async Task RefuseUnMoteurInconnuSurLaRouteDeClassification()
+    {
+        var classifieur = new ClassifieurDeTest((_, _) => new ClassificationResult("RIB", 0.9));
+        await using var application = CreerApplication("Development", classifieur);
+        using var client = application.CreateClient();
+        using var contenu = CreerPdfMultipart("Texte natif lisible");
+        contenu.Add(new StringContent("[\"RIB\"]"), "types");
+        contenu.Add(new StringContent("moteur-inconnu"), "engine");
+
+        using var response = await client.PostAsync("/api/documents/classify", contenu);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(0, classifieur.Appels);
+    }
+
+    [Fact]
+    public async Task NeRapportePasUneConfigurationOcrInvalideEnErreurClient()
+    {
+        // ReconnaissancesParalleles < 1 est un défaut de configuration serveur : il doit
+        // remonter hors du contrat HTTP (500), pas être traduit en 400 « Moteur inconnu ».
+        var classifieur = new ClassifieurDeTest((_, _) => new ClassificationResult("RIB", 0.9));
+        await using var application = new WebApplicationFactory<Program>()
+            .WithWebHostBuilder(builder =>
+            {
+                builder.UseEnvironment("Development");
+                builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(
+                    new Dictionary<string, string?> { ["PpOcr:ReconnaissancesParalleles"] = "0" }));
+                builder.ConfigureServices(services =>
+                {
+                    services.AddSingleton<IPiiDetector>(new PiiDetectorVide());
+                    services.AddSingleton<IDocumentClassifier>(classifieur);
+                });
+                builder.ConfigureLogging(logging => logging.ClearProviders());
+            });
+        using var client = application.CreateClient();
+        using var contenu = CreerPdfMultipart("Texte natif lisible");
+        contenu.Add(new StringContent("[\"RIB\"]"), "types");
+        contenu.Add(new StringContent("ppocr-tiny"), "engine");
+
+        using var response = await client.PostAsync("/api/documents/classify", contenu);
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Equal(0, classifieur.Appels);
     }
 
     [Fact]
@@ -444,6 +493,74 @@ public class DemarrageTests
     }
 
     [Fact]
+    public async Task SignaleUnTimeoutDesReglesPiiEn503()
+    {
+        // RegexMatchTimeoutException dérive de TimeoutException : un texte pathologique qui
+        // dépasse le délai des règles est une indisponibilité du traitement, pas un 500.
+        var classifieur = new ClassifieurDeTest((_, _) => new ClassificationResult("RIB", 0.9));
+        await using var application = CreerApplication(
+            "Development",
+            classifieur,
+            new PiiDetectorEnTimeoutRegex());
+        using var client = application.CreateClient();
+        using var contenu = CreerPdfMultipart("Contact : Jean Dupont");
+        contenu.Add(new StringContent("[\"RIB\"]"), "types");
+        contenu.Add(new StringContent("pdfpig"), "engine");
+
+        using var response = await client.PostAsync("/api/documents/classify", contenu);
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Equal(0, classifieur.Appels);
+    }
+
+    [Fact]
+    public async Task LotSignaleUnFichierVideSansInterrompreLesAutres()
+    {
+        var classifieur = new ClassifieurDeTest((_, _) => new ClassificationResult("RIB", 0.9));
+        await using var application = CreerApplication("Development", classifieur);
+        using var client = application.CreateClient();
+        var contenu = new MultipartFormDataContent();
+        contenu.Add(new ByteArrayContent([]), "files", "vide.pdf");
+        contenu.Add(
+            new ByteArrayContent(PdfDeTest.Construire("Document valide")),
+            "files",
+            "valide.pdf");
+        contenu.Add(new StringContent("[\"RIB\"]"), "types");
+        contenu.Add(new StringContent("pdfpig"), "engine");
+
+        using var response = await client.PostAsync("/api/documents/classify-batch", contenu);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var payload = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var resultats = payload.RootElement.EnumerateArray().ToArray();
+        Assert.Equal(2, resultats.Length);
+        Assert.Equal("vide.pdf", resultats[0].GetProperty("nomFichier").GetString());
+        Assert.Equal(JsonValueKind.Null, resultats[0].GetProperty("resultat").ValueKind);
+        Assert.Equal(400, resultats[0].GetProperty("erreur").GetProperty("status").GetInt32());
+        Assert.Equal("RIB", resultats[1].GetProperty("resultat").GetProperty("type").GetString());
+        Assert.Equal(1, classifieur.Appels);
+    }
+
+    [Fact]
+    public async Task LotRefuseUneListeDeTypesInvalide()
+    {
+        await using var application = CreerApplication("Development");
+        using var client = application.CreateClient();
+        var contenu = new MultipartFormDataContent();
+        contenu.Add(
+            new ByteArrayContent(PdfDeTest.Construire("Document")),
+            "files",
+            "document.pdf");
+        contenu.Add(new StringContent("[null]"), "types");
+        contenu.Add(new StringContent("pdfpig"), "engine");
+
+        using var response = await client.PostAsync("/api/documents/classify-batch", contenu);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+    }
+
+    [Fact]
     public async Task ReprendApresUneErreurFlowiseEtAccepteDeuxRequetes()
     {
         var classifieur = new ClassifieurDeTest((appel, _) => appel == 1
@@ -639,6 +756,15 @@ public class DemarrageTests
             string text,
             CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<PiiDetection>>([]);
+    }
+
+    private sealed class PiiDetectorEnTimeoutRegex : IPiiDetector
+    {
+        public Task<IReadOnlyList<PiiDetection>> DetectAsync(
+            string text,
+            CancellationToken cancellationToken = default) =>
+            Task.FromException<IReadOnlyList<PiiDetection>>(
+                new RegexMatchTimeoutException("texte", "pattern", TimeSpan.FromSeconds(2)));
     }
 
     private sealed class PiiDetectorEnEchec : IPiiDetector
