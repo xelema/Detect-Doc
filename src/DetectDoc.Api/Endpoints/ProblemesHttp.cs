@@ -24,7 +24,13 @@ internal static class HttpProblems
             StatusCodes.Status422UnprocessableEntity,
             "PDF invalide.",
             "Le fichier ne contient pas un PDF lisible."),
-        ArgumentException => Create(StatusCodes.Status400BadRequest, "Moteur inconnu.", exception.Message),
+        // Seul le jeton `engine` est une erreur de l'appelant. Toute autre ArgumentException
+        // (flux non rejouable, option d'un moteur, activation DI invalide) est un défaut
+        // serveur : elle doit remonter en 500, pas être rapportée en erreur client.
+        ArgumentException { ParamName: "engine" } => Create(
+            StatusCodes.Status400BadRequest,
+            "Moteur inconnu.",
+            exception.Message),
         InvalidOperationException => Create(
             StatusCodes.Status503ServiceUnavailable,
             "Moteur indisponible.",

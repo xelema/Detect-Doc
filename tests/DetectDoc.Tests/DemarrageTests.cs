@@ -7,6 +7,7 @@ using DetectDoc.Core.Pii;
 using DetectDoc.Infrastructure.Classification;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Xunit;
@@ -220,6 +221,53 @@ public class DemarrageTests
         Assert.Equal(
             "RIB | Relevé d'identité bancaire | Coordonnées du compte.\nSEPA",
             payload.RootElement.GetProperty("form").GetProperty("types").GetString());
+    }
+
+    [Fact]
+    public async Task RefuseUnMoteurInconnuSurLaRouteDeClassification()
+    {
+        var classifieur = new ClassifieurDeTest((_, _) => new ClassificationResult("RIB", 0.9));
+        await using var application = CreerApplication("Development", classifieur);
+        using var client = application.CreateClient();
+        using var contenu = CreerPdfMultipart("Texte natif lisible");
+        contenu.Add(new StringContent("[\"RIB\"]"), "types");
+        contenu.Add(new StringContent("moteur-inconnu"), "engine");
+
+        using var response = await client.PostAsync("/api/documents/classify", contenu);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(0, classifieur.Appels);
+    }
+
+    [Fact]
+    public async Task NeRapportePasUneConfigurationOcrInvalideEnErreurClient()
+    {
+        // ReconnaissancesParalleles < 1 est un défaut de configuration serveur : il doit
+        // remonter hors du contrat HTTP (500), pas être traduit en 400 « Moteur inconnu ».
+        var classifieur = new ClassifieurDeTest((_, _) => new ClassificationResult("RIB", 0.9));
+        await using var application = new WebApplicationFactory<Program>()
+            .WithWebHostBuilder(builder =>
+            {
+                builder.UseEnvironment("Development");
+                builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(
+                    new Dictionary<string, string?> { ["PpOcr:ReconnaissancesParalleles"] = "0" }));
+                builder.ConfigureServices(services =>
+                {
+                    services.AddSingleton<IPiiDetector>(new PiiDetectorVide());
+                    services.AddSingleton<IDocumentClassifier>(classifieur);
+                });
+                builder.ConfigureLogging(logging => logging.ClearProviders());
+            });
+        using var client = application.CreateClient();
+        using var contenu = CreerPdfMultipart("Texte natif lisible");
+        contenu.Add(new StringContent("[\"RIB\"]"), "types");
+        contenu.Add(new StringContent("ppocr-tiny"), "engine");
+
+        using var response = await client.PostAsync("/api/documents/classify", contenu);
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Equal(0, classifieur.Appels);
     }
 
     [Fact]
