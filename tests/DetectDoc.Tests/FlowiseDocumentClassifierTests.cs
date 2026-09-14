@@ -58,6 +58,43 @@ public class FlowiseDocumentClassifierTests
             () => classifieur.ClassifyAsync("un texte", [new TypeDocumentaire("RIB", null, null)]));
     }
 
+    [Fact]
+    public async Task ClasserAsync_GardeLaColonneDescriptionSansLibelle()
+    {
+        var capture = new TypesCaptureHandler();
+        using var client = new HttpClient(capture);
+        var classifieur = new FlowiseDocumentClassifier(
+            client,
+            new FlowiseOptions("https://flowise.test", "flow-test"));
+
+        await classifieur.ClassifyAsync(
+            "un texte",
+            [new TypeDocumentaire("RIB", null, "Coordonnées du compte.")]);
+
+        // Le flow lit les lignes `id | libelle | description` : sans libellé, la colonne reste vide.
+        Assert.Equal("RIB |  | Coordonnées du compte.", capture.Types);
+    }
+
+    private sealed class TypesCaptureHandler : HttpMessageHandler
+    {
+        public string? Types { get; private set; }
+
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            using var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellationToken));
+            Types = body.RootElement.GetProperty("form").GetProperty("types").GetString();
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    """{"text":"{\"type\":\"RIB\",\"confiance\":0.9}"}""",
+                    Encoding.UTF8,
+                    "application/json")
+            };
+        }
+    }
+
     private sealed class ReponseFixeHandler(string corps, string contentType = "application/json") : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(
