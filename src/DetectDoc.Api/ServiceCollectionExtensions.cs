@@ -35,7 +35,13 @@ public static class ServiceCollectionExtensions
             fournisseur.GetRequiredService<AutomaticExtraction>(),
             fournisseur.GetRequiredService<PdfPigNativeTextEngine>(),
             () => fournisseur.GetRequiredService<PpOcrEngine>()));
-        services.AddSingleton<IPiiDetector, HybridPresidioPiiDetector>();
+        services.AddSingleton<RegexPiiDetector>();
+        // Le constructeur de PresidioPiiDetector lance le sous-processus Python : la composition
+        // passe par une fabrique paresseuse pour qu'il ne démarre qu'à la première résolution d'IPiiDetector.
+        services.AddSingleton<PresidioPiiDetector>();
+        services.AddSingleton<IPiiDetector>(fournisseur => new HybridPresidioPiiDetector(
+            fournisseur.GetRequiredService<RegexPiiDetector>(),
+            fournisseur.GetRequiredService<PresidioPiiDetector>()));
         services.AddSingleton<PiiTextMasker>();
         services.AddSingleton(fournisseur => new DocumentClassification(
             fournisseur.GetRequiredService<IExtractionSelector>(),

@@ -23,6 +23,8 @@ public static class DevEndpoints
 
             try
             {
+                // Résolution dans le try : construire le détecteur lance Presidio, et un échec
+                // doit rester une 503 de la route, pas une erreur de résolution hors du contrat.
                 var masker = services.GetRequiredService<PiiTextMasker>();
                 return Results.Ok(new PiiMaskingHttpResponse(
                     await masker.MaskAsync(request.Text, cancellationToken)));
