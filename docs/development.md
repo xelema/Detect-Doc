@@ -14,7 +14,7 @@ C:\Temp\detect-doc-pii\Scripts\python.exe -m pip install -r src\DetectDoc.Infras
 $env:PII_PYTHON = "C:\Temp\detect-doc-pii\Scripts\python.exe"
 ```
 
-- **Flowise** : la classification passe par un flow Mistral. Sans `Flowise__BaseUrl` ni `Flowise__FlowId`, l'API démarre mais la classification répond 503.
+- **Flowise** : la classification passe par un flow Mistral. `cp .env.exemple .env` puis renseigner `Flowise__BaseUrl` et `Flowise__FlowId` (le FlowId se récupère auprès de l'équipe, jamais commité). Sans elles, l'API démarre mais la classification répond 503.
 
 ## Lancer l'API
 
@@ -22,12 +22,14 @@ $env:PII_PYTHON = "C:\Temp\detect-doc-pii\Scripts\python.exe"
 dotnet restore DetectDoc.slnx
 dotnet build DetectDoc.slnx --no-restore
 dotnet test DetectDoc.slnx --no-build --filter "Category!=Corpus"
+$env:Flowise__BaseUrl = "https://valia-flowise.val.local"
+$env:Flowise__FlowId = "<flow-id>"
 dotnet run --project src/DetectDoc.Api -- --environment Development --urls http://localhost:5080
 ```
 
 Le test marqué `Category=Corpus` dépend de `corpus/raw/`, non versionné : il est exclu du filtre. En `Development`, Swagger UI répond sur `/swagger` et sert à envoyer un PDF depuis le navigateur.
 
-En conteneur, l'image embarque modèles et Python : `docker build --tag detect-doc:local .` puis `docker run --rm --publish 8080:8080 detect-doc:local`. Détail et variables d'environnement dans `docs/integration.md`.
+En conteneur, l'image embarque modèles et Python : `docker build --tag detect-doc:local .` puis `docker run --rm --publish 8080:8080 --env-file .env detect-doc:local`, ou `docker compose --env-file .env up -d --build`. Détail et variables d'environnement dans `docs/integration.md`.
 
 ## Réglages
 
@@ -38,7 +40,7 @@ En conteneur, l'image embarque modèles et Python : `docker build --tag detect-d
 | `PII_PRESIDIO_ENTITES` | toutes | entités Presidio demandées, séparées par des virgules |
 | `PII_PRESIDIO_EXCLURE` | composants hors `tok2vec` et `ner` | composants spaCy à ne pas charger |
 | `Flowise__BaseUrl`, `Flowise__FlowId` | absents | cible du flow de classification |
-| `Flowise__AllowInvalidTls` | `false` | accepte un certificat interne, `Development` uniquement |
+| `Flowise__AllowInvalidTls` | `false` | accepte un certificat interne, refusé en `Production` |
 | `PpOcr__ModelsDirectory` | `models/` à côté du binaire | dossier contenant `v6/` |
 | `PpOcr__ReconnaissancesParalleles` | `1` | lignes reconnues en parallèle par PP-OCR |
 
@@ -64,7 +66,7 @@ Exposées en `Development` uniquement, pour tester chaque brique sans la chaîne
 | Cible | Commande | Référence |
 |---|---|---|
 | API en local | `dotnet run --project src/DetectDoc.Api -- --environment Development --urls http://localhost:5080` | ci-dessus |
-| API en conteneur | `docker build --tag detect-doc:local .` puis `docker run --rm --publish 8080:8080 detect-doc:local` | `docs/integration.md` |
+| API en conteneur | `docker build --tag detect-doc:local .` puis `docker run --rm --publish 8080:8080 --env-file .env detect-doc:local`, ou `docker compose --env-file .env up -d --build` | `docs/integration.md` |
 | Tests | `dotnet test DetectDoc.slnx --filter "Category!=Corpus"` | ci-dessus |
 | Modèles OCR | `.\Get-Modeles.ps1` | `tools/OcrComparison/README.md` |
 | Générer le corpus | `docker compose build` puis `docker compose run --rm generator`, depuis `tools/CorpusGenerator` ; contrôles : `manifest.py` et `verifier.py` via `--entrypoint python` | `tools/CorpusGenerator/README.md` |

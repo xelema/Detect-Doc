@@ -24,15 +24,37 @@ En `Development`, Swagger UI est disponible sur `http://localhost:5080/swagger` 
 ### En conteneur
 
 ```powershell
+cp .env.exemple .env   # renseigner Flowise__FlowId
 docker build --tag detect-doc:local .
-docker run --rm --publish 8080:8080 `
-    --env Flowise__BaseUrl="https://votre-hote-flowise" `
-    --env Flowise__FlowId="votre-flow-id" `
-    detect-doc:local
+docker run --rm --publish 8080:8080 --env-file .env detect-doc:local
 Invoke-RestMethod http://localhost:8080/health
 ```
 
-L'image embarque les modèles PP-OCRv6 tiny (téléchargés et vérifiés au build) et l'environnement Python Presidio complet : aucune variable de modèle ni `PII_PYTHON` à renseigner. Le conteneur écoute sur le port 8080 et tourne sous un utilisateur non privilégié. Le déploiement en recette dans Valia-stack n'est pas encore réalisé (work item 115219).
+L'image embarque les modèles PP-OCRv6 tiny (téléchargés et vérifiés au build) et l'environnement Python Presidio complet : aucune variable de modèle ni `PII_PYTHON` à renseigner. Le conteneur écoute sur le port 8080 et tourne sous un utilisateur non privilégié. Le déploiement en recette dans Valia-stack n'est pas encore réalisé (work item 115219) ; la section suivante décrit la configuration à prévoir.
+
+### Recette et production
+
+Même image, deux configurations. Ce qui change entre les environnements :
+
+| Réglage | Recette | Production |
+|---|---|---|
+| `ASPNETCORE_ENVIRONMENT` | `Development` | `Production` |
+| `Flowise__BaseUrl` | `https://valia-flowise.val.local` | `https://flowise.ammon.cloud` |
+| `Flowise__FlowId` | le flow de recette | le flow de production |
+| `Flowise__AllowInvalidTls` | `true` | absent ou `false` |
+
+En recette, `ASPNETCORE_ENVIRONMENT=Development` : `/swagger` et les routes de diagnostic `/api/dev/*` restent accessibles, ce qui permet d'y tester l'extraction et le masquage PII isolément. Le Flowise de recette présente un certificat interne que le conteneur ne reconnaît pas : `Flowise__AllowInvalidTls=true` désactive la validation de la chaîne pour cet appel sortant. L'option est refusée en `Production`, où l'application refuse de démarrer si elle est définie ; le certificat public y est valide et le bypass inutile.
+
+Le dépôt fournit `compose.yaml` et `.env.exemple` à la racine. Copier la configuration, renseigner le `Flowise__FlowId`, puis lancer :
+
+```bash
+cp .env.exemple .env
+docker compose --env-file .env up -d --build
+```
+
+Le même `.env` sert à `docker run --env-file .env` et, pour la recette, on y passe `Flowise__AllowInvalidTls=true`.
+
+Deux alternatives au bypass, toutes deux pratiquées dans Valia-Stack : monter le magasin d'autorités de l'hôte dans le conteneur (`/usr/local/share/ca-certificates/:/etc/ssl/certs/:ro`, comme le fait `valiapi` en recette) pour faire confiance au certificat sans désactiver la validation ; ou, si le conteneur rejoint le réseau `ia_stack_lan`, viser l'adresse interne `http://flowise:3000` et la question du certificat ne se pose plus.
 
 ### Configuration
 
@@ -40,7 +62,7 @@ L'image embarque les modèles PP-OCRv6 tiny (téléchargés et vérifiés au bui
 |---|---|---|
 | `Flowise__BaseUrl` | pour classer | URL de base de l'instance Flowise |
 | `Flowise__FlowId` | pour classer | identifiant du flow de classification |
-| `Flowise__AllowInvalidTls` | non | `true` accepte un certificat interne non reconnu, refusé hors `Development` |
+| `Flowise__AllowInvalidTls` | non | `true` accepte un certificat interne non reconnu, refusé en `Production` |
 | `PpOcr__ModelsDirectory` | non | dossier contenant `v6/` des modèles PP-OCR, défaut `models/` à côté du binaire |
 | `PpOcr__ReconnaissancesParalleles` | non | lignes reconnues simultanément par l'OCR, défaut `1` |
 | `PII_PYTHON` | hors conteneur | exécutable Python portant `presidio-analyzer` et `fr_core_news_md`, voir `docs/development.md` |
