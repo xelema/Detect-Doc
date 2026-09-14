@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using DetectDoc.Infrastructure.Pii;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Logging;
@@ -41,6 +42,16 @@ public class PresidioPiiDetectorTests
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+    }
+
+    [Fact]
+    public void Constructeur_SansHandshakeDansLeDelai_LeveUneIndisponibilite()
+    {
+        // Aucun processus n'écrit sa première ligne stdout dans la milliseconde qui suit
+        // Process.Start : la lecture du handshake doit être bornée, sans quoi un Python qui
+        // pend gèlerait la résolution du singleton.
+        using var restore = PiiPython(@"C:\Windows\System32\Robocopy.exe");
+        Assert.Throws<InvalidOperationException>(() => new PresidioPiiDetector(TimeSpan.FromMilliseconds(1)));
     }
 
     private static WebApplicationFactory<Program> CreerApplication() =>

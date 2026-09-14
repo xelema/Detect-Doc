@@ -9,14 +9,23 @@ namespace DetectDoc.Infrastructure.Pii;
 
 public sealed class PresidioPiiDetector : IPiiDetector, IDisposable
 {
+    // Le handshake laisse le temps à spaCy de charger fr_core_news_md ; une analyse est censée
+    // répondre en bien moins. À réévaluer lors de la phase de charge (D54).
+    private static readonly TimeSpan StartupTimeout = TimeSpan.FromSeconds(60);
+    private static readonly TimeSpan DetectionTimeout = TimeSpan.FromSeconds(30);
+
     private readonly Process _process;
     private readonly Task<string> _standardError;
+    private readonly TimeSpan _startupTimeout;
+    private readonly TimeSpan _detectionTimeout;
     private readonly ConcurrentDictionary<int, TaskCompletionSource<Response>> _pending = new();
     private readonly Lock _sendLock = new();
     private int _nextId;
 
-    public PresidioPiiDetector()
+    public PresidioPiiDetector(TimeSpan? startupTimeout = null, TimeSpan? detectionTimeout = null)
     {
+        _startupTimeout = startupTimeout ?? StartupTimeout;
+        _detectionTimeout = detectionTimeout ?? DetectionTimeout;
         var python = Environment.GetEnvironmentVariable("PII_PYTHON") ?? "python3";
         var script = Path.Combine(AppContext.BaseDirectory, "Pii", "detecteur.py");
         Process? process = null;
@@ -32,7 +41,12 @@ public sealed class PresidioPiiDetector : IPiiDetector, IDisposable
             }) ?? throw new InvalidOperationException("Le processus Presidio n'a pas démarré.");
             _standardError = process.StandardError.ReadToEndAsync();
 
-            var startupLine = process.StandardOutput.ReadLine();
+            // Lecture bornée : un Python qui pend gèlerait ce constructeur sous le verrou du
+            // singleton DI, et avec lui toutes les requêtes PII.
+            var startupLine = process.StandardOutput.ReadLineAsync()
+                .WaitAsync(_startupTimeout)
+                .GetAwaiter()
+                .GetResult();
             var startup = startupLine is null ? null : JsonSerializer.Deserialize<Startup>(startupLine);
             if (startup?.Error is not null || startupLine is null)
             {
@@ -73,7 +87,9 @@ public sealed class PresidioPiiDetector : IPiiDetector, IDisposable
                 _process.StandardInput.Flush();
             }
 
-            response = await completion.Task.WaitAsync(cancellationToken);
+            // Sans borne propre, un analyze bloqué garderait l'entrée et le sémaphore
+            // indéfiniment après l'annulation côté client.
+            response = await completion.Task.WaitAsync(_detectionTimeout, cancellationToken);
         }
         finally
         {
