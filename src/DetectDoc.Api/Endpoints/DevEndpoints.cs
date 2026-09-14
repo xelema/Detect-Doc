@@ -54,13 +54,15 @@ public static class DevEndpoints
             {
                 var detector = services.GetRequiredService<IPiiDetector>();
                 var detections = await detector.DetectAsync(request.Text, cancellationToken);
+                // Le Select est matérialisé dans le try : sans ToList, un Substring sur une
+                // plage invalide lèverait pendant l'écriture de la réponse, après le 200.
                 return Results.Ok(detections.Select(detection => new PiiDetectionHttpResponse(
                     detection.Category.ToString(),
                     detection.Rule,
                     detection.Kind.ToString(),
                     detection.Start,
                     detection.Length,
-                    request.Text.Substring(detection.Start, detection.Length))));
+                    request.Text.Substring(detection.Start, detection.Length))).ToList());
             }
             catch (Exception exception) when (HttpProblems.ForPii(
                 exception, cancellationToken, "La détection des données personnelles n'a pas abouti.") is { } probleme)
