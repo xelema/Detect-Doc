@@ -98,8 +98,10 @@ Detect-Doc/
 │   ├── protocole-evaluation.md    métriques et conditions d'exécution de l'évaluation
 │   └── modele-rapport.md          template du rapport final, avec des chiffres fictifs
 └── tools/
-    ├── CorpusGenerator/    génération du corpus et de son manifest à partir d'une seed
-    └── OcrComparison/      CLI de comparaison des moteurs d'extraction
+    ├── CorpusGenerator/          génération du corpus et de son manifest à partir d'une seed
+    ├── OcrComparison/            CLI de comparaison des moteurs d'extraction
+    ├── PiiMaskingComparison/     comparatif des détections PII et son rapport
+    └── ClassificationEvaluation/ runner d'évaluation de la classification sur le corpus
 ```
 
 `corpus/raw/` n'est pas versionné : le manifest et la seed de génération suffisent à refabriquer les mêmes documents, octet pour octet. Seul `corpus/manifest.jsonl` est le livrable.
