@@ -31,8 +31,16 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(fournisseur => new AutomaticExtraction(
             fournisseur.GetRequiredService<PdfPigNativeTextEngine>(),
             () => fournisseur.GetRequiredService<PpOcrEngine>()));
+        services.AddSingleton<IExtractionSelector>(fournisseur => new ExtractionSelector(
+            fournisseur.GetRequiredService<AutomaticExtraction>(),
+            fournisseur.GetRequiredService<PdfPigNativeTextEngine>(),
+            () => fournisseur.GetRequiredService<PpOcrEngine>()));
         services.AddSingleton<IPiiDetector, HybridPresidioPiiDetector>();
         services.AddSingleton<PiiTextMasker>();
+        services.AddSingleton(fournisseur => new DocumentClassification(
+            fournisseur.GetRequiredService<IExtractionSelector>(),
+            () => fournisseur.GetRequiredService<PiiTextMasker>(),
+            fournisseur.GetRequiredService<IDocumentClassifier>()));
         services.AddSingleton(new FlowiseOptions(
             configuration["Flowise:BaseUrl"],
             configuration["Flowise:FlowId"]));

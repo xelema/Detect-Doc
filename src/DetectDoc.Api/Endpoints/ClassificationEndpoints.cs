@@ -1,9 +1,5 @@
-using System.Diagnostics;
 using System.Text.Json;
 using DetectDoc.Core.Classification;
-using DetectDoc.Core.Engines;
-using DetectDoc.Core.Pii;
-using DetectDoc.Infrastructure.Engines;
 using Microsoft.AspNetCore.Mvc;
 
 namespace DetectDoc.Api.Endpoints;
@@ -16,9 +12,7 @@ public static class ClassificationEndpoints
             IFormFile? file,
             [FromForm] string? types,
             [FromForm] string? engine,
-            PdfPigNativeTextEngine pdfPig,
-            IServiceProvider services,
-            IDocumentClassifier classifieur,
+            DocumentClassification classification,
             CancellationToken cancellationToken) =>
         {
             if (file is null || file.Length == 0)
@@ -35,21 +29,16 @@ public static class ClassificationEndpoints
                 return erreurTypes;
             }
 
-            var resultat = await ClassifyDocumentAsync(
-                file,
-                typesValides!,
-                engine,
-                pdfPig,
-                services,
-                classifieur,
-                cancellationToken);
-            return resultat.Erreur is null
-                ? Results.Ok(resultat.Resultat)
-                : Results.Problem(resultat.Erreur);
+            await using var flux = file.OpenReadStream();
+            var outcome = await classification.ExecuteAsync(
+                flux, typesValides!, engine, cancellationToken);
+            return outcome is DocumentClassificationOutcome.Success success
+                ? Results.Ok(success.Result)
+                : Results.Problem(HttpProblems.ForOutcome(outcome, cancellationToken));
         })
             .DisableAntiforgery()
             .WithSummary("Extrait, masque les PII puis classe un PDF avec le moteur choisi.")
-            .Produces<ResultatClassificationDocumentHttp>()
+            .Produces<DocumentClassificationResult>()
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
             .ProducesProblem(StatusCodes.Status502BadGateway)
@@ -60,9 +49,7 @@ public static class ClassificationEndpoints
             [FromForm] IFormFileCollection? files,
             [FromForm] string? types,
             [FromForm] string? engine,
-            PdfPigNativeTextEngine pdfPig,
-            IServiceProvider services,
-            IDocumentClassifier classifieur,
+            DocumentClassification classification,
             CancellationToken cancellationToken) =>
         {
             if (files is null || files.Count == 0)
@@ -82,18 +69,29 @@ public static class ClassificationEndpoints
             var resultats = new List<ResultatClassificationLotDocumentHttp>(files.Count);
             foreach (var file in files)
             {
-                var resultat = await ClassifyDocumentAsync(
-                    file,
-                    typesValides!,
-                    engine,
-                    pdfPig,
-                    services,
-                    classifieur,
-                    cancellationToken);
-                resultats.Add(new ResultatClassificationLotDocumentHttp(
-                    file.FileName,
-                    resultat.Resultat,
-                    resultat.Erreur));
+                if (file.Length == 0)
+                {
+                    resultats.Add(new ResultatClassificationLotDocumentHttp(
+                        file.FileName,
+                        null,
+                        new ProblemDetails
+                        {
+                            Status = StatusCodes.Status400BadRequest,
+                            Title = "Fichier vide.",
+                            Detail = "Le fichier ne contient aucune donnée."
+                        }));
+                    continue;
+                }
+
+                await using var flux = file.OpenReadStream();
+                var outcome = await classification.ExecuteAsync(
+                    flux, typesValides!, engine, cancellationToken);
+                resultats.Add(outcome is DocumentClassificationOutcome.Success success
+                    ? new ResultatClassificationLotDocumentHttp(file.FileName, success.Result, null)
+                    : new ResultatClassificationLotDocumentHttp(
+                        file.FileName,
+                        null,
+                        HttpProblems.ForOutcome(outcome, cancellationToken)));
             }
 
             return Results.Ok(resultats);
@@ -150,111 +148,4 @@ public static class ClassificationEndpoints
                 statusCode: StatusCodes.Status400BadRequest))
             : (typesValides, null);
     }
-
-    private static async Task<ClassificationOutcome> ClassifyDocumentAsync(
-        IFormFile file,
-        IReadOnlyCollection<TypeDocumentaire> types,
-        string? engine,
-        PdfPigNativeTextEngine pdfPig,
-        IServiceProvider services,
-        IDocumentClassifier classifieur,
-        CancellationToken cancellationToken)
-    {
-        if (file.Length == 0)
-        {
-            return new(null, new ProblemDetails
-            {
-                Status = StatusCodes.Status400BadRequest,
-                Title = "Fichier vide.",
-                Detail = "Le fichier ne contient aucune donnée."
-            });
-        }
-
-        var total = Stopwatch.StartNew();
-        IReadOnlyList<PageExtractionResult> pages;
-        string moteurEffectif;
-        var extraction = Stopwatch.StartNew();
-        try
-        {
-            await using var flux = file.OpenReadStream();
-            switch (engine?.ToLowerInvariant())
-            {
-                case null or "" or "auto":
-                    var extractionAutomatique = services.GetRequiredService<AutomaticExtraction>()
-                        .Extract(flux, cancellationToken);
-                    pages = extractionAutomatique.Pages;
-                    moteurEffectif = extractionAutomatique.Moteur;
-                    break;
-                case "pdfpig":
-                    pages = pdfPig.Extract(flux, cancellationToken);
-                    moteurEffectif = pdfPig.Name;
-                    break;
-                case "ppocr-tiny":
-                    var ppOcr = services.GetRequiredService<PpOcrEngine>();
-                    pages = ppOcr.Extract(flux, cancellationToken);
-                    moteurEffectif = ppOcr.Name;
-                    break;
-                default:
-                    throw new ArgumentException("Le moteur doit être auto, pdfpig ou ppocr-tiny.", nameof(engine));
-            }
-        }
-        catch (Exception exception) when (HttpProblems.ForExtraction(exception) is { } probleme)
-        {
-            return new(null, probleme);
-        }
-
-        extraction.Stop();
-        var texte = string.Join(Environment.NewLine, pages.Select(page => page.Texte));
-        if (string.IsNullOrWhiteSpace(texte))
-        {
-            return new(null, new ProblemDetails
-            {
-                Status = StatusCodes.Status422UnprocessableEntity,
-                Title = "Texte inexploitable.",
-                Detail = "L'extraction ne retourne aucun texte."
-            });
-        }
-
-        var piiMasking = Stopwatch.StartNew();
-        string maskedText;
-        try
-        {
-            var piiTextMasker = services.GetRequiredService<PiiTextMasker>();
-            maskedText = await piiTextMasker.MaskAsync(texte, cancellationToken);
-        }
-        catch (Exception exception) when (HttpProblems.ForPii(
-            exception, cancellationToken, "La détection et le masquage des données personnelles n'ont pas abouti.") is { } probleme)
-        {
-            return new(null, probleme);
-        }
-
-        piiMasking.Stop();
-        var classification = Stopwatch.StartNew();
-        ClassificationResult resultat;
-        try
-        {
-            resultat = await classifieur.ClassifyAsync(maskedText, types, cancellationToken);
-        }
-        catch (Exception exception) when (HttpProblems.ForFlowise(exception, cancellationToken) is { } probleme)
-        {
-            return new(null, probleme);
-        }
-
-        classification.Stop();
-        total.Stop();
-        return new(new ResultatClassificationDocumentHttp(
-            resultat.Type,
-            resultat.Confiance,
-            moteurEffectif,
-            pages.Count,
-            extraction.ElapsedMilliseconds,
-            piiMasking.ElapsedMilliseconds,
-            classification.ElapsedMilliseconds,
-            total.ElapsedMilliseconds,
-            resultat.ExecutionId), null);
-    }
-
-    private sealed record ClassificationOutcome(
-        ResultatClassificationDocumentHttp? Resultat,
-        ProblemDetails? Erreur);
 }

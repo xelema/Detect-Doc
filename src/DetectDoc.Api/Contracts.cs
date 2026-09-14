@@ -1,5 +1,6 @@
 namespace DetectDoc.Api;
 
+using DetectDoc.Core.Classification;
 using Microsoft.AspNetCore.Mvc;
 
 public sealed record ResultatExtractionPageHttp(
@@ -9,18 +10,7 @@ public sealed record ResultatExtractionPageHttp(
 
 public sealed record ClassificationHttpRequest(string Texte, string[] Types);
 
-public sealed record ResultatClassificationDocumentHttp(
-    string Type,
-    double Confiance,
-    string Moteur,
-    int PagesTraitees,
-    long ExtractionMs,
-    long PiiMaskingMs,
-    long ClassificationMs,
-    long TotalMs,
-    string? ExecutionId);
-
 public sealed record ResultatClassificationLotDocumentHttp(
     string NomFichier,
-    ResultatClassificationDocumentHttp? Resultat,
+    DocumentClassificationResult? Resultat,
     ProblemDetails? Erreur);
