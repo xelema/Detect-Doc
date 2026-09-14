@@ -42,14 +42,30 @@ public class FlowiseDocumentClassifierTests
             () => classifieur.ClassifyAsync("un texte", [new TypeDocumentaire("RIB", null, null)]));
     }
 
-    private sealed class ReponseFixeHandler(string corps) : HttpMessageHandler
+    [Fact]
+    public async Task ClasserAsync_SignaleUneReponse200AvecUnCorpsNonJson()
+    {
+        // Un proxy ou un WAF devant Flowise peut répondre 200 avec une page HTML : le
+        // content-type n'est pas vérifié par ReadFromJsonAsync, c'est le corps qui est rejeté.
+        using var client = new HttpClient(new ReponseFixeHandler(
+            "<html><body>Erreur amont</body></html>",
+            "text/html"));
+        var classifieur = new FlowiseDocumentClassifier(
+            client,
+            new FlowiseOptions("https://flowise.test", "flow-test"));
+
+        await Assert.ThrowsAsync<InvalidDataException>(
+            () => classifieur.ClassifyAsync("un texte", [new TypeDocumentaire("RIB", null, null)]));
+    }
+
+    private sealed class ReponseFixeHandler(string corps, string contentType = "application/json") : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request,
             CancellationToken cancellationToken) =>
             Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
             {
-                Content = new StringContent(corps, Encoding.UTF8, "application/json")
+                Content = new StringContent(corps, Encoding.UTF8, contentType)
             });
     }
 
