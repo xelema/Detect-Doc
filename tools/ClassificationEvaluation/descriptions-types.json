@@ -17,11 +17,11 @@
   },
   "rib_sepa": {
     "libelle": "Relevé d'identité bancaire et mandat SEPA",
-    "description": "Réunit le pavé des codes nationaux du rib ET le cartouche de mandat SEPA (RUM, ICS, autorisation, signature). Les deux blocs doivent être présents."
+    "description": "Document combinant deux blocs : un bloc RIB avec code banque ou établissement, code guichet ou agence, numéro de compte et clé RIB ; un mandat avec autorisation de prélèvement, référence de mandat, identifiant créancier et emplacement de signature. Les deux blocs sont nécessaires. L’IBAN et le BIC seuls ne constituent pas le premier bloc."
   },
   "sepa": {
     "libelle": "Mandat SEPA",
-    "description": "Formulaire d'autorisation de prélèvement : RUM, ICS, clause d'autorisation, signature, IBAN et BIC du débiteur, sans le pavé des quatre codes nationaux."
+    "description": "Mandat d’autorisation de prélèvement avec référence de mandat, identifiant créancier, IBAN/BIC du débiteur et emplacement de signature. Exclut les documents contenant également le bloc RIB distinct composé du code banque, code guichet, numéro de compte et clé RIB."
   },
   "devis": {
     "libelle": "Devis",
