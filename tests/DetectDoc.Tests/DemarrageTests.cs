@@ -608,6 +608,32 @@ public class DemarrageTests
         Assert.Equal(HttpStatusCode.NotFound, maskingResponse.StatusCode);
     }
 
+    [Theory]
+    [InlineData("Production", false)]
+    [InlineData("Recette", true)]
+    [InlineData("Development", true)]
+    public async Task AllowInvalidTlsEstRefuseEnProductionUniquement(string environnement, bool accepte)
+    {
+        await using var application = new WebApplicationFactory<Program>()
+            .WithWebHostBuilder(builder =>
+            {
+                builder.UseEnvironment(environnement);
+                builder.UseSetting("Flowise:AllowInvalidTls", "true");
+                builder.ConfigureServices(services => services.AddSingleton<IPiiDetector>(new PiiDetectorVide()));
+                builder.ConfigureLogging(logging => logging.ClearProviders());
+            });
+
+        if (!accepte)
+        {
+            Assert.Throws<InvalidOperationException>(() => application.CreateClient());
+            return;
+        }
+
+        using var client = application.CreateClient();
+        using var health = await client.GetAsync("/health");
+        Assert.Equal(HttpStatusCode.OK, health.StatusCode);
+    }
+
     [Fact]
     public async Task DetecteLesPiiEnDevelopment()
     {

@@ -4,25 +4,33 @@ POC de détection de type documentaire : le service reçoit un document PDF et u
 
 ## Démarrer l'API
 
-Prérequis : SDK .NET 10 épinglé dans `global.json`, modèles OCR installés par `Get-Modeles.ps1`. Depuis la racine du dépôt :
+Prérequis : SDK .NET 10 épinglé dans `global.json`, modèles OCR installés par `Get-Modeles.ps1`. Copier la configuration puis renseigner `Flowise__FlowId`. Depuis la racine du dépôt :
 
 ```powershell
 .\Get-Modeles.ps1
+cp .env.exemple .env
 dotnet restore DetectDoc.slnx
 dotnet build DetectDoc.slnx --no-restore
 dotnet test DetectDoc.slnx --no-build --filter "Category!=Corpus"
+$env:Flowise__BaseUrl = "https://valia-flowise.val.local"
+$env:Flowise__FlowId = "<flow-id>"
 dotnet run --project src/DetectDoc.Api -- --environment Development --urls http://localhost:5080
 ```
 
-En conteneur, l'image embarque modèles OCR et environnement Python Presidio :
+`dotnet run` ne lit pas le `.env` : les deux variables se posent dans la session avant de lancer.
+
+En conteneur, l'image embarque modèles OCR et environnement Python Presidio, et le `.env` se passe tel quel :
 
 ```powershell
 docker build --tag detect-doc:local .
-docker run --rm --publish 8080:8080 detect-doc:local
+docker run --rm --publish 8080:8080 --env-file .env detect-doc:local
+# ou
+docker compose --env-file .env up -d --build
+
 Invoke-RestMethod http://localhost:8080/health
 ```
 
-La dernière commande retourne `statut : ok`. Arrêter avec `Ctrl+C`.
+La dernière commande retourne `statut : ok`. Arrêter avec `Ctrl+C` ou `docker compose down`.
 
 ## Routes
 
@@ -58,6 +66,8 @@ Le démarrage fonctionne sans secret ni service externe : la classification rép
 ```
 Detect-Doc/
 ├── Dockerfile               image Linux de l'API : build, tests, modèles OCR, Presidio
+├── compose.yaml             lancement conteneur à partir du .env
+├── .env.exemple             configuration à copier en .env, non versionné
 ├── DetectDoc.slnx           solution de l'API et de ses tests
 ├── global.json              version du SDK .NET
 ├── Get-Modeles.ps1          télécharge et vérifie les modèles OCR

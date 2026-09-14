@@ -19,9 +19,11 @@ public static class ServiceCollectionExtensions
         var reconnaissancesParalleles = configuration.GetValue("PpOcr:ReconnaissancesParalleles", 1);
 
         var accepterCertificatInvalide = configuration.GetValue<bool>("Flowise:AllowInvalidTls");
-        if (accepterCertificatInvalide && !environment.IsDevelopment())
+        // Le bypass TLS sert en Development comme en recette, où le certificat interne de Flowise
+        // n'est pas reconnu ; il reste interdit en Production.
+        if (accepterCertificatInvalide && environment.IsProduction())
         {
-            throw new InvalidOperationException("Flowise:AllowInvalidTls est réservé à Development.");
+            throw new InvalidOperationException("Flowise:AllowInvalidTls est refusé en Production.");
         }
 
         services.AddSingleton<PdfPigNativeTextEngine>();
