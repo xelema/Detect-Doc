@@ -13,6 +13,9 @@ public sealed class PpOcrEngine : ITextExtractionEngine, IDisposable
     private readonly RapidOcr _ocr = new();
     private readonly RapidOcrOptions _optionsOcr;
     private readonly string _taille;
+    // La thread-safety de RapidOcrNet n'est pas démontrée : les inférences sont sérialisées
+    // tant que le test de charge n'a pas tranché.
+    private readonly Lock _verrouOcr = new();
 
     public PpOcrEngine(string taille, string repertoireModeles, int reconnaissancesParalleles = 1)
     {
@@ -54,7 +57,12 @@ public sealed class PpOcrEngine : ITextExtractionEngine, IDisposable
                 leaveOpen: true,
                 password: null,
                 options: new RenderOptions(Dpi: Dpi));
-            var blocs = _ocr.Detect(image, _optionsOcr).TextBlocks;
+            OcrResult resultat;
+            lock (_verrouOcr)
+            {
+                resultat = _ocr.Detect(image, _optionsOcr);
+            }
+            var blocs = resultat.TextBlocks;
             var confiances = blocs
                 .Where(bloc => bloc.CharScores is { Length: > 0 })
                 .SelectMany(bloc => bloc.CharScores!)
