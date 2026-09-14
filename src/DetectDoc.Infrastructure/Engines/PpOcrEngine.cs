@@ -1,6 +1,8 @@
 using DetectDoc.Core.Engines;
 using PDFtoImage;
+using PDFtoImage.Exceptions;
 using RapidOcrNet;
+using SkiaSharp;
 using UglyToad.PdfPig;
 
 namespace DetectDoc.Infrastructure.Engines;
@@ -51,12 +53,7 @@ public sealed class PpOcrEngine : ITextExtractionEngine, IDisposable
             fluxDocument.Position = 0;
 
             // Une page rendue est libérée avant la suivante : le PDF entier ne tient jamais en mémoire.
-            using var image = Conversion.ToImage(
-                fluxDocument,
-                numeroPage,
-                leaveOpen: true,
-                password: null,
-                options: new RenderOptions(Dpi: Dpi));
+            using var image = Rendre(fluxDocument, numeroPage);
             OcrResult resultat;
             lock (_verrouOcr)
             {
@@ -75,6 +72,25 @@ public sealed class PpOcrEngine : ITextExtractionEngine, IDisposable
         }
 
         return pages;
+    }
+
+    // Un PDF que PdfPig ouvre peut tout de même échouer au rendu PDFium : l'erreur est celle
+    // du document, elle remonte comme les autres PDF invalides (422).
+    private static SKBitmap Rendre(Stream fluxDocument, int numeroPage)
+    {
+        try
+        {
+            return Conversion.ToImage(
+                fluxDocument,
+                numeroPage,
+                leaveOpen: true,
+                password: null,
+                options: new RenderOptions(Dpi: Dpi));
+        }
+        catch (PdfException exception)
+        {
+            throw new InvalidDataException($"Le rendu de la page {numeroPage + 1} a échoué.", exception);
+        }
     }
 
     private static RapidOcrModelSet ModelSet(string taille, string repertoireModeles)
