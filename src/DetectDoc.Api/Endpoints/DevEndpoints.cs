@@ -76,7 +76,9 @@ public static class DevEndpoints
             IDocumentClassifier classifieur,
             CancellationToken cancellationToken) =>
         {
-            var types = DocumentTypes.Normalize(requete?.Types);
+            var types = DocumentTypes.Normalize(requete?.Types?
+                .Select(id => id is null ? null : new TypeDocumentaire(id, null, null))
+                .ToList());
             if (string.IsNullOrWhiteSpace(requete?.Texte) || types is null)
             {
                 return Results.Problem(

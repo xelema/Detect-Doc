@@ -158,6 +158,10 @@ public class DemarrageTests
     [Theory]
     [InlineData("[null]")]
     [InlineData("[\"RIB\", null]")]
+    [InlineData("[{\"libelle\":\"Relevé bancaire\"}]")]
+    [InlineData("[{\"id\":\"\"},{\"id\":\"SEPA\"}]")]
+    [InlineData("[{\"id\":\"RIB\"},{\"id\":\"RIB\"}]")]
+    [InlineData("[\"RIB\",{\"id\":\"SEPA\"}]")]
     public async Task RefuseUnTypeNullDansLaListe(string types)
     {
         await using var application = CreerApplication("Development");
@@ -170,6 +174,52 @@ public class DemarrageTests
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+    }
+
+    [Fact]
+    public async Task AccepteDesTypesAvecLibelleEtDescription()
+    {
+        var classifieur = new ClassifieurDeTest((_, _) => new ClassificationResult("RIB", 0.9));
+        await using var application = CreerApplication("Development", classifieur);
+        using var client = application.CreateClient();
+        using var contenu = CreerPdfMultipart("Texte natif lisible");
+        contenu.Add(new StringContent(
+            """[{"id":"RIB","libelle":"Relevé d'identité bancaire","description":"Coordonnées du compte."},{"id":"SEPA"}]"""),
+            "types");
+        contenu.Add(new StringContent("pdfpig"), "engine");
+
+        using var response = await client.PostAsync("/api/documents/classify", contenu);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(
+            [new TypeDocumentaire("RIB", "Relevé d'identité bancaire", "Coordonnées du compte."),
+             new TypeDocumentaire("SEPA", null, null)],
+            classifieur.DerniersTypes);
+    }
+
+    [Fact]
+    public async Task EnvoieLesTypesDecritsAuClientFlowise()
+    {
+        var flowise = new FlowiseCaptureHandler();
+        using var flowiseClient = new HttpClient(flowise);
+        var classifieur = new FlowiseDocumentClassifier(
+            flowiseClient,
+            new FlowiseOptions("https://flowise.test", "flow-test"));
+        await using var application = CreerApplication("Development", classifieur);
+        using var client = application.CreateClient();
+        using var contenu = CreerPdfMultipart("Texte natif lisible");
+        contenu.Add(new StringContent(
+            """[{"id":"RIB","libelle":"Relevé d'identité bancaire","description":"Coordonnées du compte."},{"id":"SEPA"}]"""),
+            "types");
+        contenu.Add(new StringContent("pdfpig"), "engine");
+
+        using var response = await client.PostAsync("/api/documents/classify", contenu);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var payload = JsonDocument.Parse(flowise.DernierCorps!);
+        Assert.Equal(
+            "RIB | Relevé d'identité bancaire | Coordonnées du compte.\nSEPA",
+            payload.RootElement.GetProperty("form").GetProperty("types").GetString());
     }
 
     [Fact]
@@ -280,7 +330,9 @@ public class DemarrageTests
         Assert.Equal("DEVIS", resultat.RootElement.GetProperty("type").GetString());
         Assert.Equal(0.12, resultat.RootElement.GetProperty("confiance").GetDouble());
         Assert.Equal("run-123", resultat.RootElement.GetProperty("executionId").GetString());
-        Assert.Equal(["CV", "OFFRE_EMPLOI", "RIB", "FACTURE"], classifieur.DerniersTypes);
+        Assert.Equal(
+            ["CV", "OFFRE_EMPLOI", "RIB", "FACTURE"],
+            classifieur.DerniersTypes!.Select(type => type.Id).ToArray());
     }
 
     [Fact]
@@ -568,7 +620,7 @@ public class DemarrageTests
     {
         public Task<ClassificationResult> ClassifyAsync(
             string texte,
-            IReadOnlyCollection<string> types,
+            IReadOnlyCollection<TypeDocumentaire> types,
             CancellationToken cancellationToken = default) => Task.FromException<ClassificationResult>(exception);
     }
 
@@ -658,17 +710,17 @@ public class DemarrageTests
     }
 
     private sealed class ClassifieurDeTest(
-        Func<int, IReadOnlyCollection<string>, ClassificationResult> resultFactory) : IDocumentClassifier
+        Func<int, IReadOnlyCollection<TypeDocumentaire>, ClassificationResult> resultFactory) : IDocumentClassifier
     {
         private int _appels;
 
         public int Appels => _appels;
 
-        public IReadOnlyCollection<string>? DerniersTypes { get; private set; }
+        public IReadOnlyCollection<TypeDocumentaire>? DerniersTypes { get; private set; }
 
         public Task<ClassificationResult> ClassifyAsync(
             string texte,
-            IReadOnlyCollection<string> types,
+            IReadOnlyCollection<TypeDocumentaire> types,
             CancellationToken cancellationToken = default)
         {
             DerniersTypes = types;
