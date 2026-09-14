@@ -103,14 +103,18 @@ public sealed class PresidioPiiDetector : IPiiDetector, IDisposable
             throw new InvalidOperationException($"Presidio : {response.Error}");
         }
 
-        if (response.Detections.Any(d => d.Start < 0 || d.Length <= 0 || d.Start > text.Length - d.Length))
+        var detections = response.Detections
+            ?? throw new InvalidDataException("Réponse Presidio sans détections ni erreur.");
+        if (detections.Any(d => d.Start < 0 || d.Length <= 0 || d.Start > text.Length - d.Length))
         {
             throw new InvalidDataException("Presidio a retourné une plage invalide.");
         }
 
-        return [.. response.Detections
+        return [.. detections
             .Select(d => new PiiDetection(
-                Enum.Parse<PiiCategory>(d.Category),
+                // Une entité connue de Presidio mais pas du contrat reste masquée sous le
+                // marqueur générique plutôt que d'interrompre la requête.
+                Enum.TryParse<PiiCategory>(d.Category, out var category) ? category : PiiCategory.Unknown,
                 d.Rule,
                 PiiDetectionKind.Model,
                 d.Start,
@@ -134,7 +138,9 @@ public sealed class PresidioPiiDetector : IPiiDetector, IDisposable
                     continue;
                 }
 
-                if (response is not null && _pending.TryRemove(response.Id, out var completion))
+                // Une réponse sans id (ligne entrante illisible côté Python) n'est pas
+                // corrélable : elle est ignorée, la requête émettrice expirera sur son délai.
+                if (response?.Id is { } responseId && _pending.TryRemove(responseId, out var completion))
                 {
                     completion.SetResult(response);
                 }
@@ -197,8 +203,8 @@ public sealed class PresidioPiiDetector : IPiiDetector, IDisposable
     private sealed record Startup([property: JsonPropertyName("erreur")] string? Error);
 
     private sealed record Response(
-        [property: JsonPropertyName("id")] int Id,
-        [property: JsonPropertyName("detections")] IReadOnlyList<PythonDetection> Detections,
+        [property: JsonPropertyName("id")] int? Id,
+        [property: JsonPropertyName("detections")] IReadOnlyList<PythonDetection>? Detections,
         [property: JsonPropertyName("erreur")] string? Error);
 
     private sealed record PythonDetection(

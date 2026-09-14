@@ -73,8 +73,9 @@ def main():
         if not line.strip():
             continue
 
-        request = json.loads(line)
+        request = None
         try:
+            request = json.loads(line)
             detections = []
             for category, rule, start, end in detect(request["texte"]):
                 position, length = utf16_range(request["texte"], start, end)
@@ -86,7 +87,8 @@ def main():
                 })
             response = {"id": request["id"], "detections": detections}
         except Exception as error:
-            response = {"id": request.get("id"),
+            request_id = request.get("id") if isinstance(request, dict) else None
+            response = {"id": request_id,
                         "erreur": f"{type(error).__name__}: {error}"}
 
         print(json.dumps(response), file=OUTPUT, flush=True)
