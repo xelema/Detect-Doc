@@ -13,7 +13,7 @@ public static class DevEndpoints
     {
         app.MapPost("/api/dev/pii/mask", async Task<IResult> (
             PiiDetectionHttpRequest? request,
-            IServiceProvider services,
+            PiiTextMasker masker,
             CancellationToken cancellationToken) =>
         {
             if (string.IsNullOrWhiteSpace(request?.Text))
@@ -23,7 +23,6 @@ public static class DevEndpoints
 
             try
             {
-                var masker = services.GetRequiredService<PiiTextMasker>();
                 return Results.Ok(new PiiMaskingHttpResponse(
                     await masker.MaskAsync(request.Text, cancellationToken)));
             }
@@ -40,7 +39,7 @@ public static class DevEndpoints
 
         app.MapPost("/api/dev/pii/detect", async Task<IResult> (
             PiiDetectionHttpRequest? request,
-            IServiceProvider services,
+            IPiiDetector detector,
             CancellationToken cancellationToken) =>
         {
             if (string.IsNullOrWhiteSpace(request?.Text))
@@ -50,7 +49,6 @@ public static class DevEndpoints
 
             try
             {
-                var detector = services.GetRequiredService<IPiiDetector>();
                 var detections = await detector.DetectAsync(request.Text, cancellationToken);
                 return Results.Ok(detections.Select(detection => new PiiDetectionHttpResponse(
                     detection.Category.ToString(),
