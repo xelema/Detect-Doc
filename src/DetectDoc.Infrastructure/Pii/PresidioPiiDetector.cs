@@ -19,21 +19,36 @@ public sealed class PresidioPiiDetector : IPiiDetector, IDisposable
     {
         var python = Environment.GetEnvironmentVariable("PII_PYTHON") ?? "python3";
         var script = Path.Combine(AppContext.BaseDirectory, "Pii", "detecteur.py");
-        _process = Process.Start(new ProcessStartInfo(python, ["-u", script])
+        Process? process = null;
+        try
         {
-            RedirectStandardInput = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            StandardOutputEncoding = new UTF8Encoding(false),
-            StandardInputEncoding = new UTF8Encoding(false)
-        }) ?? throw new InvalidOperationException("Le processus Presidio n'a pas démarré.");
-        _standardError = _process.StandardError.ReadToEndAsync();
+            process = Process.Start(new ProcessStartInfo(python, ["-u", script])
+            {
+                RedirectStandardInput = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                StandardOutputEncoding = new UTF8Encoding(false),
+                StandardInputEncoding = new UTF8Encoding(false)
+            }) ?? throw new InvalidOperationException("Le processus Presidio n'a pas démarré.");
+            _standardError = process.StandardError.ReadToEndAsync();
 
-        var startupLine = _process.StandardOutput.ReadLine();
-        var startup = startupLine is null ? null : JsonSerializer.Deserialize<Startup>(startupLine);
-        if (startup?.Error is not null || startupLine is null)
+            var startupLine = process.StandardOutput.ReadLine();
+            var startup = startupLine is null ? null : JsonSerializer.Deserialize<Startup>(startupLine);
+            if (startup?.Error is not null || startupLine is null)
+            {
+                throw Fail(process, $"Chargement de Presidio impossible : {startup?.Error ?? "réponse absente"}.");
+            }
+
+            _process = process;
+        }
+        catch (Exception exception)
         {
-            throw Fail($"Chargement de Presidio impossible : {startup?.Error ?? "réponse absente"}.");
+            // Un échec de démarrage est une indisponibilité (503), pas un 500 : exécutable absent,
+            // première ligne stdout illisible (un avertissement natif contourne redirect_stdout)…
+            // Le processus éventuellement lancé ne doit pas survivre orphelin.
+            KillProcess(process);
+            process?.Dispose();
+            throw new InvalidOperationException("Le démarrage du détecteur Presidio a échoué.", exception);
         }
 
         _ = Task.Run(DistributeAsync);
@@ -118,23 +133,49 @@ public sealed class PresidioPiiDetector : IPiiDetector, IDisposable
         }
     }
 
-    private InvalidOperationException Fail(string message)
+    private InvalidOperationException Fail(Process process, string message)
     {
-        _process.StandardInput.Close();
-        _process.WaitForExit(5000);
+        process.StandardInput.Close();
+        process.WaitForExit(5000);
         var error = _standardError.IsCompletedSuccessfully ? _standardError.Result.TrimEnd() : string.Empty;
         return new InvalidOperationException($"{message} {error}".TrimEnd());
     }
 
     public void Dispose()
     {
-        if (!_process.HasExited)
+        try
         {
-            _process.StandardInput.Close();
-            _process.WaitForExit(5000);
+            if (!_process.HasExited)
+            {
+                _process.StandardInput.Close();
+                if (!_process.WaitForExit(5000))
+                {
+                    KillProcess(_process);
+                }
+            }
+        }
+        catch (Exception)
+        {
+            // La fermeture reste du meilleur effort : le processus peut se terminer entre les
+            // contrôles, et un Dispose qui lève compliquerait l'arrêt de l'hôte.
         }
 
         _process.Dispose();
+    }
+
+    private static void KillProcess(Process? process)
+    {
+        try
+        {
+            if (process is { HasExited: false })
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
+        catch (Exception)
+        {
+            // Meilleur effort : l'appelant est déjà en train d'échouer ou de s'arrêter.
+        }
     }
 
     private sealed record Startup([property: JsonPropertyName("erreur")] string? Error);
