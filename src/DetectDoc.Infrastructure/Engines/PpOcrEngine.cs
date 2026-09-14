@@ -2,8 +2,6 @@ using DetectDoc.Core.Engines;
 using PDFtoImage;
 using PDFtoImage.Exceptions;
 using RapidOcrNet;
-using SkiaSharp;
-using UglyToad.PdfPig;
 
 namespace DetectDoc.Infrastructure.Engines;
 
@@ -40,57 +38,46 @@ public sealed class PpOcrEngine : ITextExtractionEngine, IDisposable
         PdfStream.Validate(fluxDocument);
         cancellationToken.ThrowIfCancellationRequested();
 
-        int nombrePages;
-        using (var document = PdfDocument.Open(fluxDocument))
-        {
-            nombrePages = document.NumberOfPages;
-        }
-
-        var pages = new List<PageExtractionResult>(nombrePages);
-        for (var numeroPage = 0; numeroPage < nombrePages; numeroPage++)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            fluxDocument.Position = 0;
-
-            // Une page rendue est libérée avant la suivante : le PDF entier ne tient jamais en mémoire.
-            using var image = Rendre(fluxDocument, numeroPage);
-            OcrResult resultat;
-            lock (_verrouOcr)
-            {
-                resultat = _ocr.Detect(image, _optionsOcr);
-            }
-            var blocs = resultat.TextBlocks;
-            var confiances = blocs
-                .Where(bloc => bloc.CharScores is { Length: > 0 })
-                .SelectMany(bloc => bloc.CharScores!)
-                .ToArray();
-
-            pages.Add(new PageExtractionResult(
-                numeroPage + 1,
-                string.Join(" ", blocs.Select(bloc => bloc.Text)),
-                confiances.Length > 0 ? confiances.Average() : null));
-        }
-
-        return pages;
-    }
-
-    // Un PDF que PdfPig ouvre peut tout de même échouer au rendu PDFium : l'erreur est celle
-    // du document, elle remonte comme les autres PDF invalides (422).
-    private static SKBitmap Rendre(Stream fluxDocument, int numeroPage)
-    {
+        var pages = new List<PageExtractionResult>();
         try
         {
-            return Conversion.ToImage(
+            // ToImages produit les rendus à la demande : le PDF n'est parsé qu'une fois et une
+            // page rendue est libérée avant la suivante, le document entier ne tient pas en mémoire.
+            foreach (var image in Conversion.ToImages(
                 fluxDocument,
-                numeroPage,
                 leaveOpen: true,
                 password: null,
-                options: new RenderOptions(Dpi: Dpi));
+                options: new RenderOptions(Dpi: Dpi)))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                using (image)
+                {
+                    OcrResult resultat;
+                    lock (_verrouOcr)
+                    {
+                        resultat = _ocr.Detect(image, _optionsOcr);
+                    }
+                    var blocs = resultat.TextBlocks;
+                    var confiances = blocs
+                        .Where(bloc => bloc.CharScores is { Length: > 0 })
+                        .SelectMany(bloc => bloc.CharScores!)
+                        .ToArray();
+
+                    pages.Add(new PageExtractionResult(
+                        pages.Count + 1,
+                        string.Join(" ", blocs.Select(bloc => bloc.Text)),
+                        confiances.Length > 0 ? confiances.Average() : null));
+                }
+            }
         }
         catch (PdfException exception)
         {
-            throw new InvalidDataException($"Le rendu de la page {numeroPage + 1} a échoué.", exception);
+            // Un PDF que la signature ouvre peut tout de même échouer au rendu PDFium : l'erreur
+            // est celle du document, elle remonte comme les autres PDF invalides (422).
+            throw new InvalidDataException("Le PDF n'a pas pu être rendu en image.", exception);
         }
+
+        return pages;
     }
 
     private static RapidOcrModelSet ModelSet(string taille, string repertoireModeles)
