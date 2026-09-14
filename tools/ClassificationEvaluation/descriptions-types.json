@@ -1,0 +1,34 @@
+{
+  "carte_visite": {
+    "libelle": "Carte de visite",
+    "description": "Très court, quelques dizaines de mots : nom, fonction et coordonnées d'une personne. Aucune date, aucun montant, aucun corps de document."
+  },
+  "feuille_emar": {
+    "libelle": "Feuille d'émargement",
+    "description": "Liste nominative de participants avec une grille de signatures par créneau, sous un en-tête de session de formation."
+  },
+  "offre_emploi": {
+    "libelle": "Offre de stage, alternance ou emploi",
+    "description": "Capture imprimée d'une page web d'offre : URL et date en en-tête et pied de page, poste, entreprise, missions, bouton de candidature."
+  },
+  "rib": {
+    "libelle": "Relevé d'identité bancaire",
+    "description": "Document dont l'objet est de communiquer les coordonnées d'un compte : pavé des codes nationaux ou IBAN et BIC, jamais de cartouche de mandat à signer. Un bloc de coordonnées bancaires dans un document d'un autre objet n'est pas un rib."
+  },
+  "rib_sepa": {
+    "libelle": "Relevé d'identité bancaire et mandat SEPA",
+    "description": "Réunit le pavé des codes nationaux du rib ET le cartouche de mandat SEPA (RUM, ICS, autorisation, signature). Les deux blocs doivent être présents."
+  },
+  "sepa": {
+    "libelle": "Mandat SEPA",
+    "description": "Formulaire d'autorisation de prélèvement : RUM, ICS, clause d'autorisation, signature, IBAN et BIC du débiteur, sans le pavé des quatre codes nationaux."
+  },
+  "devis": {
+    "libelle": "Devis",
+    "description": "Proposition chiffrée d'une prestation avant commande : lignes, quantités, totaux HT et TTC, émetteur et client."
+  },
+  "facture": {
+    "libelle": "Facture",
+    "description": "Document de facturation après une prestation : numéro, lignes, totaux HT, TVA et TTC, émetteur et client, souvent les coordonnées bancaires de règlement."
+  }
+}

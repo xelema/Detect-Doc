@@ -35,7 +35,26 @@ if (documents.Select(document => Path.GetFileName(document.Path)).Distinct(Strin
 {
     throw new InvalidOperationException("Les noms de fichiers du lot doivent être uniques.");
 }
+
+var descriptions = options.DescriptionsPath is null
+    ? null
+    : ReadDescriptions(options.DescriptionsPath);
+if (descriptions is not null)
+{
+    var nonDecrits = options.Types.Where(type => !descriptions.ContainsKey(type)).ToList();
+    if (nonDecrits.Count > 0)
+    {
+        throw new InvalidOperationException(
+            $"Descriptions absentes pour : {string.Join(", ", nonDecrits)}. Un run avec descriptions doit en couvrir chaque type soumis pour rester comparable.");
+    }
+}
 Console.WriteLine($"{documents.Count} document(s) prêt(s), envoi à {options.ApiUrl}.");
+
+object typesPayload = descriptions is null
+    ? options.Types
+    : options.Types
+        .Select(type => new TypeSoumis(type, descriptions[type].Libelle, descriptions[type].Description))
+        .ToList();
 
 using var content = new MultipartFormDataContent();
 foreach (var document in documents)
@@ -44,7 +63,7 @@ foreach (var document in documents)
     file.Headers.ContentType = new("application/pdf");
     content.Add(file, "files", Path.GetFileName(document.Path));
 }
-content.Add(new StringContent(JsonSerializer.Serialize(options.Types)), "types");
+content.Add(new StringContent(JsonSerializer.Serialize(typesPayload, Json.Options)), "types");
 content.Add(new StringContent(options.Engine), "engine");
 
 using var client = new HttpClient { BaseAddress = new Uri(options.ApiUrl), Timeout = TimeSpan.FromMinutes(10) };
@@ -87,6 +106,26 @@ static IEnumerable<ManifestEntry> ReadManifest(string path) => File.ReadLines(pa
     JsonSerializer.Deserialize<ManifestEntry>(line)
     ?? throw new InvalidDataException($"Manifest illisible, ligne {index + 1}."));
 
+static Dictionary<string, DescriptionType> ReadDescriptions(string path)
+{
+    var descriptions = JsonSerializer.Deserialize<Dictionary<string, DescriptionType>>(
+        File.ReadAllText(path), Json.Options);
+    if (descriptions is null || descriptions.Count == 0)
+    {
+        throw new InvalidDataException($"Fichier de descriptions vide ou illisible : {path}.");
+    }
+    return descriptions;
+}
+
+public sealed record TypeSoumis(
+    [property: JsonPropertyName("id")] string Id,
+    [property: JsonPropertyName("libelle")] string? Libelle,
+    [property: JsonPropertyName("description")] string? Description);
+
+public sealed record DescriptionType(
+    [property: JsonPropertyName("libelle")] string? Libelle,
+    [property: JsonPropertyName("description")] string? Description);
+
 public sealed record ManifestEntry(
     [property: JsonPropertyName("id")] string Id,
     [property: JsonPropertyName("fichier")] string FilePath,
@@ -118,13 +157,16 @@ public sealed record ResultDocument(string Id, string FileName, string ExpectedT
 }
 
 public sealed record RunMetadata(string RunId, DateTime Date, string ManifestSha256, string ApiUrl, string Engine,
-    string Split, IReadOnlyList<string> Types, MachineInfo Machine)
+    string Split, IReadOnlyList<string> Types, string? DescriptionsSha256, MachineInfo Machine)
 {
     public static RunMetadata Create(string runId, RunnerOptions options)
     {
         using var stream = File.OpenRead(options.ManifestPath);
+        var descriptionsSha256 = options.DescriptionsPath is null
+            ? null
+            : Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(options.DescriptionsPath))).ToLowerInvariant();
         return new(runId, DateTime.UtcNow, Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant(),
-            options.ApiUrl, options.Engine, options.Split, options.Types,
+            options.ApiUrl, options.Engine, options.Split, options.Types, descriptionsSha256,
             new(RuntimeInformation.OSDescription, RuntimeInformation.FrameworkDescription,
                 Environment.GetEnvironmentVariable("PROCESSOR_IDENTIFIER") ?? RuntimeInformation.ProcessArchitecture.ToString(),
                 Environment.ProcessorCount, GC.GetGCMemoryInfo().TotalAvailableMemoryBytes));
@@ -134,7 +176,7 @@ public sealed record RunMetadata(string RunId, DateTime Date, string ManifestSha
 public sealed record MachineInfo(string Os, string Dotnet, string Cpu, int Cores, long RamBytes);
 
 public sealed record RunnerOptions(string CorpusPath, string ManifestPath, string ApiUrl, string Engine,
-    string Split, IReadOnlyList<string> Types)
+    string Split, IReadOnlyList<string> Types, string? DescriptionsPath)
 {
     private static readonly string[] DefaultTypes = ["carte_visite", "feuille_emar", "offre_emploi", "rib", "rib_sepa", "sepa"];
 
@@ -145,7 +187,7 @@ public sealed record RunnerOptions(string CorpusPath, string ManifestPath, strin
         {
             if (!args[index].StartsWith("--") || index + 1 == args.Length || !values.TryAdd(args[index], args[index + 1]))
             {
-                throw new ArgumentException("Usage: ClassificationEvaluation --corpus <chemin> --manifest <chemin> [--api <url>] [--engine <auto|pdfpig|ppocr-tiny>] [--types <csv>] [--split <dev|test>].");
+                throw new ArgumentException("Usage: ClassificationEvaluation --corpus <chemin> --manifest <chemin> [--api <url>] [--engine <auto|pdfpig|ppocr-tiny>] [--types <csv>] [--descriptions <chemin>] [--split <dev|test>].");
             }
         }
 
@@ -164,7 +206,8 @@ public sealed record RunnerOptions(string CorpusPath, string ManifestPath, strin
 
         return new(Path.GetFullPath(corpus), Path.GetFullPath(manifest),
             values.GetValueOrDefault("--api", "http://localhost:5080"), values.GetValueOrDefault("--engine", "auto"),
-            values.GetValueOrDefault("--split", "dev"), types);
+            values.GetValueOrDefault("--split", "dev"), types,
+            values.TryGetValue("--descriptions", out var descriptions) ? Path.GetFullPath(descriptions) : null);
     }
 }
 

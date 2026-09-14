@@ -104,7 +104,7 @@ public static class ClassificationEndpoints
             .ProducesProblem(StatusCodes.Status400BadRequest);
     }
 
-    private static (IReadOnlyCollection<string>? Types, IResult? Erreur) ParseTypes(string? types)
+    private static (IReadOnlyCollection<TypeDocumentaire>? Types, IResult? Erreur) ParseTypes(string? types)
     {
         if (string.IsNullOrWhiteSpace(types))
         {
@@ -114,38 +114,46 @@ public static class ClassificationEndpoints
                 statusCode: StatusCodes.Status400BadRequest));
         }
 
-        string[]? typesDemandes;
+        List<TypeDocumentaire?>? typesDemandes;
         try
         {
-            typesDemandes = JsonSerializer.Deserialize<string[]>(types);
+            using var document = JsonDocument.Parse(types);
+            // Deux formes admises : `["RIB","SEPA"]` ou
+            // `[{"id":"RIB","libelle":"…","description":"…"}]`, les deux derniers champs étant facultatifs.
+            typesDemandes = document.RootElement is { ValueKind: JsonValueKind.Array } tableau
+                && tableau.EnumerateArray().All(element => element.ValueKind == JsonValueKind.String)
+                ? tableau.EnumerateArray()
+                    .Select(element => (TypeDocumentaire?)new TypeDocumentaire(element.GetString() ?? "", null, null))
+                    .ToList()
+                : document.RootElement.Deserialize<List<TypeDocumentaire?>>(JsonSerializerOptions.Web);
         }
         catch (JsonException) when (!types.TrimStart().StartsWith('['))
         {
             // Swagger poste la liste séparée par des virgules plutôt qu'un tableau JSON.
             typesDemandes = types.Split(',', StringSplitOptions.TrimEntries)
-                .Select(type => type.Trim('"'))
-                .ToArray();
+                .Select(type => (TypeDocumentaire?)new TypeDocumentaire(type.Trim('"'), null, null))
+                .ToList();
         }
         catch (JsonException)
         {
             return (null, Results.Problem(
                 title: "Requête invalide.",
-                detail: "Le champ types doit être un tableau JSON ou une liste séparée par des virgules.",
+                detail: "Le champ types doit être un tableau JSON d'identifiants ou d'objets, ou une liste séparée par des virgules.",
                 statusCode: StatusCodes.Status400BadRequest));
         }
 
-        var typesValides = DocumentTypes.Normalize(typesDemandes);
+        var typesValides = typesDemandes is null ? null : DocumentTypes.Normalize(typesDemandes);
         return typesValides is null
             ? (null, Results.Problem(
                 title: "Requête invalide.",
-                detail: "Les types doivent être non vides et uniques.",
+                detail: "Les types doivent porter un id non vide et unique.",
                 statusCode: StatusCodes.Status400BadRequest))
             : (typesValides, null);
     }
 
     private static async Task<ClassificationOutcome> ClassifyDocumentAsync(
         IFormFile file,
-        IReadOnlyCollection<string> types,
+        IReadOnlyCollection<TypeDocumentaire> types,
         string? engine,
         PdfPigNativeTextEngine pdfPig,
         IServiceProvider services,

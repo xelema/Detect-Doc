@@ -11,12 +11,12 @@ public sealed class FlowiseDocumentClassifier(HttpClient httpClient, FlowiseOpti
 {
     public async Task<ClassificationResult> ClassifyAsync(
         string texte,
-        IReadOnlyCollection<string> types,
+        IReadOnlyCollection<TypeDocumentaire> types,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(texte);
         ArgumentNullException.ThrowIfNull(types);
-        if (types.Count == 0 || types.Any(string.IsNullOrWhiteSpace))
+        if (types.Count == 0 || types.Any(type => string.IsNullOrWhiteSpace(type.Id)))
         {
             throw new ArgumentException("Au moins un type non vide est requis.", nameof(types));
         }
@@ -29,7 +29,7 @@ public sealed class FlowiseDocumentClassifier(HttpClient httpClient, FlowiseOpti
         var url = $"{options.BaseUrl.TrimEnd('/')}/api/v1/prediction/{Uri.EscapeDataString(options.FlowId)}";
         using var response = await httpClient.PostAsJsonAsync(
             url,
-            new { form = new { texte, types = string.Join(", ", types) } },
+            new { form = new { texte, types = string.Join('\n', types.Select(RenderType)) } },
             cancellationToken);
         response.EnsureSuccessStatusCode();
 
@@ -57,13 +57,23 @@ public sealed class FlowiseDocumentClassifier(HttpClient httpClient, FlowiseOpti
             || string.IsNullOrWhiteSpace(resultat.Type)
             || !double.IsFinite(resultat.Confiance)
             || resultat.Confiance is < 0 or > 1
-            || !types.Contains(resultat.Type, StringComparer.Ordinal))
+            || !types.Any(type => string.Equals(type.Id, resultat.Type, StringComparison.Ordinal)))
         {
             throw new InvalidDataException("La réponse de classification Flowise est invalide.");
         }
 
         return resultat with { ExecutionId = enveloppe.ExecutionId };
     }
+
+    // Le flow attend une ligne `id | libelle | description` par type : le modèle ne reçoit
+    // jamais le libellé sans la ligne, et ne doit restituer que l'identifiant.
+    private static string RenderType(TypeDocumentaire type) => (type.Libelle, type.Description) switch
+    {
+        ({ } libelle, { } description) => $"{type.Id} | {libelle} | {description}",
+        ({ } libelle, null) => $"{type.Id} | {libelle}",
+        (null, { } description) => $"{type.Id} | {description}",
+        _ => type.Id
+    };
 
     private sealed record FlowiseResponse(string? Text, string? ExecutionId);
 }

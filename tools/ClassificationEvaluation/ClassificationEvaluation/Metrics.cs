@@ -17,6 +17,9 @@ public static class Metrics
         report.AppendLine($"- **API** : `{metadata.ApiUrl}`");
         report.AppendLine($"- **Moteur** : `{metadata.Engine}`");
         report.AppendLine($"- **Types soumis** : {string.Join(", ", metadata.Types.Select(type => $"`{type}`"))}");
+        report.AppendLine(metadata.DescriptionsSha256 is null
+            ? "- **Descriptions** : non"
+            : $"- **Descriptions** : oui, sha256 `{metadata.DescriptionsSha256[..12]}…`");
         report.AppendLine();
         report.AppendLine("## Résultats de l'API");
         report.AppendLine();

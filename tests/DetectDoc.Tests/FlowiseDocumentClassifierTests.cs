@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text;
 using System.Text.Json;
+using DetectDoc.Core.Classification;
 using DetectDoc.Infrastructure.Classification;
 using Xunit;
 
@@ -18,7 +19,10 @@ public class FlowiseDocumentClassifierTests
 
         var resultat = await classifieur.ClassifyAsync(
             "RELEVÉ D’IDENTITÉ BANCAIRE",
-            ["RIB", "FEUILLE_EMAR"]);
+            [
+                new TypeDocumentaire("RIB", "Relevé d'identité bancaire", "Coordonnées du compte."),
+                new TypeDocumentaire("FEUILLE_EMAR", null, null)
+            ]);
 
         Assert.Equal("RIB", resultat.Type);
         Assert.Equal(0.98, resultat.Confiance);
@@ -35,7 +39,7 @@ public class FlowiseDocumentClassifierTests
             new FlowiseOptions("https://flowise.test", "flow-test"));
 
         await Assert.ThrowsAsync<InvalidDataException>(
-            () => classifieur.ClassifyAsync("un texte", ["RIB"]));
+            () => classifieur.ClassifyAsync("un texte", [new TypeDocumentaire("RIB", null, null)]));
     }
 
     private sealed class ReponseFixeHandler(string corps) : HttpMessageHandler
@@ -61,7 +65,9 @@ public class FlowiseDocumentClassifierTests
             using var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellationToken));
             var form = body.RootElement.GetProperty("form");
             Assert.Equal("RELEVÉ D’IDENTITÉ BANCAIRE", form.GetProperty("texte").GetString());
-            Assert.Equal("RIB, FEUILLE_EMAR", form.GetProperty("types").GetString());
+            Assert.Equal(
+                "RIB | Relevé d'identité bancaire | Coordonnées du compte.\nFEUILLE_EMAR",
+                form.GetProperty("types").GetString());
 
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
