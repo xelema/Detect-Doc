@@ -28,7 +28,27 @@ public class PiiTextMaskerTests
 
         var masked = await masker.MaskAsync(text);
 
-        Assert.Equal("Contact : [PERSON], IBAN [IBAN], téléphone : [PHONE].", masked);
+        Assert.Equal("Contact : [PERSON], [PII], téléphone : [PHONE].", masked);
+    }
+
+    [Fact]
+    public async Task MaskAsync_MasksModelRemainderOverlappedByDifferentCategoryRule()
+    {
+        var masker = new PiiTextMasker(new FakePiiDetector(t =>
+        {
+            var nameStart = t.IndexOf("Jean Dupont", StringComparison.Ordinal);
+            var addressStart = t.IndexOf("Dupont demeure", StringComparison.Ordinal);
+            return
+            [
+                new PiiDetection(PiiCategory.Name, "PERSON", PiiDetectionKind.Model, nameStart, "Jean Dupont".Length),
+                new PiiDetection(PiiCategory.Address, "VoieDemeure", PiiDetectionKind.Label, addressStart, "Dupont demeure".Length)
+            ];
+        }));
+
+        var masked = await masker.MaskAsync("Jean Dupont demeure ici.");
+
+        Assert.Equal("[PII] ici.", masked);
+        Assert.DoesNotContain("Jean", masked);
     }
 
     [Fact]
