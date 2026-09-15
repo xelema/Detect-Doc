@@ -463,6 +463,45 @@ public class DemarrageTests
     }
 
     [Fact]
+    public async Task LotRapporteUneFauteInterneSansInterrompreLesAutres()
+    {
+        var classifieur = new ClassifieurDeTest((appel, _) => appel == 1
+            ? throw new NullReferenceException("défaut interne")
+            : new ClassificationResult("RIB", 0.9));
+        await using var application = CreerApplication("Development", classifieur);
+        using var client = application.CreateClient();
+        using var contenu = CreerLotMultipart(
+            ("panne.pdf", "Premier document"),
+            ("succes.pdf", "Second document"));
+
+        using var response = await client.PostAsync("/api/documents/classify-batch", contenu);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var payload = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var resultats = payload.RootElement.EnumerateArray().ToArray();
+        Assert.Equal(JsonValueKind.Null, resultats[0].GetProperty("resultat").ValueKind);
+        Assert.Equal(500, resultats[0].GetProperty("erreur").GetProperty("status").GetInt32());
+        Assert.Equal("RIB", resultats[1].GetProperty("resultat").GetProperty("type").GetString());
+        Assert.Equal(JsonValueKind.Null, resultats[1].GetProperty("erreur").ValueKind);
+        Assert.Equal(2, classifieur.Appels);
+    }
+
+    [Fact]
+    public async Task FauteInterneResteUne500SurLaRouteUnitaire()
+    {
+        var classifieur = new ClassifieurDeTest((_, _) => throw new NullReferenceException("défaut interne"));
+        await using var application = CreerApplication("Development", classifieur);
+        using var client = application.CreateClient();
+        using var contenu = CreerPdfMultipart("Texte natif lisible");
+        contenu.Add(new StringContent("[\"RIB\"]"), "types");
+        contenu.Add(new StringContent("pdfpig"), "engine");
+
+        using var response = await client.PostAsync("/api/documents/classify", contenu);
+
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+    }
+
+    [Fact]
     public async Task MasqueLesPiiAvantFlowiseEtMesureLaDuree()
     {
         var flowise = new FlowiseCaptureHandler();

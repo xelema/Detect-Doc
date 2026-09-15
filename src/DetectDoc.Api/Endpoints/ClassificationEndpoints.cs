@@ -83,15 +83,32 @@ public static class ClassificationEndpoints
                     continue;
                 }
 
-                await using var flux = file.OpenReadStream();
-                var outcome = await classification.ExecuteAsync(
-                    flux, typesValides!, engine, cancellationToken);
-                resultats.Add(outcome is DocumentClassificationOutcome.Success success
-                    ? new ResultatClassificationLotDocumentHttp(file.FileName, success.Result, null)
-                    : new ResultatClassificationLotDocumentHttp(
+                try
+                {
+                    await using var flux = file.OpenReadStream();
+                    var outcome = await classification.ExecuteAsync(
+                        flux, typesValides!, engine, cancellationToken);
+                    resultats.Add(outcome is DocumentClassificationOutcome.Success success
+                        ? new ResultatClassificationLotDocumentHttp(file.FileName, success.Result, null)
+                        : new ResultatClassificationLotDocumentHttp(
+                            file.FileName,
+                            null,
+                            HttpProblems.ForOutcome(outcome, cancellationToken)));
+                }
+                catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
+                {
+                    // Une faute hors contrat (exception non traduite par ForOutcome, flux
+                    // inouvrable) reste attachée à son document : le lot n'est pas interrompu.
+                    resultats.Add(new ResultatClassificationLotDocumentHttp(
                         file.FileName,
                         null,
-                        HttpProblems.ForOutcome(outcome, cancellationToken)));
+                        new ProblemDetails
+                        {
+                            Status = StatusCodes.Status500InternalServerError,
+                            Title = "Erreur interne.",
+                            Detail = exception.Message
+                        }));
+                }
             }
 
             return Results.Ok(resultats);
