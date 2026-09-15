@@ -178,6 +178,30 @@ public class DemarrageTests
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
     }
 
+    [Theory]
+    [InlineData("""{"id":"RIB"}""")]
+    [InlineData("""{"id":"RIB","x":1}""")]
+    [InlineData("123")]
+    [InlineData("\"RIB\"")]
+    [InlineData("true")]
+    [InlineData("null")]
+    [InlineData("{pas du json")]
+    public async Task RefuseUnChampTypesQuiNestPasUnTableauJson(string types)
+    {
+        var classifieur = new ClassifieurDeTest((_, _) => new ClassificationResult("RIB", 0.9));
+        await using var application = CreerApplication("Development", classifieur);
+        using var client = application.CreateClient();
+        using var contenu = CreerPdfMultipart("Texte natif lisible");
+        contenu.Add(new StringContent(types), "types");
+        contenu.Add(new StringContent("pdfpig"), "engine");
+
+        using var response = await client.PostAsync("/api/documents/classify", contenu);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(0, classifieur.Appels);
+    }
+
     [Fact]
     public async Task AccepteDesTypesAvecLibelleEtDescription()
     {
