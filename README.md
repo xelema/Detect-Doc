@@ -77,7 +77,7 @@ Detect-Doc/
 │   ├── DetectDoc.Core/      use case de classification, interfaces des adapteurs
 │   └── DetectDoc.Infrastructure/  adapteurs : PdfPig, PP-OCR, Presidio, Flowise
 ├── tests/
-│   └── DetectDoc.Tests/     tests HTTP avec serveur en mémoire
+│   └── DetectDoc.Tests/     tests unitaires et HTTP, serveur en mémoire
 ├── corpus/
 │   ├── manifest.jsonl       livrable versionné : une ligne JSON par document, sa vérité terrain
 │   └── raw/                 documents produits par le générateur, non versionnés

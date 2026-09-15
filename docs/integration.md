@@ -89,7 +89,7 @@ Formulaire `multipart/form-data` :
 
 `types` accepte un tableau JSON d'identifiants, `["RIB","FACTURE"]`, ou d'objets avec `libelle` et `description` facultatifs, `[{"id":"RIB","libelle":"Relevé d'identité bancaire","description":"Coordonnées bancaires du titulaire"}]`. Les libellés et descriptions sont montrés au modèle et améliorent la discrimination entre types proches. La liste séparée par des virgules (`RIB,FACTURE`) reste admise, c'est ce que poste Swagger. Chaque `id` doit être non vide et unique.
 
-`engine` choisit l'extraction : `pdfpig` lit le texte natif, `ppocr-tiny` passe chaque page par l'OCR, `auto` extrait avec PdfPig puis applique l'OCR aux pages sans texte. Laisser `auto` sauf essai reproductible.
+`engine` choisit l'extraction : `pdfpig` lit le texte natif, `ppocr-tiny` passe chaque page par l'OCR, `auto` rend le texte natif quand chaque page en porte, et reprend l'extraction du document entier par l'OCR dès qu'une page n'en livre pas. Laisser `auto` sauf essai reproductible.
 
 Réponse `200` :
 

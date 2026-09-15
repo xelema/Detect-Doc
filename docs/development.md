@@ -5,7 +5,7 @@ Runbook du développeur qui travaille sur le POC : prérequis, lancement, régla
 ## Prérequis
 
 - **SDK .NET 10** : `global.json` épingle la version (10.0.302, patches de la série acceptés).
-- **Modèles OCR** : pas dans le dépôt. `Get-Modeles.ps1` à la racine les télécharge dans `models/`, vérifie leurs empreintes SHA-256, et le build copie PP-OCRv6 tiny vers la sortie de l'API. Sans accès à GitHub ou ModelScope : `.\Get-Modeles.ps1 -Source \\serveur\partage\modeles-ocr`.
+- **Modèles OCR** : pas dans le dépôt. `Get-Modeles.ps1` à la racine les télécharge dans `models/`, vérifie leurs empreintes SHA-256, et le build copie `models/v6` vers la sortie de l'API. Sans accès à GitHub ou ModelScope : `.\Get-Modeles.ps1 -Source \\serveur\partage\modeles-ocr`.
 - **Python pour le masquage PII** : la détection Presidio tourne dans un sous-processus. Créer l'environnement une fois, sous un chemin court (l'arborescence de Presidio dépasse la limite de longueur de chemin Windows sous `%TEMP%`) :
 
 ```powershell

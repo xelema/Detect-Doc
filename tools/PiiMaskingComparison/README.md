@@ -35,7 +35,7 @@ Les moteurs NER ont besoin de leur environnement Python. L'image le porte ; en l
 
 ```powershell
 python -m venv C:\Temp\pii-venv
-C:\Temp\pii-venv\Scripts\python.exe -m pip install --requirement PiiMaskingComparison\Presidio\requirements.txt
+C:\Temp\pii-venv\Scripts\python.exe -m pip install --requirement PiiMaskingComparison\Ner\requirements.txt
 $env:PII_PYTHON = "C:\Temp\pii-venv\Scripts\python.exe"
 ```
 
@@ -178,7 +178,7 @@ Le fichier de résultats porte chaque détection avec sa plage, son texte et son
 | Dossier | Rôle |
 |---|---|
 | `Engines/` | un moteur par famille, derrière `IPiiDetectionEngine`. Un moteur rend des plages, il ne masque rien |
-| `Presidio/` | le pont Python du moteur `presidio` et ses dépendances épinglées |
+| `Ner/` | le pont Python des moteurs NER et leurs dépendances épinglées |
 | `Manifest/` | lecture de `corpus/manifest.jsonl` |
 | `VeriteTerrain/` | localisation des valeurs injectées dans le texte de référence |
 | `Benchmark/` | exécution d'un run, mesure du coût, écriture des résultats |

@@ -182,7 +182,7 @@ Un chiffre seul ne dit rien. Chaque mesure de qualité se lit contre deux repèr
 | **Baseline sans IA** | mots-clés et expressions régulières sur le texte OCR, une demi-journée d'écriture | si le modèle ne la bat pas nettement, la recommandation du POC change de nature, et le coût, la latence et le risque PII disparaissent avec elle |
 | **Borne haute sans OCR** | classification directe sur le texte natif des documents qui en ont un | l'écart avec le pipeline complet isole exactement ce que l'OCR fait perdre en qualité, et permet de trancher le choix du moteur sur un chiffre |
 
-Une troisième comparaison s'ajoutera quand le masquage PII existera : la même évaluation avec et sans masquage, pour mesurer ce que le masquage coûte en qualité de classification.
+Une troisième comparaison s'ajoutera le jour où le pipeline pourra être évalué avec et sans masquage PII : la même évaluation dans les deux configurations, pour mesurer ce que le masquage coûte en qualité de classification.
 
 ## Déroulé d'une évaluation
 
@@ -194,4 +194,4 @@ Une troisième comparaison s'ajoutera quand le masquage PII existera : la même 
 
 Le fichier de résultats est le seul intermédiaire entre l'exécution et le rapport : n'importe quelle métrique de ce document se recalcule à partir de lui, sans relancer une seule fois le modèle.
 
-Le runner reste à écrire, avec l'API du POC. Le format décrit ici lui sert de spécification.
+Le runner existe : `tools/ClassificationEvaluation`, qui envoie le lot à `/api/documents/classify-batch` et écrit `run.json`, `resultats.jsonl`, `recap.md` et `matrice-confusion.csv` (voir son README). Le format décrit ici reste la cible de ce qu'un run doit consigner : l'API n'exposant ni tokens, ni coût, ni version du flow ni empreinte du prompt, le `run.json` actuel se limite à `run_id`, `date`, `manifest_sha256`, `api_url`, `engine`, `split`, `types`, `descriptions_sha256` et `machine`, et les lignes de résultats ne portent ni tokens ni pic mémoire.

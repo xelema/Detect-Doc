@@ -24,7 +24,7 @@ Trois niveaux, un champ `sensibilite` par entrée :
 | `interne_assaini` | valeurs réelles remplacées | masquage obligatoire |
 | `production_valide` | validé nominativement | masquage obligatoire, ne quitte jamais le partage réseau |
 
-Les 96 entrées actuelles sont toutes `public` : le corpus ne contient à ce jour aucun document réel, assaini ou non.
+Les 270 entrées actuelles sont toutes `public` : le corpus ne contient à ce jour aucun document réel, assaini ou non.
 
 ## Traçabilité
 
@@ -34,7 +34,7 @@ Le validateur, `tools/CorpusGenerator/manifest.py`, vérifie pour chaque entrée
 
 `texte_reference` porte le texte natif du document au moment de son rendu, avant qu'une éventuelle numérisation ne l'écrase avec sa version dégradée. C'est la vérité terrain du comparatif OCR : le générateur connaît par construction le contenu exact de chaque document, aucune extraction séparée n'est nécessaire pour l'obtenir.
 
-Le split `dev` / `test` est stratifié par type : dans chaque bloc de quatre documents d'un même type, un part au réglage. Chaque type est donc présent dans `dev`, y compris les types à faible effectif, et un document ne change jamais de camp d'une exécution à l'autre. Tout le réglage de prompt et d'OCR se fait sur `dev`, seul jeu qu'on s'autorise à ouvrir document par document ; `test` ne s'ouvre qu'aux mesures.
+Le split `dev` / `test` est stratifié par type : dans chaque bloc de quatre unités d'un même type, une part au réglage, son éventuel jumeau numérisé la suivant dans le même jeu. Chaque type est donc présent dans `dev`, y compris les types à faible effectif, et un document ne change jamais de camp d'une exécution à l'autre. Tout le réglage de prompt et d'OCR se fait sur `dev`, seul jeu qu'on s'autorise à ouvrir document par document ; `test` ne s'ouvre qu'aux mesures.
 
 ## Composition actuelle
 
