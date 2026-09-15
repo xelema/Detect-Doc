@@ -51,14 +51,14 @@ Exposées en `Development` et `Recette` uniquement, pour tester chaque brique sa
 
 | Route | Entrée | Sortie |
 |---|---|---|
-| `POST /api/dev/extract/{engine}` | `file` multipart, `engine` = `pdfpig` ou `ppocr-tiny` | pages `{numeroPage, texte, confianceOcr}` |
+| `POST /api/dev/extract/{engine}` | `file` multipart (PDF, image ou DOCX), `engine` = `pdfpig`, `ppocr-tiny` ou `openxml` | pages `{numeroPage, texte, confianceOcr}` |
 | `POST /api/dev/pii/detect` | `{"text":"..."}` | détections `{category, rule, kind, start, length, value}` |
 | `POST /api/dev/pii/mask` | `{"text":"..."}` | `{"text":"..."}` avec les marqueurs envoyés à Flowise |
 | `POST /api/dev/classify` | `{"text":"...","types":["RIB","SEPA"]}` | `{type, confiance, executionId}` brut du classifieur |
 
 ## Où vivent les choses
 
-`src/DetectDoc.Api/Program.cs` assemble l'application, `ServiceCollectionExtensions.cs` enregistre les services, `Endpoints/` porte les routes en Minimal APIs. L'orchestration vit dans `DocumentClassification` (Core) : `ExecuteAsync` enchaîne extraction, masquage PII et classification, et retourne un `DocumentClassificationOutcome` (`Success`, `Rejected`, `Faulted` par étape) que `HttpProblems.ForOutcome` traduit en `ProblemDetails`. Les systèmes externes (PdfPig, ONNX, sous-processus Presidio, HTTP Flowise) sont des adapteurs derrière des interfaces dans `DetectDoc.Infrastructure`. Le glossaire du domaine est dans `CONTEXT.md`.
+`src/DetectDoc.Api/Program.cs` assemble l'application, `ServiceCollectionExtensions.cs` enregistre les services, `Endpoints/` porte les routes en Minimal APIs. L'orchestration vit dans `DocumentClassification` (Core) : `ExecuteAsync` enchaîne extraction, masquage PII et classification, et retourne un `DocumentClassificationOutcome` (`Success`, `Rejected`, `Faulted` par étape) que `HttpProblems.ForOutcome` traduit en `ProblemDetails`. Les systèmes externes (PdfPig, ONNX, OpenXml, sous-processus Presidio, HTTP Flowise) sont des adapteurs derrière des interfaces dans `DetectDoc.Infrastructure`. Le glossaire du domaine est dans `CONTEXT.md`.
 
 `tests/DetectDoc.Tests` démarre un serveur en mémoire et vérifie les réponses HTTP en Development et en Production. La couture du détecteur Presidio est pilotée par `PII_PYTHON`, ce qui permet de tester l'absence d'exécutable, un handshake illisible ou un délai dépassé sans Python réel.
 

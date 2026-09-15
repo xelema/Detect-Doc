@@ -72,8 +72,8 @@ Deux alternatives au bypass, toutes deux pratiquées dans Valia-Stack : monter l
 | Route | Objet |
 |---|---|
 | `GET /health` | `200 {"statut":"ok"}`, `503 {"statut":"degraded"}` quand le sous-processus Presidio est tombé et son budget de relances est épuisé |
-| `POST /api/documents/classify` | extraction, masquage PII puis classification d'un PDF |
-| `POST /api/documents/classify-batch` | même chaîne sur un lot de PDF, erreur par document |
+| `POST /api/documents/classify` | extraction, masquage PII puis classification d'un document (PDF, image, DOCX) |
+| `POST /api/documents/classify-batch` | même chaîne sur un lot de documents, erreur par document |
 
 Les routes `/api/dev/*` de diagnostic ne sont exposées qu'en `Development` et `Recette` : voir `docs/development.md`.
 
@@ -83,13 +83,13 @@ Formulaire `multipart/form-data` :
 
 | Champ | Requis | Contenu |
 |---|---|---|
-| `file` | oui | le PDF, non vide |
+| `file` | oui | le document, non vide : PDF, PNG, JPEG, BMP, WebP, GIF ou DOCX |
 | `types` | oui | catalogue du client, trois formes admises (ci-dessous) |
-| `engine` | non | `auto` (défaut), `pdfpig` ou `ppocr-tiny` |
+| `engine` | non | `auto` (défaut), `pdfpig`, `ppocr-tiny` ou `openxml` |
 
 `types` accepte un tableau JSON d'identifiants, `["RIB","FACTURE"]`, ou d'objets avec `libelle` et `description` facultatifs, `[{"id":"RIB","libelle":"Relevé d'identité bancaire","description":"Coordonnées bancaires du titulaire"}]`. Les libellés et descriptions sont montrés au modèle et améliorent la discrimination entre types proches. La liste séparée par des virgules (`RIB,FACTURE`) reste admise, c'est ce que poste Swagger. Chaque `id` doit être non vide et unique.
 
-`engine` choisit l'extraction : `pdfpig` lit le texte natif, `ppocr-tiny` passe chaque page par l'OCR, `auto` rend le texte natif quand chaque page en porte, et reprend l'extraction du document entier par l'OCR dès qu'une page n'en livre pas. Laisser `auto` sauf essai reproductible.
+`engine` choisit l'extraction, dans la limite du format détecté à la signature du contenu (l'extension et le `Content-Type` ne font pas foi) : `pdfpig` lit le texte natif d'un PDF, `ppocr-tiny` passe un PDF ou une image (PNG, JPEG, BMP, WebP, GIF première frame) par l'OCR, `openxml` lit le texte natif d'un DOCX. `auto` choisit selon le format : PDF natif puis OCR si une page est vide, OCR direct pour une image, `openxml` pour un DOCX. Une combinaison explicite incompatible (`pdfpig` sur une image, `ppocr-tiny` sur un DOCX…) est refusée en `400`. Laisser `auto` sauf essai reproductible.
 
 Réponse `200` :
 
@@ -97,7 +97,7 @@ Réponse `200` :
 |---|---|
 | `type` | un `id` du catalogue soumis, recopié à l'identique |
 | `confiance` | score déclaré par le modèle, entre 0 et 1, renvoyé même s'il est faible |
-| `moteur` | moteur effectivement utilisé, `pdfpig` ou `ppocr-tiny`, y compris après `auto` |
+| `moteur` | moteur effectivement utilisé, `pdfpig`, `ppocr-tiny` ou `openxml`, y compris après `auto` |
 | `pagesTraitees` | nombre de pages extraites |
 | `extractionMs`, `piiMaskingMs`, `classificationMs`, `totalMs` | durées des étapes et totale |
 | `executionId` | identifiant d'exécution Flowise, quand le flow le retourne |
@@ -113,9 +113,10 @@ Les erreurs suivent le format `ProblemDetails` (`status`, `title`, `detail`).
 | Statut | `title` | Cause |
 |---|---|---|
 | 400 | `Requête invalide.` | fichier ou `types` absent, `id` vide ou en double |
-| 400 | `Moteur inconnu.` | `engine` hors de `auto`, `pdfpig`, `ppocr-tiny` |
-| 422 | `PDF invalide.` | le fichier n'est pas un PDF lisible |
-| 422 | `Texte inexploitable.` | l'extraction ne retourne aucun texte |
+| 400 | `Moteur inconnu.` | `engine` hors de `auto`, `pdfpig`, `ppocr-tiny`, `openxml`, ou incompatible avec le format détecté |
+| 415 | `Format non pris en charge.` | signature inconnue, ou archive zip sans `word/document.xml` (XLSX, PPTX, ODT, DOC…) |
+| 422 | `PDF invalide.` / `Document invalide.` | le fichier porte une signature reconnue mais son contenu est illisible |
+| 422 | `Texte inexploitable.` | l'extraction ne retourne aucun texte (scan collé dans un DOCX inclus) |
 | 502 | `Réponse Flowise invalide.` | le flow n'a pas rendu le JSON attendu |
 | 503 | `Moteur indisponible.` | modèles OCR absents du déploiement |
 | 503 | `Traitement PII indisponible.` | sous-processus Presidio absent ou interrompu |
@@ -165,7 +166,7 @@ public sealed record DocumentClassificationResult(
 ## Points de vigilance
 
 - **La confiance n'est pas un seuil.** Le service renvoie le meilleur type même quand le score est faible : c'est l'appelant qui décide à partir de quelle valeur un humain relit. Un document hors catalogue reçoit un type de repli avec un score bas, pas un rejet.
-- **PDF uniquement.** Les images et documents Word ne sont pas acceptés à ce stade.
+- **Formats acceptés :** PDF, PNG, JPEG, BMP, WebP, GIF (première frame) et DOCX à texte natif. Un DOCX ne contenant que des images embarquées ressort sans texte (`422`) : l'OCR des images embarquées n'est pas implémenté. TIFF, `.doc` binaire, ODT, XLSX et PPTX ne sont pas pris en charge (`415`). L'orientation EXIF des JPEG est normalisée avant l'OCR.
 - **Pas d'authentification dans le POC**, ni sur l'API ni vers Flowise.
 - **Le champ `moteur` est rejouable** : sa valeur peut être renvoyée dans `engine` pour reproduire une extraction.
 - **La classification dépend du flow Flowise configuré** : modèle, prompt et version du flow font partie du résultat autant que le code de l'API. La configuration de référence est décrite dans `docs/flowise-classification.md`.
