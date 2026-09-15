@@ -721,6 +721,39 @@ public class DemarrageTests
     }
 
     [Fact]
+    public async Task ClassifieUnTexteViaLaRouteDev()
+    {
+        var classifieur = new ClassifieurDeTest((_, _) => new ClassificationResult("RIB", 0.9));
+        await using var application = CreerApplication("Development", classifieur);
+        using var client = application.CreateClient();
+
+        using var response = await client.PostAsJsonAsync(
+            "/api/dev/classify",
+            new { text = "Contact : Jean Dupont", types = new[] { "RIB", "SEPA" } });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var payload = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("RIB", payload.RootElement.GetProperty("type").GetString());
+        Assert.Equal(1, classifieur.Appels);
+        Assert.Equal(new[] { "RIB", "SEPA" }, classifieur.DerniersTypes?.Select(type => type.Id));
+    }
+
+    [Fact]
+    public async Task RefuseUnCorpsSansChampTextSurLaRouteDev()
+    {
+        var classifieur = new ClassifieurDeTest((_, _) => new ClassificationResult("RIB", 0.9));
+        await using var application = CreerApplication("Development", classifieur);
+        using var client = application.CreateClient();
+
+        using var response = await client.PostAsJsonAsync(
+            "/api/dev/classify",
+            new { texte = "Contact : Jean Dupont", types = new[] { "RIB" } });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(0, classifieur.Appels);
+    }
+
+    [Fact]
     public async Task MasqueLesPiiSansDupliquerLesDetections()
     {
         await using var application = new WebApplicationFactory<Program>()

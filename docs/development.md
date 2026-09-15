@@ -53,7 +53,7 @@ Exposées en `Development` uniquement, pour tester chaque brique sans la chaîne
 | `POST /api/dev/extract/{engine}` | `file` multipart, `engine` = `pdfpig` ou `ppocr-tiny` | pages `{numeroPage, texte, confianceOcr}` |
 | `POST /api/dev/pii/detect` | `{"text":"..."}` | détections `{category, rule, kind, start, length, value}` |
 | `POST /api/dev/pii/mask` | `{"text":"..."}` | `{"text":"..."}` avec les marqueurs envoyés à Flowise |
-| `POST /api/dev/classify` | `{"texte":"...","types":["RIB","SEPA"]}` | `{type, confiance, executionId}` brut du classifieur |
+| `POST /api/dev/classify` | `{"text":"...","types":["RIB","SEPA"]}` | `{type, confiance, executionId}` brut du classifieur |
 
 ## Où vivent les choses
 

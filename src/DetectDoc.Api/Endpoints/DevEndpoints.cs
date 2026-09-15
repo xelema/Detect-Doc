@@ -83,7 +83,7 @@ public static class DevEndpoints
             var types = DocumentTypes.Normalize(requete?.Types?
                 .Select(id => id is null ? null : new TypeDocumentaire(id, null, null))
                 .ToList());
-            if (string.IsNullOrWhiteSpace(requete?.Texte) || types is null)
+            if (string.IsNullOrWhiteSpace(requete?.Text) || types is null)
             {
                 return Results.Problem(
                     title: "Requête invalide.",
@@ -93,7 +93,7 @@ public static class DevEndpoints
 
             try
             {
-                return Results.Ok(await classifieur.ClassifyAsync(requete.Texte, types, cancellationToken));
+                return Results.Ok(await classifieur.ClassifyAsync(requete.Text, types, cancellationToken));
             }
             catch (Exception exception) when (HttpProblems.ForFlowise(exception, cancellationToken) is { } probleme)
             {
