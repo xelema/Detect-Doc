@@ -776,7 +776,7 @@ public class DemarrageTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var result = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.Equal(
-            "Contact : [PERSON], IBAN [IBAN], téléphone : [PHONE].",
+            "Contact : [PERSON], [PII], téléphone : [PHONE].",
             result.RootElement.GetProperty("text").GetString());
     }
 
