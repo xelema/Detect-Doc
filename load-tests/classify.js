@@ -1,9 +1,14 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
-import { Rate } from 'k6/metrics';
+import { Rate, Trend, Counter } from 'k6/metrics';
 import { textSummary } from 'https://jslib.k6.io/k6-summary/0.0.2/index.js';
 
 const errorRate = new Rate('errors');
+const statusCounter = new Counter('http_status');
+const extractionMs = new Trend('stage_extraction_ms', true);
+const piiMs = new Trend('stage_pii_ms', true);
+const classificationMs = new Trend('stage_classification_ms', true);
+const durationByEngine = new Trend('duration_by_engine_ms', true);
 
 // Pas de prefixe K6_ : K6_VUS/K6_ITERATIONS sont natives et ecrasent le scenario.
 const VUS = Number(__ENV.LOAD_VUS || '5');
@@ -42,11 +47,19 @@ const documents = open(`${CORPUS_DIR}/manifest.jsonl`)
     .filter((doc) => doc.split === 'dev')
     .map((doc) => ({
         nom: doc.fichier.split('/').pop(),
+        regime: doc.regime || '',
         data: open(`${CORPUS_DIR}/${doc.fichier}`, 'b'),
     }));
 
 if (documents.length === 0) {
     throw new Error(`Aucun document dev trouvé dans ${CORPUS_DIR}/manifest.jsonl`);
+}
+
+// Une ligne REQ|... par requête sur la console : chaque VU a son propre contexte
+// JS, un tableau partagé n'arriverait pas jusqu'à handleSummary. L'orchestrateur
+// capture la sortie et la transforme en CSV.
+function emitRecord(fields) {
+    console.log('REQ|' + fields.map((v) => String(v ?? '').replace(/[|\n]/g, ' ')).join('|'));
 }
 
 export default function () {
@@ -61,22 +74,54 @@ export default function () {
         },
         { timeout: '120s' });
 
+    let body = null;
+    try {
+        body = JSON.parse(response.body);
+    } catch (e) { /* corps non JSON : traité comme échec par le check */ }
+
     const success = check(response, {
         'status is 200': (r) => r.status === 200,
-        'response is json': (r) => {
-            try {
-                return JSON.parse(r.body) !== null;
-            } catch (e) {
-                return false;
-            }
-        },
+        'response is json': () => body !== null,
     });
     errorRate.add(!success);
+    statusCounter.add(1, { status: String(response.status) });
 
-    if (!success) {
-        console.log(`Echec : status=${response.status} doc=${doc.nom} duree=${response.timings.duration}ms`);
+    const record = {
+        vu: __VU,
+        iter: __ITER,
+        doc: doc.nom,
+        regime: doc.regime,
+        status: response.status,
+        duration_ms: Math.round(response.timings.duration),
+        error_title: '',
+    };
+
+    if (response.status === 200 && body) {
+        record.moteur = body.moteur || '';
+        record.type_predit = body.type || '';
+        record.confiance = body.confiance ?? '';
+        record.pages = body.pagesTraitees ?? '';
+        record.extraction_ms = body.extractionMs ?? '';
+        record.pii_ms = body.piiMaskingMs ?? '';
+        record.classification_ms = body.classificationMs ?? '';
+        record.total_ms = body.totalMs ?? '';
+        record.execution_id = body.executionId || '';
+        extractionMs.add(body.extractionMs || 0);
+        piiMs.add(body.piiMaskingMs || 0);
+        classificationMs.add(body.classificationMs || 0);
+        if (body.moteur) {
+            durationByEngine.add(response.timings.duration, { moteur: body.moteur });
+        }
+    } else {
+        // Le ProblemDetails nomme l'étape fautive dans `title`.
+        record.error_title = (body && body.title) || (response.body || '').slice(0, 120);
+        record.execution_id = (body && body.executionId) || '';
     }
 
+    emitRecord(['req', record.vu, record.iter, record.doc, record.regime, record.status,
+        record.duration_ms, record.moteur, record.type_predit, record.confiance, record.pages,
+        record.extraction_ms, record.pii_ms, record.classification_ms, record.total_ms,
+        record.execution_id, record.error_title]);
     sleep(1);
 }
 
@@ -90,8 +135,10 @@ const RUN_ID = (__ENV.K6_RUN_ID || `vus${VUS}`).replace(/[:\\/\s]+/g, '-');
 const RESULTS_DIR = (__ENV.K6_RESULTS_DIR || '.').replace(/\/+$/, '');
 
 export function handleSummary(data) {
+    const base = `${RESULTS_DIR}/k6-${RUN_ID}`;
+
     return {
         stdout: textSummary(data, { indent: ' ', enableColors: true }),
-        [`${RESULTS_DIR}/k6-${RUN_ID}.summary.txt`]: textSummary(data, { indent: ' ', enableColors: false }),
+        [`${base}.summary.txt`]: textSummary(data, { indent: ' ', enableColors: false }),
     };
 }

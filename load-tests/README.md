@@ -12,7 +12,15 @@ Convention reprise de Valia-Stack (`documentation/load-testing/K6.md`) : un run 
 
 ## Un palier de concurrence
 
-Deux terminaux depuis `load-tests/` :
+Méthode recommandée, tout-en-un (logs du conteneur, stats, run K6, récapitulatif) :
+
+```powershell
+.\Invoke-LoadRun.ps1 -Vus 20          # depuis load-tests/
+```
+
+Elle produit dans `results/` : `k6-<RunId>.summary.txt`, `k6-<RunId>.requests.csv` (une ligne par requête : statut, durées par étape, moteur, executionId Flowise, titre d'erreur), `stats-<RunId>.csv`, `logs-<RunId>.txt`, `run-<RunId>.meta.json`. Ajouter `-LocalK6` pour utiliser un binaire `k6` local au lieu de Docker.
+
+Méthode manuelle, deux terminaux depuis `load-tests/` :
 
 ```powershell
 # 1. Echantillonnage RAM/CPU du conteneur API (Ctrl+C a la fin du run)
