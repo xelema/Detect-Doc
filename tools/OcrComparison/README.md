@@ -16,11 +16,11 @@ Le script télécharge chaque fichier et rejette celui dont l'empreinte sha256 n
 ..\..\Get-Modeles.ps1 -Source \\serveur\partage\modeles-ocr
 ```
 
-Le script installe Tesseract (`fra`, `osd`) et PP-OCRv6 en tailles `tiny` et `small`. La taille `medium` pèse 138 Mo à elle seule et n'est pas installée par défaut : ajouter ses trois entrées à la table du script pour la mesurer.
+Le script installe Tesseract (`fra`, `osd`) et PP-OCRv6 en tailles `tiny`, `small` et `medium`, dictionnaires compris, celui de `tiny` étant propre à cette taille.
 
 Le classifieur d'orientation n'y figure pas, RapidOcrNet le livre dans son paquet sous `models\v5`. PP-OCRv6 le réutilise directement.
 
-**Pourquoi pas dans le dépôt.** Les huit fichiers pèsent 48 Mo, et le triple avec `medium`. Un binaire commité reste dans l'historique pour toujours, y compris quand le modèle sera remplacé. C'est la règle déjà retenue pour le corpus : versionner l'identité, pas les octets. `Get-Modeles.ps1` tient lieu de manifest.
+**Pourquoi pas dans le dépôt.** Les dix fichiers pèsent environ 190 Mo, `medium` à lui seul autour de 130. Un binaire commité reste dans l'historique pour toujours, y compris quand le modèle sera remplacé. C'est la règle déjà retenue pour le corpus : versionner l'identité, pas les octets. `Get-Modeles.ps1` tient lieu de manifest.
 
 **Chaque taille de PP-OCRv6 a son propre dictionnaire** : 18 708 caractères pour `small` et `medium`, 6 904 pour `tiny`. Les intervertir ne lève aucune erreur, ça décale l'alphabet et rend du texte plausible et faux. C'est la raison d'être de la vérification d'empreinte.
 

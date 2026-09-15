@@ -14,58 +14,47 @@ public sealed class PresidioPiiDetector : IPiiDetector, IDisposable
     private static readonly TimeSpan StartupTimeout = TimeSpan.FromSeconds(60);
     private static readonly TimeSpan DetectionTimeout = TimeSpan.FromSeconds(30);
 
-    private readonly Process _process;
-    private readonly Task<string> _standardError;
+    // Un enfant mort est relancé quelques fois puis le détecteur reste en faute : sans borne,
+    // un crash systématique bouclerait sur des démarrages coûteux et la santé resterait verte.
+    private const int MaxRestarts = 3;
+    private static readonly TimeSpan RestartDelay = TimeSpan.FromMilliseconds(500);
+
+    // stderr ne sert qu'à diagnostiquer un démarrage raté : on ne conserve que la fin.
+    private const int StderrRetainedLength = 16 * 1024;
+
     private readonly TimeSpan _startupTimeout;
     private readonly TimeSpan _detectionTimeout;
-    private readonly ConcurrentDictionary<int, TaskCompletionSource<Response>> _pending = new();
-    private readonly Lock _sendLock = new();
+    private readonly PresidioHealth _health;
+    private readonly SemaphoreSlim _sendGate = new(1, 1);
     private int _nextId;
+    private int _restarts;
+    private bool _faulted;
 
-    public PresidioPiiDetector(TimeSpan? startupTimeout = null, TimeSpan? detectionTimeout = null)
+    // Génération courante du sous-processus : une relance remplace le processus et sa table de
+    // correspondance ensemble, pour qu'une réponse du nouvel enfant ne résolve jamais une
+    // requête écrite à l'ancien.
+    private Process _process;
+    private ConcurrentDictionary<int, TaskCompletionSource<Response>> _pending = new();
+
+    public PresidioPiiDetector(
+        TimeSpan? startupTimeout = null,
+        TimeSpan? detectionTimeout = null,
+        PresidioHealth? health = null)
     {
         _startupTimeout = startupTimeout ?? StartupTimeout;
         _detectionTimeout = detectionTimeout ?? DetectionTimeout;
-        var python = Environment.GetEnvironmentVariable("PII_PYTHON") ?? "python3";
-        var script = Path.Combine(AppContext.BaseDirectory, "Pii", "detecteur.py");
-        Process? process = null;
+        _health = health ?? new PresidioHealth();
         try
         {
-            process = Process.Start(new ProcessStartInfo(python, ["-u", script])
-            {
-                RedirectStandardInput = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                StandardOutputEncoding = new UTF8Encoding(false),
-                StandardInputEncoding = new UTF8Encoding(false)
-            }) ?? throw new InvalidOperationException("Le processus Presidio n'a pas démarré.");
-            _standardError = process.StandardError.ReadToEndAsync();
-
-            // Lecture bornée : un Python qui pend gèlerait ce constructeur sous le verrou du
-            // singleton DI, et avec lui toutes les requêtes PII.
-            var startupLine = process.StandardOutput.ReadLineAsync()
-                .WaitAsync(_startupTimeout)
-                .GetAwaiter()
-                .GetResult();
-            var startup = startupLine is null ? null : JsonSerializer.Deserialize<Startup>(startupLine);
-            if (startup?.Error is not null || startupLine is null)
-            {
-                throw Fail(process, $"Chargement de Presidio impossible : {startup?.Error ?? "réponse absente"}.");
-            }
-
-            _process = process;
+            _process = StartProcess();
         }
-        catch (Exception exception)
+        catch
         {
-            // Un échec de démarrage est une indisponibilité (503), pas un 500 : exécutable absent,
-            // première ligne stdout illisible (un avertissement natif contourne redirect_stdout)…
-            // Le processus éventuellement lancé ne doit pas survivre orphelin.
-            KillProcess(process);
-            process?.Dispose();
-            throw new InvalidOperationException("Le démarrage du détecteur Presidio a échoué.", exception);
+            _health.Unrecoverable = true;
+            throw;
         }
 
-        _ = Task.Run(DistributeAsync);
+        _ = Task.Run(() => DistributeAsync(_process, _pending));
     }
 
     public async Task<IReadOnlyList<PiiDetection>> DetectAsync(
@@ -76,15 +65,35 @@ public sealed class PresidioPiiDetector : IPiiDetector, IDisposable
 
         var id = Interlocked.Increment(ref _nextId);
         var completion = new TaskCompletionSource<Response>(TaskCreationOptions.RunContinuationsAsynchronously);
-        _pending[id] = completion;
+        ConcurrentDictionary<int, TaskCompletionSource<Response>>? pending = null;
 
         Response response;
         try
         {
-            lock (_sendLock)
+            await _sendGate.WaitAsync(cancellationToken);
+            try
             {
-                _process.StandardInput.WriteLine(JsonSerializer.Serialize(new { id, texte = text }));
-                _process.StandardInput.Flush();
+                EnsureAlive();
+                pending = _pending;
+                pending[id] = completion;
+                // L'écriture est bornée par le délai de détection : un enfant qui ne lit plus
+                // son entrée ne doit pas retenir indéfiniment le verrou que tout le monde traverse.
+                var ligne = JsonSerializer.Serialize(new { id, texte = text });
+                await _process.StandardInput.WriteLineAsync(ligne)
+                    .WaitAsync(_detectionTimeout, cancellationToken);
+                await _process.StandardInput.FlushAsync()
+                    .WaitAsync(_detectionTimeout, cancellationToken);
+            }
+            catch (Exception) when (!cancellationToken.IsCancellationRequested)
+            {
+                // Une ligne tronquée désynchroniserait le protocole : on abandonne l'enfant,
+                // l'appel suivant le relance dans la limite du budget de redémarrage.
+                KillProcess(_process);
+                throw;
+            }
+            finally
+            {
+                _sendGate.Release();
             }
 
             // Sans borne propre, un analyze bloqué garderait l'entrée et le sémaphore
@@ -95,7 +104,7 @@ public sealed class PresidioPiiDetector : IPiiDetector, IDisposable
         {
             // Retire l'entrée dans tous les cas : réponse reçue, échec d'écriture ou annulation
             // par l'appelant, pour ne jamais laisser une requête abandonnée dans la table.
-            _pending.TryRemove(id, out _);
+            pending?.TryRemove(id, out _);
         }
 
         if (response.Error is not null)
@@ -121,11 +130,116 @@ public sealed class PresidioPiiDetector : IPiiDetector, IDisposable
                 d.Length))];
     }
 
-    private async Task DistributeAsync()
+    // Appelée sous _sendGate : un enfant mort est relancé dans la limite du budget, puis le
+    // détecteur reste en faute jusqu'au redémarrage de l'hôte.
+    private void EnsureAlive()
+    {
+        if (_faulted)
+        {
+            throw new InvalidOperationException("Le sous-processus Presidio est tombé et le budget de relances est épuisé.");
+        }
+        if (!_process.HasExited)
+        {
+            return;
+        }
+
+        if (_restarts >= MaxRestarts)
+        {
+            _faulted = true;
+            _health.Unrecoverable = true;
+            throw new InvalidOperationException("Le sous-processus Presidio est tombé et le budget de relances est épuisé.");
+        }
+
+        _restarts++;
+        Thread.Sleep(RestartDelay);
+
+        var process = StartProcess();
+        var previous = _process;
+        _process = process;
+        var pending = _pending = new ConcurrentDictionary<int, TaskCompletionSource<Response>>();
+        _ = Task.Run(() => DistributeAsync(process, pending));
+        previous.Dispose();
+    }
+
+    private Process StartProcess()
+    {
+        var python = Environment.GetEnvironmentVariable("PII_PYTHON") ?? "python3";
+        var script = Environment.GetEnvironmentVariable("PII_PYTHON_SCRIPT")
+            ?? Path.Combine(AppContext.BaseDirectory, "Pii", "detecteur.py");
+        Process? process = null;
+        try
+        {
+            process = Process.Start(new ProcessStartInfo(python, ["-u", script])
+            {
+                RedirectStandardInput = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                StandardOutputEncoding = new UTF8Encoding(false),
+                StandardInputEncoding = new UTF8Encoding(false)
+            }) ?? throw new InvalidOperationException("Le processus Presidio n'a pas démarré.");
+
+            // Le drain tourne pendant toute la vie de l'enfant : sans lecture concurrente, un
+            // stderr bavard finirait par remplir le tube et geler le processus. La rétention
+            // reste bornée, seule la fin sert au diagnostic d'un démarrage raté.
+            var standardError = new StringBuilder();
+            _ = Task.Run(() => DrainStderrAsync(process.StandardError, standardError));
+
+            // Lecture bornée : un Python qui pend gèlerait le démarrage sous le verrou d'envoi.
+            var startupLine = process.StandardOutput.ReadLineAsync()
+                .WaitAsync(_startupTimeout)
+                .GetAwaiter()
+                .GetResult();
+            var startup = startupLine is null ? null : JsonSerializer.Deserialize<Startup>(startupLine);
+            if (startup?.Error is not null || startupLine is null)
+            {
+                throw Fail(process, standardError, $"Chargement de Presidio impossible : {startup?.Error ?? "réponse absente"}.");
+            }
+
+            _health.Unrecoverable = false;
+            return process;
+        }
+        catch (Exception exception)
+        {
+            // Un échec de démarrage est une indisponibilité (503), pas un 500 : exécutable absent,
+            // première ligne stdout illisible (un avertissement natif contourne redirect_stdout)…
+            // Le processus éventuellement lancé ne doit pas survivre orphelin.
+            KillProcess(process);
+            process?.Dispose();
+            throw new InvalidOperationException("Le démarrage du détecteur Presidio a échoué.", exception);
+        }
+    }
+
+    private static async Task DrainStderrAsync(StreamReader stderr, StringBuilder retained)
     {
         try
         {
-            while (await _process.StandardOutput.ReadLineAsync() is { } line)
+            var chunk = new char[2048];
+            int lu;
+            while ((lu = await stderr.ReadAsync(chunk)) > 0)
+            {
+                lock (retained)
+                {
+                    retained.Append(chunk, 0, lu);
+                    if (retained.Length > StderrRetainedLength)
+                    {
+                        retained.Remove(0, retained.Length - StderrRetainedLength);
+                    }
+                }
+            }
+        }
+        catch (Exception)
+        {
+            // Meilleur effort : ce flux ne sert qu'au diagnostic, jamais au protocole.
+        }
+    }
+
+    private static async Task DistributeAsync(
+        Process process,
+        ConcurrentDictionary<int, TaskCompletionSource<Response>> pending)
+    {
+        try
+        {
+            while (await process.StandardOutput.ReadLineAsync() is { } line)
             {
                 Response? response;
                 try
@@ -140,7 +254,7 @@ public sealed class PresidioPiiDetector : IPiiDetector, IDisposable
 
                 // Une réponse sans id (ligne entrante illisible côté Python) n'est pas
                 // corrélable : elle est ignorée, la requête émettrice expirera sur son délai.
-                if (response?.Id is { } responseId && _pending.TryRemove(responseId, out var completion))
+                if (response?.Id is { } responseId && pending.TryRemove(responseId, out var completion))
                 {
                     completion.SetResult(response);
                 }
@@ -148,18 +262,23 @@ public sealed class PresidioPiiDetector : IPiiDetector, IDisposable
         }
         finally
         {
-            foreach (var completion in _pending.Values)
+            foreach (var completion in pending.Values)
             {
                 completion.TrySetException(new InvalidOperationException("Le processus Presidio s'est interrompu."));
             }
         }
     }
 
-    private InvalidOperationException Fail(Process process, string message)
+    private static InvalidOperationException Fail(Process process, StringBuilder standardError, string message)
     {
         process.StandardInput.Close();
         process.WaitForExit(5000);
-        var error = _standardError.IsCompletedSuccessfully ? _standardError.Result.TrimEnd() : string.Empty;
+        string error;
+        lock (standardError)
+        {
+            error = standardError.ToString().TrimEnd();
+        }
+
         return new InvalidOperationException($"{message} {error}".TrimEnd());
     }
 
@@ -183,6 +302,7 @@ public sealed class PresidioPiiDetector : IPiiDetector, IDisposable
         }
 
         _process.Dispose();
+        _sendGate.Dispose();
     }
 
     private static void KillProcess(Process? process)
@@ -212,4 +332,11 @@ public sealed class PresidioPiiDetector : IPiiDetector, IDisposable
         [property: JsonPropertyName("start")] int Start,
         [property: JsonPropertyName("length")] int Length,
         [property: JsonPropertyName("regle")] string Rule);
+}
+
+// État santé partagé entre le détecteur et /health : lire l'état en résolvant
+// PresidioPiiDetector lancerait le sous-processus.
+public sealed class PresidioHealth
+{
+    public bool Unrecoverable { get; set; }
 }

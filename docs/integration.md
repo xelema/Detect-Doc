@@ -19,7 +19,7 @@ Prérequis : SDK .NET 10 (`global.json` épingle la version) et les modèles OCR
 dotnet run --project src/DetectDoc.Api -- --environment Development --urls http://localhost:5080
 ```
 
-En `Development`, Swagger UI est disponible sur `http://localhost:5080/swagger` et la description OpenAPI sur `/openapi/v1.json`. Le démarrage fonctionne sans secret ni service externe : les appels de classification échoueront en 503 tant que Flowise n'est pas configuré, mais `/health` et l'extraction répondent.
+La surface de diagnostic (Swagger UI sur `http://localhost:5080/swagger`, description OpenAPI sur `/openapi/v1.json`, routes `/api/dev/*`) est exposée en `Development` comme en `Recette`. Le démarrage fonctionne sans secret ni service externe : les appels de classification échoueront en 503 tant que Flowise n'est pas configuré, mais `/health` et l'extraction répondent.
 
 ### En conteneur
 
@@ -38,12 +38,12 @@ Même image, deux configurations. Ce qui change entre les environnements :
 
 | Réglage | Recette | Production |
 |---|---|---|
-| `ASPNETCORE_ENVIRONMENT` | `Development` | `Production` |
+| `ASPNETCORE_ENVIRONMENT` | `Recette` | `Production` |
 | `Flowise__BaseUrl` | `https://valia-flowise.val.local` | `https://flowise.ammon.cloud` |
 | `Flowise__FlowId` | le flow de recette | le flow de production |
 | `Flowise__AllowInvalidTls` | `true` | absent ou `false` |
 
-En recette, `ASPNETCORE_ENVIRONMENT=Development` : `/swagger` et les routes de diagnostic `/api/dev/*` restent accessibles, ce qui permet d'y tester l'extraction et le masquage PII isolément. Le Flowise de recette présente un certificat interne que le conteneur ne reconnaît pas : `Flowise__AllowInvalidTls=true` désactive la validation de la chaîne pour cet appel sortant. L'option est refusée en `Production`, où l'application refuse de démarrer si elle est définie ; le certificat public y est valide et le bypass inutile.
+En recette, `ASPNETCORE_ENVIRONMENT=Recette` garde `/swagger` et les routes de diagnostic `/api/dev/*` accessibles, ce qui permet d'y tester l'extraction et le masquage PII isolément. Le Flowise de recette présente un certificat interne que le conteneur ne reconnaît pas : `Flowise__AllowInvalidTls=true` désactive la validation de la chaîne pour cet appel sortant. L'option n'est acceptée que sous `Development` et `Recette` ; sous tout autre nom d'environnement, l'application refuse de démarrer si elle est définie. Le certificat public est valide en `Production` et le bypass inutile.
 
 Le dépôt fournit `compose.yaml` et `.env.exemple` à la racine. Copier la configuration, renseigner le `Flowise__FlowId`, puis lancer :
 
@@ -52,7 +52,7 @@ cp .env.exemple .env
 docker compose --env-file .env up -d --build
 ```
 
-Le même `.env` sert à `docker run --env-file .env` et, pour la recette, on y passe `Flowise__AllowInvalidTls=true`.
+Le même `.env` sert à `docker run --env-file .env` et, pour la recette, on y passe `ASPNETCORE_ENVIRONMENT=Recette` et `Flowise__AllowInvalidTls=true`.
 
 Deux alternatives au bypass, toutes deux pratiquées dans Valia-Stack : monter le magasin d'autorités de l'hôte dans le conteneur (`/usr/local/share/ca-certificates/:/etc/ssl/certs/:ro`, comme le fait `valiapi` en recette) pour faire confiance au certificat sans désactiver la validation ; ou, si le conteneur rejoint le réseau `ia_stack_lan`, viser l'adresse interne `http://flowise:3000` et la question du certificat ne se pose plus.
 
@@ -62,7 +62,7 @@ Deux alternatives au bypass, toutes deux pratiquées dans Valia-Stack : monter l
 |---|---|---|
 | `Flowise__BaseUrl` | pour classer | URL de base de l'instance Flowise |
 | `Flowise__FlowId` | pour classer | identifiant du flow de classification |
-| `Flowise__AllowInvalidTls` | non | `true` accepte un certificat interne non reconnu, refusé en `Production` |
+| `Flowise__AllowInvalidTls` | non | `true` accepte un certificat interne non reconnu, admis seulement en `Development` et `Recette` |
 | `PpOcr__ModelsDirectory` | non | dossier contenant `v6/` des modèles PP-OCR, défaut `models/` à côté du binaire |
 | `PpOcr__ReconnaissancesParalleles` | non | lignes reconnues simultanément par l'OCR, défaut `1` |
 | `PII_PYTHON` | hors conteneur | exécutable Python portant `presidio-analyzer` et `fr_core_news_md`, voir `docs/development.md` |
@@ -71,11 +71,11 @@ Deux alternatives au bypass, toutes deux pratiquées dans Valia-Stack : monter l
 
 | Route | Objet |
 |---|---|
-| `GET /health` | `200 {"statut":"ok"}` |
+| `GET /health` | `200 {"statut":"ok"}`, `503 {"statut":"degraded"}` quand le sous-processus Presidio est tombé et son budget de relances est épuisé |
 | `POST /api/documents/classify` | extraction, masquage PII puis classification d'un PDF |
 | `POST /api/documents/classify-batch` | même chaîne sur un lot de PDF, erreur par document |
 
-Les routes `/api/dev/*` de diagnostic ne sont exposées qu'en `Development` : voir `docs/development.md`.
+Les routes `/api/dev/*` de diagnostic ne sont exposées qu'en `Development` et `Recette` : voir `docs/development.md`.
 
 ### `POST /api/documents/classify`
 
@@ -89,7 +89,7 @@ Formulaire `multipart/form-data` :
 
 `types` accepte un tableau JSON d'identifiants, `["RIB","FACTURE"]`, ou d'objets avec `libelle` et `description` facultatifs, `[{"id":"RIB","libelle":"Relevé d'identité bancaire","description":"Coordonnées bancaires du titulaire"}]`. Les libellés et descriptions sont montrés au modèle et améliorent la discrimination entre types proches. La liste séparée par des virgules (`RIB,FACTURE`) reste admise, c'est ce que poste Swagger. Chaque `id` doit être non vide et unique.
 
-`engine` choisit l'extraction : `pdfpig` lit le texte natif, `ppocr-tiny` passe chaque page par l'OCR, `auto` extrait avec PdfPig puis applique l'OCR aux pages sans texte. Laisser `auto` sauf essai reproductible.
+`engine` choisit l'extraction : `pdfpig` lit le texte natif, `ppocr-tiny` passe chaque page par l'OCR, `auto` rend le texte natif quand chaque page en porte, et reprend l'extraction du document entier par l'OCR dès qu'une page n'en livre pas. Laisser `auto` sauf essai reproductible.
 
 Réponse `200` :
 

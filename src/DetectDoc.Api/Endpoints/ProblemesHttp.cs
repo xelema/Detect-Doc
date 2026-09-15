@@ -34,7 +34,7 @@ internal static class HttpProblems
         InvalidOperationException => Create(
             StatusCodes.Status503ServiceUnavailable,
             "Moteur indisponible.",
-            exception.Message),
+            "Le moteur d'extraction demandé n'est pas disponible."),
         _ => null
     };
 
@@ -45,18 +45,18 @@ internal static class HttpProblems
         InvalidDataException => Create(
             StatusCodes.Status502BadGateway,
             "Réponse Flowise invalide.",
-            exception.Message),
+            "La réponse de Flowise n'est pas exploitable."),
         HttpRequestException => Create(
             StatusCodes.Status503ServiceUnavailable,
             "Flowise indisponible.",
-            exception.Message),
+            "L'appel au service Flowise a échoué."),
         TaskCanceledException when !cancellationToken.IsCancellationRequested => Create(
             StatusCodes.Status504GatewayTimeout,
             "Flowise a dépassé le délai d'appel."),
         InvalidOperationException => Create(
             StatusCodes.Status503ServiceUnavailable,
             "Flowise non configuré.",
-            exception.Message),
+            "La configuration du service Flowise est incomplète."),
         _ => null
     };
 

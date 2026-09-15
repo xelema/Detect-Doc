@@ -83,15 +83,32 @@ public static class ClassificationEndpoints
                     continue;
                 }
 
-                await using var flux = file.OpenReadStream();
-                var outcome = await classification.ExecuteAsync(
-                    flux, typesValides!, engine, cancellationToken);
-                resultats.Add(outcome is DocumentClassificationOutcome.Success success
-                    ? new ResultatClassificationLotDocumentHttp(file.FileName, success.Result, null)
-                    : new ResultatClassificationLotDocumentHttp(
+                try
+                {
+                    await using var flux = file.OpenReadStream();
+                    var outcome = await classification.ExecuteAsync(
+                        flux, typesValides!, engine, cancellationToken);
+                    resultats.Add(outcome is DocumentClassificationOutcome.Success success
+                        ? new ResultatClassificationLotDocumentHttp(file.FileName, success.Result, null)
+                        : new ResultatClassificationLotDocumentHttp(
+                            file.FileName,
+                            null,
+                            HttpProblems.ForOutcome(outcome, cancellationToken)));
+                }
+                catch (Exception) when (!cancellationToken.IsCancellationRequested)
+                {
+                    // Une faute hors contrat (exception non traduite par ForOutcome, flux
+                    // inouvrable) reste attachée à son document : le lot n'est pas interrompu.
+                    resultats.Add(new ResultatClassificationLotDocumentHttp(
                         file.FileName,
                         null,
-                        HttpProblems.ForOutcome(outcome, cancellationToken)));
+                        new ProblemDetails
+                        {
+                            Status = StatusCodes.Status500InternalServerError,
+                            Title = "Erreur interne.",
+                            Detail = "Le fichier n'a pas pu être traité."
+                        }));
+                }
             }
 
             return Results.Ok(resultats);
@@ -112,20 +129,30 @@ public static class ClassificationEndpoints
                 statusCode: StatusCodes.Status400BadRequest));
         }
 
+        // La forme se choisit au premier caractère, jamais via le filtre d'un catch : un JSON
+        // valide qui n'est pas un tableau (objet, scalaire) doit être une 400, pas une liste
+        // virgules dont les éléments deviendraient des identifiants absurdes envoyés au flow.
+        var formeJson = types.TrimStart() is ['[', ..] or ['{', ..];
+
         List<TypeDocumentaire?>? typesDemandes;
         try
         {
             using var document = JsonDocument.Parse(types);
+            if (document.RootElement.ValueKind is not JsonValueKind.Array)
+            {
+                return (null, TypesInvalides());
+            }
+
+            var tableau = document.RootElement;
             // Deux formes admises : `["RIB","SEPA"]` ou
             // `[{"id":"RIB","libelle":"…","description":"…"}]`, les deux derniers champs étant facultatifs.
-            typesDemandes = document.RootElement is { ValueKind: JsonValueKind.Array } tableau
-                && tableau.EnumerateArray().All(element => element.ValueKind == JsonValueKind.String)
+            typesDemandes = tableau.EnumerateArray().All(element => element.ValueKind == JsonValueKind.String)
                 ? tableau.EnumerateArray()
                     .Select(element => (TypeDocumentaire?)new TypeDocumentaire(element.GetString() ?? "", null, null))
                     .ToList()
-                : document.RootElement.Deserialize<List<TypeDocumentaire?>>(JsonSerializerOptions.Web);
+                : tableau.Deserialize<List<TypeDocumentaire?>>(JsonSerializerOptions.Web);
         }
-        catch (JsonException) when (!types.TrimStart().StartsWith('['))
+        catch (JsonException) when (!formeJson)
         {
             // Swagger poste la liste séparée par des virgules plutôt qu'un tableau JSON.
             typesDemandes = types.Split(',', StringSplitOptions.TrimEntries)
@@ -134,10 +161,7 @@ public static class ClassificationEndpoints
         }
         catch (JsonException)
         {
-            return (null, Results.Problem(
-                title: "Requête invalide.",
-                detail: "Le champ types doit être un tableau JSON d'identifiants ou d'objets, ou une liste séparée par des virgules.",
-                statusCode: StatusCodes.Status400BadRequest));
+            return (null, TypesInvalides());
         }
 
         var typesValides = typesDemandes is null ? null : DocumentTypes.Normalize(typesDemandes);
@@ -148,4 +172,9 @@ public static class ClassificationEndpoints
                 statusCode: StatusCodes.Status400BadRequest))
             : (typesValides, null);
     }
+
+    private static IResult TypesInvalides() => Results.Problem(
+        title: "Requête invalide.",
+        detail: "Le champ types doit être un tableau JSON d'identifiants ou d'objets, ou une liste séparée par des virgules.",
+        statusCode: StatusCodes.Status400BadRequest);
 }

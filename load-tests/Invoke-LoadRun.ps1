@@ -69,32 +69,41 @@ try {
     # 3. Run K6.
     $corpusDir = Join-Path $repoRoot 'corpus'
     $typesFile = Join-Path $repoRoot 'tools\ClassificationEvaluation\descriptions-types.json'
-    if ($LocalK6) {
-        $env:DETECTDOC_BASE_URL = if ($BaseUrl) { $BaseUrl } else { 'http://localhost:8080' }
-        $env:K6_CORPUS_DIR = $corpusDir
-        $env:K6_TYPES_PATH = $typesFile
-        $env:LOAD_VUS = "$Vus"
-        $env:K6_RUN_ID = $RunId
-        $env:K6_RESULTS_DIR = $resultsDir
-        k6 run (Join-Path $loadTestsDir 'classify.js') 2>&1 |
-            Tee-Object -FilePath $consoleFile
-        $k6Exit = $LASTEXITCODE
+    $k6Exit = 1
+    $previousErrorActionPreference = $ErrorActionPreference
+    # K6 écrit ses console.log sur stderr, mais seul son code de sortie indique l'échec du run.
+    $ErrorActionPreference = 'Continue'
+    try {
+        if ($LocalK6) {
+            $env:DETECTDOC_BASE_URL = if ($BaseUrl) { $BaseUrl } else { 'http://localhost:8080' }
+            $env:K6_CORPUS_DIR = $corpusDir
+            $env:K6_TYPES_PATH = $typesFile
+            $env:LOAD_VUS = "$Vus"
+            $env:K6_RUN_ID = $RunId
+            $env:K6_RESULTS_DIR = $resultsDir
+            k6 run (Join-Path $loadTestsDir 'classify.js') 2>&1 |
+                Tee-Object -FilePath $consoleFile
+            $k6Exit = $LASTEXITCODE
+        }
+        else {
+            $base = if ($BaseUrl) { $BaseUrl } else { 'http://host.docker.internal:8080' }
+            docker run --rm -i `
+                -v "${loadTestsDir}:/scripts" `
+                -v "${corpusDir}:/corpus:ro" `
+                -v "${typesFile}:/types/descriptions-types.json:ro" `
+                -e "DETECTDOC_BASE_URL=$base" `
+                -e K6_CORPUS_DIR=/corpus `
+                -e K6_TYPES_PATH=/types/descriptions-types.json `
+                -e "LOAD_VUS=$Vus" `
+                -e "K6_RUN_ID=$RunId" `
+                -e K6_RESULTS_DIR=/scripts/results `
+                grafana/k6 run /scripts/classify.js 2>&1 |
+                Tee-Object -FilePath $consoleFile
+            $k6Exit = $LASTEXITCODE
+        }
     }
-    else {
-        $base = if ($BaseUrl) { $BaseUrl } else { 'http://host.docker.internal:8080' }
-        docker run --rm -i `
-            -v "${loadTestsDir}:/scripts" `
-            -v "${corpusDir}:/corpus:ro" `
-            -v "${typesFile}:/scripts/descriptions-types.json:ro" `
-            -e "DETECTDOC_BASE_URL=$base" `
-            -e K6_CORPUS_DIR=/corpus `
-            -e K6_TYPES_PATH=/scripts/descriptions-types.json `
-            -e "LOAD_VUS=$Vus" `
-            -e "K6_RUN_ID=$RunId" `
-            -e K6_RESULTS_DIR=/scripts/results `
-            grafana/k6 run /scripts/classify.js 2>&1 |
-            Tee-Object -FilePath $consoleFile
-        $k6Exit = $LASTEXITCODE
+    finally {
+        $ErrorActionPreference = $previousErrorActionPreference
     }
 }
 finally {

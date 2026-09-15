@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 using DetectDoc.Core.Classification;
 using DetectDoc.Core.Pii;
 using DetectDoc.Infrastructure.Classification;
+using DetectDoc.Infrastructure.Pii;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
@@ -18,9 +19,12 @@ namespace DetectDoc.Tests;
 public class DemarrageTests
 {
     [Theory]
-    [InlineData("Development", true)]
-    [InlineData("Production", false)]
-    public async Task ExposeLesRoutesSelonEnvironnement(string environnement, bool documentationExposee)
+    [InlineData("Development", HttpStatusCode.OK)]
+    [InlineData("Recette", HttpStatusCode.OK)]
+    [InlineData("Production", HttpStatusCode.NotFound)]
+    [InlineData("Staging", HttpStatusCode.NotFound)]
+    public async Task ExposeLaSurfaceDeDiagnosticEnDevelopmentEtRecette(
+        string environnement, HttpStatusCode statutDocumentation)
     {
         await using var application = new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder => builder.UseEnvironment(environnement));
@@ -34,11 +38,10 @@ public class DemarrageTests
 
         using var openApi = await client.GetAsync("/openapi/v1.json");
         using var swagger = await client.GetAsync("/swagger/index.html");
-        var statutDocumentation = documentationExposee ? HttpStatusCode.OK : HttpStatusCode.NotFound;
         Assert.Equal(statutDocumentation, openApi.StatusCode);
         Assert.Equal(statutDocumentation, swagger.StatusCode);
 
-        if (documentationExposee)
+        if (statutDocumentation == HttpStatusCode.OK)
         {
             using var contrat = JsonDocument.Parse(await openApi.Content.ReadAsStringAsync());
             Assert.True(contrat.RootElement.GetProperty("paths").GetProperty("/health")
@@ -94,6 +97,11 @@ public class DemarrageTests
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        using var probleme = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("Moteur indisponible.", probleme.RootElement.GetProperty("title").GetString());
+        var detail = probleme.RootElement.GetProperty("detail").GetString();
+        Assert.Equal("Le moteur d'extraction demandé n'est pas disponible.", detail);
+        Assert.DoesNotContain(AppContext.BaseDirectory, detail);
     }
 
     [Theory]
@@ -133,9 +141,12 @@ public class DemarrageTests
     [Theory]
     [InlineData("[\"RIB\"]", typeof(TaskCanceledException), HttpStatusCode.GatewayTimeout)]
     [InlineData("DEVIS,FACTURE,RIB,FEUILLE_EMAR", typeof(InvalidDataException), HttpStatusCode.BadGateway)]
+    [InlineData("[\"RIB\"]", typeof(HttpRequestException), HttpStatusCode.ServiceUnavailable)]
+    [InlineData("[\"RIB\"]", typeof(InvalidOperationException), HttpStatusCode.ServiceUnavailable)]
     public async Task SignaleLesEchecsFlowise(string types, Type typeException, HttpStatusCode statutAttendu)
     {
-        var exception = (Exception)Activator.CreateInstance(typeException)!;
+        var exception = (Exception)Activator.CreateInstance(
+            typeException, "message interne à ne pas exposer")!;
         await using var application = new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder =>
             {
@@ -155,6 +166,9 @@ public class DemarrageTests
 
         Assert.Equal(statutAttendu, response.StatusCode);
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        Assert.DoesNotContain(
+            "message interne à ne pas exposer",
+            await response.Content.ReadAsStringAsync());
     }
 
     [Theory]
@@ -176,6 +190,30 @@ public class DemarrageTests
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+    }
+
+    [Theory]
+    [InlineData("""{"id":"RIB"}""")]
+    [InlineData("""{"id":"RIB","x":1}""")]
+    [InlineData("123")]
+    [InlineData("\"RIB\"")]
+    [InlineData("true")]
+    [InlineData("null")]
+    [InlineData("{pas du json")]
+    public async Task RefuseUnChampTypesQuiNestPasUnTableauJson(string types)
+    {
+        var classifieur = new ClassifieurDeTest((_, _) => new ClassificationResult("RIB", 0.9));
+        await using var application = CreerApplication("Development", classifieur);
+        using var client = application.CreateClient();
+        using var contenu = CreerPdfMultipart("Texte natif lisible");
+        contenu.Add(new StringContent(types), "types");
+        contenu.Add(new StringContent("pdfpig"), "engine");
+
+        using var response = await client.PostAsync("/api/documents/classify", contenu);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(0, classifieur.Appels);
     }
 
     [Fact]
@@ -244,8 +282,8 @@ public class DemarrageTests
     [Fact]
     public async Task NeRapportePasUneConfigurationOcrInvalideEnErreurClient()
     {
-        // ReconnaissancesParalleles < 1 est un défaut de configuration serveur : il doit
-        // remonter hors du contrat HTTP (500), pas être traduit en 400 « Moteur inconnu ».
+        // ReconnaissancesParalleles < 1 est un défaut de configuration serveur : il remonte
+        // en 503 « Moteur indisponible », pas en 400 « Moteur inconnu » imputé à l'appelant.
         var classifieur = new ClassifieurDeTest((_, _) => new ClassificationResult("RIB", 0.9));
         await using var application = new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder =>
@@ -268,6 +306,9 @@ public class DemarrageTests
         using var response = await client.PostAsync("/api/documents/classify", contenu);
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.DoesNotContain(
+            AppContext.BaseDirectory,
+            await response.Content.ReadAsStringAsync());
         Assert.Equal(0, classifieur.Appels);
     }
 
@@ -439,6 +480,62 @@ public class DemarrageTests
     }
 
     [Fact]
+    public async Task LotRapporteUneFauteInterneSansInterrompreLesAutres()
+    {
+        var classifieur = new ClassifieurDeTest((appel, _) => appel == 1
+            ? throw new NullReferenceException("défaut interne")
+            : new ClassificationResult("RIB", 0.9));
+        await using var application = CreerApplication("Development", classifieur);
+        using var client = application.CreateClient();
+        using var contenu = CreerLotMultipart(
+            ("panne.pdf", "Premier document"),
+            ("succes.pdf", "Second document"));
+
+        using var response = await client.PostAsync("/api/documents/classify-batch", contenu);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var payload = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var resultats = payload.RootElement.EnumerateArray().ToArray();
+        Assert.Equal(JsonValueKind.Null, resultats[0].GetProperty("resultat").ValueKind);
+        var erreur = resultats[0].GetProperty("erreur");
+        Assert.Equal(500, erreur.GetProperty("status").GetInt32());
+        Assert.Equal("Erreur interne.", erreur.GetProperty("title").GetString());
+        Assert.Equal("Le fichier n'a pas pu être traité.", erreur.GetProperty("detail").GetString());
+        Assert.Equal("RIB", resultats[1].GetProperty("resultat").GetProperty("type").GetString());
+        Assert.Equal(JsonValueKind.Null, resultats[1].GetProperty("erreur").ValueKind);
+        Assert.Equal(2, classifieur.Appels);
+    }
+
+    [Theory]
+    [InlineData("Development", true)]
+    [InlineData("Recette", true)]
+    [InlineData("Production", false)]
+    public async Task FauteInterneResteUne500SurLaRouteUnitaire(string environnement, bool detailExpose)
+    {
+        var classifieur = new ClassifieurDeTest((_, _) => throw new NullReferenceException("défaut interne"));
+        await using var application = CreerApplication(environnement, classifieur);
+        using var client = application.CreateClient();
+        using var contenu = CreerPdfMultipart("Texte natif lisible");
+        contenu.Add(new StringContent("[\"RIB\"]"), "types");
+        contenu.Add(new StringContent("pdfpig"), "engine");
+
+        if (!detailExpose)
+        {
+            // Hors Development et Recette, aucune page d'exception n'est inscrite :
+            // la faute remonte brute au client de test.
+            await Assert.ThrowsAsync<NullReferenceException>(
+                () => client.PostAsync("/api/documents/classify", contenu));
+            return;
+        }
+
+        using var response = await client.PostAsync("/api/documents/classify", contenu);
+
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        // La page d'exception détaillée fait partie de la surface de diagnostic.
+        Assert.Contains("NullReferenceException", await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
     public async Task MasqueLesPiiAvantFlowiseEtMesureLaDuree()
     {
         var flowise = new FlowiseCaptureHandler();
@@ -588,10 +685,12 @@ public class DemarrageTests
         Assert.Equal(3, classifieur.Appels);
     }
 
-    [Fact]
-    public async Task NExposePasLesRoutesDeDiagnosticEnProduction()
+    [Theory]
+    [InlineData("Production")]
+    [InlineData("Staging")]
+    public async Task NExposePasLesRoutesDeDiagnosticHorsDevelopmentEtRecette(string environnement)
     {
-        await using var application = CreerApplication("Production");
+        await using var application = CreerApplication(environnement);
         using var client = application.CreateClient();
         using var contenu = CreerPdfMultipart("contenu");
 
@@ -602,17 +701,22 @@ public class DemarrageTests
         using var maskingResponse = await client.PostAsJsonAsync(
             "/api/dev/pii/mask",
             new { text = "Jean Dupont" });
+        using var classifyResponse = await client.PostAsJsonAsync(
+            "/api/dev/classify",
+            new { text = "contenu", types = new[] { "RIB" } });
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, piiResponse.StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, maskingResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, classifyResponse.StatusCode);
     }
 
     [Theory]
-    [InlineData("Production", false)]
-    [InlineData("Recette", true)]
     [InlineData("Development", true)]
-    public async Task AllowInvalidTlsEstRefuseEnProductionUniquement(string environnement, bool accepte)
+    [InlineData("Recette", true)]
+    [InlineData("Production", false)]
+    [InlineData("Staging", false)]
+    public async Task AllowInvalidTlsEstRefuseHorsDevelopmentEtRecette(string environnement, bool accepte)
     {
         await using var application = new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder =>
@@ -635,12 +739,35 @@ public class DemarrageTests
     }
 
     [Fact]
-    public async Task DetecteLesPiiEnDevelopment()
+    public async Task SanteDegradeeQuandPresidioEstIrrecuperable()
+    {
+        // Le budget de relances épuisé marque l'état partagé : /health doit le rapporter
+        // dégradé sans résoudre le détecteur, ce qui lancerait le sous-processus.
+        await using var application = new WebApplicationFactory<Program>()
+            .WithWebHostBuilder(builder =>
+            {
+                builder.ConfigureServices(services =>
+                    services.AddSingleton(new PresidioHealth { Unrecoverable = true }));
+                builder.ConfigureLogging(logging => logging.ClearProviders());
+            });
+        using var client = application.CreateClient();
+
+        using var health = await client.GetAsync("/health");
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, health.StatusCode);
+        using var etat = JsonDocument.Parse(await health.Content.ReadAsStringAsync());
+        Assert.Equal("degraded", etat.RootElement.GetProperty("statut").GetString());
+    }
+
+    [Theory]
+    [InlineData("Development")]
+    [InlineData("Recette")]
+    public async Task DetecteLesPiiEnDevelopmentEtRecette(string environnement)
     {
         await using var application = new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder =>
             {
-                builder.UseEnvironment("Development");
+                builder.UseEnvironment(environnement);
                 builder.ConfigureServices(services => services.AddSingleton<IPiiDetector>(new PiiDetectorDeTest()));
                 builder.ConfigureLogging(logging => logging.ClearProviders());
             });
@@ -655,6 +782,39 @@ public class DemarrageTests
         var detection = Assert.Single(result.RootElement.EnumerateArray());
         Assert.Equal("Name", detection.GetProperty("category").GetString());
         Assert.Equal("Jean Dupont", detection.GetProperty("value").GetString());
+    }
+
+    [Fact]
+    public async Task ClassifieUnTexteViaLaRouteDev()
+    {
+        var classifieur = new ClassifieurDeTest((_, _) => new ClassificationResult("RIB", 0.9));
+        await using var application = CreerApplication("Development", classifieur);
+        using var client = application.CreateClient();
+
+        using var response = await client.PostAsJsonAsync(
+            "/api/dev/classify",
+            new { text = "Contact : Jean Dupont", types = new[] { "RIB", "SEPA" } });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var payload = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("RIB", payload.RootElement.GetProperty("type").GetString());
+        Assert.Equal(1, classifieur.Appels);
+        Assert.Equal(new[] { "RIB", "SEPA" }, classifieur.DerniersTypes?.Select(type => type.Id));
+    }
+
+    [Fact]
+    public async Task RefuseUnCorpsSansChampTextSurLaRouteDev()
+    {
+        var classifieur = new ClassifieurDeTest((_, _) => new ClassificationResult("RIB", 0.9));
+        await using var application = CreerApplication("Development", classifieur);
+        using var client = application.CreateClient();
+
+        using var response = await client.PostAsJsonAsync(
+            "/api/dev/classify",
+            new { texte = "Contact : Jean Dupont", types = new[] { "RIB" } });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(0, classifieur.Appels);
     }
 
     [Fact]
@@ -680,7 +840,7 @@ public class DemarrageTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var result = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.Equal(
-            "Contact : [PERSON], IBAN [IBAN], téléphone : [PHONE].",
+            "Contact : [PERSON], [PII], téléphone : [PHONE].",
             result.RootElement.GetProperty("text").GetString());
     }
 

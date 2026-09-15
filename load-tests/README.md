@@ -18,7 +18,7 @@ Méthode recommandée, tout-en-un (logs du conteneur, stats, run K6, récapitula
 .\Invoke-LoadRun.ps1 -Vus 20          # depuis load-tests/
 ```
 
-Elle produit dans `results/` : `k6-<RunId>.summary.txt`, `k6-<RunId>.requests.csv` (une ligne par requête : statut, durées par étape, moteur, executionId Flowise, titre d'erreur), `stats-<RunId>.csv`, `logs-<RunId>.txt`, `run-<RunId>.meta.json`. Ajouter `-LocalK6` pour utiliser un binaire `k6` local au lieu de Docker.
+Elle produit dans `results/` : `k6-<RunId>.summary.txt`, `k6-<RunId>.requests.csv` (une ligne par requête : statut, durées par étape, moteur, executionId Flowise, titre d'erreur), `console-<RunId>.txt` (sortie K6 brute, dont le CSV est reconstitué), `stats-<RunId>.csv`, `logs-<RunId>.txt`, `run-<RunId>.meta.json`. Ajouter `-LocalK6` pour utiliser un binaire `k6` local au lieu de Docker.
 
 Méthode manuelle (sans capture de logs ni de stats) :
 
@@ -27,9 +27,10 @@ Méthode manuelle (sans capture de logs ni de stats) :
 docker run --rm -i `
     -v "${PWD}:/scripts" `
     -v "${PWD}\..\corpus:/corpus:ro" `
-    -v "${PWD}\..\tools\ClassificationEvaluation\descriptions-types.json:/scripts/descriptions-types.json:ro" `
+    -v "${PWD}\..\tools\ClassificationEvaluation\descriptions-types.json:/types/descriptions-types.json:ro" `
     -e DETECTDOC_BASE_URL=http://host.docker.internal:8080 `
     -e K6_CORPUS_DIR=/corpus `
+    -e K6_TYPES_PATH=/types/descriptions-types.json `
     -e LOAD_VUS=5 `
     -e K6_RUN_ID=vus5 `
     -e K6_RESULTS_DIR=/scripts/results `

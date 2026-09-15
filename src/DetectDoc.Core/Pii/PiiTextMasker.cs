@@ -25,14 +25,10 @@ public sealed class PiiTextMasker(IPiiDetector detector)
             }
         }
 
-        var structuredDetections = detections.Where(detection => detection.Kind != PiiDetectionKind.Model).ToArray();
-        // Une détection modèle qui chevauche une règle d'une AUTRE catégorie est un faux positif probable
-        // et on l'écarte. Une détection modèle qui chevauche une règle de la MÊME catégorie est conservée :
-        // la fusion ci-dessous étend alors le masque à toute son étendue au lieu de la tronquer.
+        // Une détection modèle chevauchée par une règle d'une autre catégorie n'est un faux
+        // positif probable que sur la partie commune : la fusion couvre l'union des plages,
+        // donc le reste de la plage modèle reste masqué au lieu d'être écarté avec elle.
         var ranges = detections
-            .Where(detection => detection.Kind != PiiDetectionKind.Model
-                || !structuredDetections.Any(structured =>
-                    structured.Category != detection.Category && Overlaps(detection, structured)))
             .GroupBy(detection => (detection.Start, detection.Length))
             .Select(group => group.OrderBy(detection => detection.Kind).First())
             .OrderBy(detection => detection.Start)
@@ -71,9 +67,6 @@ public sealed class PiiTextMasker(IPiiDetector detector)
         result.Append(text, cursor, text.Length - cursor);
         return result.ToString();
     }
-
-    private static bool Overlaps(PiiDetection left, PiiDetection right) =>
-        left.Start < right.Start + right.Length && right.Start < left.Start + left.Length;
 
     private static string GetMarker(PiiCategory category) => category switch
     {

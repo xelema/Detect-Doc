@@ -5,7 +5,7 @@ Runbook du développeur qui travaille sur le POC : prérequis, lancement, régla
 ## Prérequis
 
 - **SDK .NET 10** : `global.json` épingle la version (10.0.302, patches de la série acceptés).
-- **Modèles OCR** : pas dans le dépôt. `Get-Modeles.ps1` à la racine les télécharge dans `models/`, vérifie leurs empreintes SHA-256, et le build copie PP-OCRv6 tiny vers la sortie de l'API. Sans accès à GitHub ou ModelScope : `.\Get-Modeles.ps1 -Source \\serveur\partage\modeles-ocr`.
+- **Modèles OCR** : pas dans le dépôt. `Get-Modeles.ps1` à la racine les télécharge dans `models/`, vérifie leurs empreintes SHA-256, et le build copie `models/v6` vers la sortie de l'API. Sans accès à GitHub ou ModelScope : `.\Get-Modeles.ps1 -Source \\serveur\partage\modeles-ocr`.
 - **Python pour le masquage PII** : la détection Presidio tourne dans un sous-processus. Créer l'environnement une fois, sous un chemin court (l'arborescence de Presidio dépasse la limite de longueur de chemin Windows sous `%TEMP%`) :
 
 ```powershell
@@ -27,7 +27,7 @@ $env:Flowise__FlowId = "<flow-id>"
 dotnet run --project src/DetectDoc.Api -- --environment Development --urls http://localhost:5080
 ```
 
-Le test marqué `Category=Corpus` dépend de `corpus/raw/`, non versionné : il est exclu du filtre. En `Development`, Swagger UI répond sur `/swagger` et sert à envoyer un PDF depuis le navigateur.
+Le test marqué `Category=Corpus` dépend de `corpus/raw/`, non versionné : il est exclu du filtre. Les tests marqués `Category=Python` exécutent un vrai `python` local via des scripts stub (`PII_PYTHON`/`PII_PYTHON_SCRIPT`) : l'étape de test du Dockerfile les exclut, l'image de build n'embarque pas d'interpréteur. En `Development`, Swagger UI répond sur `/swagger` et sert à envoyer un PDF depuis le navigateur.
 
 En conteneur, l'image embarque modèles et Python : `docker build --tag detect-doc:local .` puis `docker run --rm --publish 8080:8080 --env-file .env detect-doc:local`, ou `docker compose --env-file .env up -d --build`. Détail et variables d'environnement dans `docs/integration.md`.
 
@@ -36,24 +36,25 @@ En conteneur, l'image embarque modèles et Python : `docker build --tag detect-d
 | Variable | Défaut | Effet |
 |---|---|---|
 | `PII_PYTHON` | `python3` | exécutable Python du sous-processus Presidio |
+| `PII_PYTHON_SCRIPT` | `Pii/detecteur.py` à côté du binaire | script servi par le sous-processus, surtout utile aux tests |
 | `PII_PRESIDIO_MODELE` | `fr_core_news_md` | modèle spaCy chargé par `detecteur.py` |
 | `PII_PRESIDIO_ENTITES` | toutes | entités Presidio demandées, séparées par des virgules |
 | `PII_PRESIDIO_EXCLURE` | composants hors `tok2vec` et `ner` | composants spaCy à ne pas charger |
 | `Flowise__BaseUrl`, `Flowise__FlowId` | absents | cible du flow de classification |
-| `Flowise__AllowInvalidTls` | `false` | accepte un certificat interne, refusé en `Production` |
+| `Flowise__AllowInvalidTls` | `false` | accepte un certificat interne, admis seulement en `Development` et `Recette` |
 | `PpOcr__ModelsDirectory` | `models/` à côté du binaire | dossier contenant `v6/` |
 | `PpOcr__ReconnaissancesParalleles` | `1` | lignes reconnues en parallèle par PP-OCR |
 
 ## Routes de diagnostic
 
-Exposées en `Development` uniquement, pour tester chaque brique sans la chaîne complète :
+Exposées en `Development` et `Recette` uniquement, pour tester chaque brique sans la chaîne complète :
 
 | Route | Entrée | Sortie |
 |---|---|---|
 | `POST /api/dev/extract/{engine}` | `file` multipart, `engine` = `pdfpig` ou `ppocr-tiny` | pages `{numeroPage, texte, confianceOcr}` |
 | `POST /api/dev/pii/detect` | `{"text":"..."}` | détections `{category, rule, kind, start, length, value}` |
 | `POST /api/dev/pii/mask` | `{"text":"..."}` | `{"text":"..."}` avec les marqueurs envoyés à Flowise |
-| `POST /api/dev/classify` | `{"texte":"...","types":["RIB","SEPA"]}` | `{type, confiance, executionId}` brut du classifieur |
+| `POST /api/dev/classify` | `{"text":"...","types":["RIB","SEPA"]}` | `{type, confiance, executionId}` brut du classifieur |
 
 ## Où vivent les choses
 

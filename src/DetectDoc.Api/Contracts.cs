@@ -8,7 +8,7 @@ public sealed record ResultatExtractionPageHttp(
     string Texte,
     float? ConfianceOcr);
 
-public sealed record ClassificationHttpRequest(string Texte, string[] Types);
+public sealed record ClassificationHttpRequest(string Text, string[] Types);
 
 public sealed record ResultatClassificationLotDocumentHttp(
     string NomFichier,

@@ -39,12 +39,12 @@ La dernière commande retourne `statut : ok`. Arrêter avec `Ctrl+C` ou `docker 
 | [/health](http://localhost:5080/health) | HTTP 200, `{"statut":"ok"}` | Tous les environnements |
 | `POST /api/documents/classify` | Extraction puis classification d'un PDF | Tous les environnements |
 | `POST /api/documents/classify-batch` | Extraction puis classification d'un lot de PDF | Tous les environnements |
-| `POST /api/dev/extract/{engine}` | Texte extrait page par page | Development |
-| `POST /api/dev/pii/detect` | Plages de PII détectées par les règles et Presidio | Development |
-| `POST /api/dev/pii/mask` | Texte avec les PII remplacées par des marqueurs | Development |
-| `POST /api/dev/classify` | Classification d'un texte par Flowise | Development |
-| [/openapi/v1.json](http://localhost:5080/openapi/v1.json) | Description OpenAPI des routes | Development |
-| [/swagger](http://localhost:5080/swagger) | Interface interactive des routes | Development |
+| `POST /api/dev/extract/{engine}` | Texte extrait page par page | Development et Recette |
+| `POST /api/dev/pii/detect` | Plages de PII détectées par les règles et Presidio | Development et Recette |
+| `POST /api/dev/pii/mask` | Texte avec les PII remplacées par des marqueurs | Development et Recette |
+| `POST /api/dev/classify` | Classification d'un texte par Flowise | Development et Recette |
+| [/openapi/v1.json](http://localhost:5080/openapi/v1.json) | Description OpenAPI des routes | Development et Recette |
+| [/swagger](http://localhost:5080/swagger) | Interface interactive des routes | Development et Recette |
 
 Le démarrage fonctionne sans secret ni service externe : la classification répond 503 tant que Flowise n'est pas configuré.
 
@@ -77,7 +77,7 @@ Detect-Doc/
 │   ├── DetectDoc.Core/      use case de classification, interfaces des adapteurs
 │   └── DetectDoc.Infrastructure/  adapteurs : PdfPig, PP-OCR, Presidio, Flowise
 ├── tests/
-│   └── DetectDoc.Tests/     tests HTTP avec serveur en mémoire
+│   └── DetectDoc.Tests/     tests unitaires et HTTP, serveur en mémoire
 ├── corpus/
 │   ├── manifest.jsonl       livrable versionné : une ligne JSON par document, sa vérité terrain
 │   └── raw/                 documents produits par le générateur, non versionnés
