@@ -94,6 +94,11 @@ public class DemarrageTests
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        using var probleme = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("Moteur indisponible.", probleme.RootElement.GetProperty("title").GetString());
+        var detail = probleme.RootElement.GetProperty("detail").GetString();
+        Assert.Equal("Le moteur d'extraction demandé n'est pas disponible.", detail);
+        Assert.DoesNotContain(AppContext.BaseDirectory, detail);
     }
 
     [Theory]
@@ -133,9 +138,12 @@ public class DemarrageTests
     [Theory]
     [InlineData("[\"RIB\"]", typeof(TaskCanceledException), HttpStatusCode.GatewayTimeout)]
     [InlineData("DEVIS,FACTURE,RIB,FEUILLE_EMAR", typeof(InvalidDataException), HttpStatusCode.BadGateway)]
+    [InlineData("[\"RIB\"]", typeof(HttpRequestException), HttpStatusCode.ServiceUnavailable)]
+    [InlineData("[\"RIB\"]", typeof(InvalidOperationException), HttpStatusCode.ServiceUnavailable)]
     public async Task SignaleLesEchecsFlowise(string types, Type typeException, HttpStatusCode statutAttendu)
     {
-        var exception = (Exception)Activator.CreateInstance(typeException)!;
+        var exception = (Exception)Activator.CreateInstance(
+            typeException, "message interne à ne pas exposer")!;
         await using var application = new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder =>
             {
@@ -155,6 +163,9 @@ public class DemarrageTests
 
         Assert.Equal(statutAttendu, response.StatusCode);
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        Assert.DoesNotContain(
+            "message interne à ne pas exposer",
+            await response.Content.ReadAsStringAsync());
     }
 
     [Theory]
@@ -268,8 +279,8 @@ public class DemarrageTests
     [Fact]
     public async Task NeRapportePasUneConfigurationOcrInvalideEnErreurClient()
     {
-        // ReconnaissancesParalleles < 1 est un défaut de configuration serveur : il doit
-        // remonter hors du contrat HTTP (500), pas être traduit en 400 « Moteur inconnu ».
+        // ReconnaissancesParalleles < 1 est un défaut de configuration serveur : il remonte
+        // en 503 « Moteur indisponible », pas en 400 « Moteur inconnu » imputé à l'appelant.
         var classifieur = new ClassifieurDeTest((_, _) => new ClassificationResult("RIB", 0.9));
         await using var application = new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder =>
@@ -292,6 +303,9 @@ public class DemarrageTests
         using var response = await client.PostAsync("/api/documents/classify", contenu);
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.DoesNotContain(
+            AppContext.BaseDirectory,
+            await response.Content.ReadAsStringAsync());
         Assert.Equal(0, classifieur.Appels);
     }
 
@@ -480,7 +494,10 @@ public class DemarrageTests
         using var payload = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         var resultats = payload.RootElement.EnumerateArray().ToArray();
         Assert.Equal(JsonValueKind.Null, resultats[0].GetProperty("resultat").ValueKind);
-        Assert.Equal(500, resultats[0].GetProperty("erreur").GetProperty("status").GetInt32());
+        var erreur = resultats[0].GetProperty("erreur");
+        Assert.Equal(500, erreur.GetProperty("status").GetInt32());
+        Assert.Equal("Erreur interne.", erreur.GetProperty("title").GetString());
+        Assert.Equal("Le fichier n'a pas pu être traité.", erreur.GetProperty("detail").GetString());
         Assert.Equal("RIB", resultats[1].GetProperty("resultat").GetProperty("type").GetString());
         Assert.Equal(JsonValueKind.Null, resultats[1].GetProperty("erreur").ValueKind);
         Assert.Equal(2, classifieur.Appels);
