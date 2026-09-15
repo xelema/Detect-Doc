@@ -95,7 +95,7 @@ public static class ClassificationEndpoints
                             null,
                             HttpProblems.ForOutcome(outcome, cancellationToken)));
                 }
-                catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
+                catch (Exception) when (!cancellationToken.IsCancellationRequested)
                 {
                     // Une faute hors contrat (exception non traduite par ForOutcome, flux
                     // inouvrable) reste attachée à son document : le lot n'est pas interrompu.
@@ -106,7 +106,7 @@ public static class ClassificationEndpoints
                         {
                             Status = StatusCodes.Status500InternalServerError,
                             Title = "Erreur interne.",
-                            Detail = exception.Message
+                            Detail = "Le fichier n'a pas pu être traité."
                         }));
                 }
             }
