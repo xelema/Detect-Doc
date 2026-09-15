@@ -118,7 +118,7 @@ public static class DevEndpoints
             {
                 return Results.Problem(
                     title: "Fichier invalide.",
-                    detail: "Un fichier PDF non vide est requis.",
+                    detail: "Un fichier non vide est requis.",
                     statusCode: StatusCodes.Status400BadRequest);
             }
 
@@ -128,7 +128,9 @@ public static class DevEndpoints
                 {
                     "pdfpig" => pdfPig,
                     "ppocr-tiny" => services.GetRequiredService<PpOcrEngine>(),
-                    _ => throw new ArgumentException("Le moteur doit être pdfpig ou ppocr-tiny.", nameof(engine))
+                    "openxml" => services.GetRequiredService<OpenXmlTextEngine>(),
+                    _ => throw new ArgumentException(
+                        "Le moteur doit être pdfpig, ppocr-tiny ou openxml.", nameof(engine))
                 };
                 using var flux = file.OpenReadStream();
                 var pages = extracteur.Extract(flux, cancellationToken)
@@ -145,9 +147,10 @@ public static class DevEndpoints
             }
         })
             .DisableAntiforgery()
-            .WithSummary("Extrait le texte d'un PDF avec le moteur choisi.")
+            .WithSummary("Extrait le texte d'un PDF, d'une image ou d'un DOCX avec le moteur choisi.")
             .Produces<IEnumerable<ResultatExtractionPageHttp>>()
             .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status415UnsupportedMediaType)
             .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
             .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
     }

@@ -29,6 +29,7 @@ public static class ServiceCollectionExtensions
         }
 
         services.AddSingleton<PdfPigNativeTextEngine>();
+        services.AddSingleton<OpenXmlTextEngine>();
         // Le constructeur charge les modèles ONNX : la résolution reste paresseuse pour que
         // l'API démarre sans modèle et que leur absence se traduise par une erreur de requête.
         services.AddSingleton(_ => new PpOcrEngine("tiny", repertoireModeles, reconnaissancesParalleles));
@@ -38,7 +39,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IExtractionSelector>(fournisseur => new ExtractionSelector(
             fournisseur.GetRequiredService<AutomaticExtraction>(),
             fournisseur.GetRequiredService<PdfPigNativeTextEngine>(),
-            () => fournisseur.GetRequiredService<PpOcrEngine>()));
+            () => fournisseur.GetRequiredService<PpOcrEngine>(),
+            fournisseur.GetRequiredService<OpenXmlTextEngine>()));
         services.AddSingleton<RegexPiiDetector>();
         // Le constructeur de PresidioPiiDetector lance le sous-processus Python : la composition
         // passe par une fabrique paresseuse pour qu'il ne démarre qu'à la première résolution d'IPiiDetector.

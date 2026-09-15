@@ -46,14 +46,23 @@ public class PdfPigNativeTextEngineTests
     }
 
     [Fact]
-    public void Extract_RefuseUnFluxSansSignaturePdf()
+    public void Extract_RefuseUnFormatNonPrisEnCharge()
     {
         using var stream = new MemoryStream("pas un PDF"u8.ToArray());
         var engine = new PdfPigNativeTextEngine();
 
-        var exception = Assert.Throws<InvalidDataException>(() => engine.Extract(stream));
+        Assert.Throws<DetectDoc.Core.Engines.UnsupportedDocumentFormatException>(
+            () => engine.Extract(stream));
+    }
 
-        Assert.Contains("signature PDF", exception.Message);
+    [Fact]
+    public void Extract_RefuseUneImage()
+    {
+        using var stream = new MemoryStream(FichiersDeTest.Png());
+        var engine = new PdfPigNativeTextEngine();
+
+        var exception = Assert.Throws<ArgumentException>(() => engine.Extract(stream));
+        Assert.Equal("engine", exception.ParamName);
     }
 
     [Fact]

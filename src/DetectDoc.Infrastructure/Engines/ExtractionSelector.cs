@@ -2,23 +2,41 @@ using DetectDoc.Core.Engines;
 
 namespace DetectDoc.Infrastructure.Engines;
 
-// Propriétaire du vocabulaire des moteurs côté requête. La fabrique OCR garde la construction
-// paresseuse : le constructeur de PpOcrEngine charge les modèles ONNX.
+// Propriétaire du vocabulaire des moteurs côté requête et du dispatch par format. La fabrique
+// OCR garde la construction paresseuse : le constructeur de PpOcrEngine charge les modèles ONNX.
 public sealed class ExtractionSelector(
     AutomaticExtraction automatique,
     ITextExtractionEngine pdfPig,
-    Func<ITextExtractionEngine> ppOcr) : IExtractionSelector
+    Func<ITextExtractionEngine> ppOcr,
+    ITextExtractionEngine openXml) : IExtractionSelector
 {
     public ExtractionResult Extract(
         string? engine,
         Stream document,
-        CancellationToken cancellationToken = default) => engine?.ToLowerInvariant() switch
+        CancellationToken cancellationToken = default)
+    {
+        var format = DocumentFormats.Detect(document);
+        var jeton = engine?.ToLowerInvariant();
+        return (jeton, format) switch
         {
-            null or "" or "auto" => automatique.Extract(document, cancellationToken),
-            "pdfpig" => Extrait(pdfPig, document, cancellationToken),
-            "ppocr-tiny" => Extrait(ppOcr(), document, cancellationToken),
-            _ => throw new ArgumentException("Le moteur doit être auto, pdfpig ou ppocr-tiny.", nameof(engine))
+            (null or "" or "auto", DocumentFileFormat.Pdf) =>
+                automatique.Extract(document, cancellationToken),
+            (null or "" or "auto", DocumentFileFormat.Image) =>
+                Extrait(ppOcr(), document, cancellationToken),
+            (null or "" or "auto", DocumentFileFormat.Docx) =>
+                Extrait(openXml, document, cancellationToken),
+            ("pdfpig", DocumentFileFormat.Pdf) =>
+                Extrait(pdfPig, document, cancellationToken),
+            ("ppocr-tiny", DocumentFileFormat.Pdf or DocumentFileFormat.Image) =>
+                Extrait(ppOcr(), document, cancellationToken),
+            ("openxml", DocumentFileFormat.Docx) =>
+                Extrait(openXml, document, cancellationToken),
+            ("pdfpig" or "ppocr-tiny" or "openxml", _) => throw new ArgumentException(
+                $"Le moteur {jeton} ne prend pas en charge ce format de document.", nameof(engine)),
+            _ => throw new ArgumentException(
+                "Le moteur doit être auto, pdfpig, ppocr-tiny ou openxml.", nameof(engine))
         };
+    }
 
     private static ExtractionResult Extrait(
         ITextExtractionEngine moteur,

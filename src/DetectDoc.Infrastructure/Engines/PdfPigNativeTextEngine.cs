@@ -11,7 +11,11 @@ public sealed class PdfPigNativeTextEngine : ITextExtractionEngine
         Stream fluxDocument,
         CancellationToken cancellationToken = default)
     {
-        PdfStream.Validate(fluxDocument);
+        if (DocumentFormats.Detect(fluxDocument) is not DocumentFileFormat.Pdf)
+        {
+            throw new ArgumentException($"Le moteur {Name} ne lit que les PDF.", "engine");
+        }
+
         cancellationToken.ThrowIfCancellationRequested();
 
         using var document = PdfDocument.Open(fluxDocument);

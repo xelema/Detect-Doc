@@ -123,19 +123,49 @@ public class DemarrageTests
     }
 
     [Fact]
-    public async Task RetourneUnProblemDetailsPourUnPdfInvalide()
+    public async Task RetourneUnProblemDetailsPourUnFormatNonPrisEnCharge()
     {
         await using var application = CreerApplication("Development");
         using var client = application.CreateClient();
         using var contenu = new MultipartFormDataContent();
-        contenu.Add(new ByteArrayContent("pas un PDF"u8.ToArray()), "file", "document.pdf");
+        contenu.Add(new ByteArrayContent("pas un document"u8.ToArray()), "file", "document.bin");
 
         using var response = await client.PostAsync("/api/dev/extract/pdfpig", contenu);
 
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        Assert.Equal(HttpStatusCode.UnsupportedMediaType, response.StatusCode);
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
         using var probleme = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.Equal("PDF invalide.", probleme.RootElement.GetProperty("title").GetString());
+        Assert.Equal("Format non pris en charge.", probleme.RootElement.GetProperty("title").GetString());
+    }
+
+    [Fact]
+    public async Task ExtraitUnDocxAvecOpenXmlEnDevelopment()
+    {
+        await using var application = CreerApplication("Development");
+        using var client = application.CreateClient();
+        using var contenu = new MultipartFormDataContent();
+        contenu.Add(new ByteArrayContent(FichiersDeTest.Docx("Relevé d'identité bancaire")), "file", "document.docx");
+
+        using var response = await client.PostAsync("/api/dev/extract/openxml", contenu);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var resultat = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var page = Assert.Single(resultat.RootElement.EnumerateArray());
+        Assert.Contains("Relevé d'identité bancaire", page.GetProperty("texte").GetString());
+    }
+
+    [Fact]
+    public async Task RefuseUneCombinaisonMoteurFormatIncompatibleSurLaRouteDev()
+    {
+        await using var application = CreerApplication("Development");
+        using var client = application.CreateClient();
+        using var contenu = new MultipartFormDataContent();
+        contenu.Add(new ByteArrayContent(PdfDeTest.Construire("texte")), "file", "document.pdf");
+
+        using var response = await client.PostAsync("/api/dev/extract/openxml", contenu);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
     }
 
     [Theory]
@@ -313,22 +343,133 @@ public class DemarrageTests
     }
 
     [Fact]
-    public async Task SignaleUnPdfInvalideSansLImputerAFlowise()
+    public async Task SignaleUnFormatNonPrisEnChargeSansLImputerAFlowise()
     {
         var classifieur = new ClassifieurDeTest((_, _) => new ClassificationResult("RIB", 0.9));
         await using var application = CreerApplication("Development", classifieur);
         using var client = application.CreateClient();
         using var contenu = new MultipartFormDataContent();
-        contenu.Add(new ByteArrayContent("pas un PDF"u8.ToArray()), "file", "document.pdf");
+        contenu.Add(new ByteArrayContent("pas un document"u8.ToArray()), "file", "document.bin");
         contenu.Add(new StringContent("[\"RIB\"]"), "types");
-        contenu.Add(new StringContent("pdfpig"), "engine");
+        contenu.Add(new StringContent("auto"), "engine");
 
         using var response = await client.PostAsync("/api/documents/classify", contenu);
 
-        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        Assert.Equal(HttpStatusCode.UnsupportedMediaType, response.StatusCode);
         using var probleme = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.Equal("PDF invalide.", probleme.RootElement.GetProperty("title").GetString());
+        Assert.Equal("Format non pris en charge.", probleme.RootElement.GetProperty("title").GetString());
         Assert.Equal(0, classifieur.Appels);
+    }
+
+    [Fact]
+    public async Task SignaleUnZipSansPartieDocumentCommeNonPrisEnCharge()
+    {
+        var classifieur = new ClassifieurDeTest((_, _) => new ClassificationResult("RIB", 0.9));
+        await using var application = CreerApplication("Development", classifieur);
+        using var client = application.CreateClient();
+        using var contenu = new MultipartFormDataContent();
+        contenu.Add(new ByteArrayContent(FichiersDeTest.ZipSansDocx()), "file", "classeur.xlsx");
+        contenu.Add(new StringContent("[\"RIB\"]"), "types");
+
+        using var response = await client.PostAsync("/api/documents/classify", contenu);
+
+        Assert.Equal(HttpStatusCode.UnsupportedMediaType, response.StatusCode);
+        Assert.Equal(0, classifieur.Appels);
+    }
+
+    [Fact]
+    public async Task ClassifieUnDocxDeBoutEnBout()
+    {
+        var classifieur = new ClassifieurDeTest((_, _) => new ClassificationResult("RIB", 0.9));
+        await using var application = CreerApplication("Development", classifieur);
+        using var client = application.CreateClient();
+        using var contenu = new MultipartFormDataContent();
+        contenu.Add(
+            new ByteArrayContent(FichiersDeTest.Docx("Premier paragraphe.", "Second paragraphe.")),
+            "file",
+            "document.docx");
+        contenu.Add(new StringContent("[\"RIB\"]"), "types");
+
+        using var response = await client.PostAsync("/api/documents/classify", contenu);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var resultat = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("RIB", resultat.RootElement.GetProperty("type").GetString());
+        Assert.Equal("openxml", resultat.RootElement.GetProperty("moteur").GetString());
+        Assert.Equal(1, resultat.RootElement.GetProperty("pagesTraitees").GetInt32());
+        Assert.Equal(1, classifieur.Appels);
+        Assert.Contains("Second paragraphe.", classifieur.DernierTexte);
+    }
+
+    [Theory]
+    [InlineData("pdfpig")]
+    [InlineData("openxml")]
+    public async Task RefuseUnMoteurIncompatibleAvecUneImage(string engine)
+    {
+        var classifieur = new ClassifieurDeTest((_, _) => new ClassificationResult("RIB", 0.9));
+        await using var application = CreerApplication("Development", classifieur);
+        using var client = application.CreateClient();
+        using var contenu = new MultipartFormDataContent();
+        contenu.Add(new ByteArrayContent(FichiersDeTest.Png()), "file", "scan.png");
+        contenu.Add(new StringContent("[\"RIB\"]"), "types");
+        contenu.Add(new StringContent(engine), "engine");
+
+        using var response = await client.PostAsync("/api/documents/classify", contenu);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(0, classifieur.Appels);
+    }
+
+    [Fact]
+    public async Task AchemineUneImageVersLOcr()
+    {
+        var classifieur = new ClassifieurDeTest((_, _) => new ClassificationResult("RIB", 0.9));
+        await using var application = CreerApplication("Development", classifieur);
+        using var client = application.CreateClient();
+        using var contenu = new MultipartFormDataContent();
+        contenu.Add(new ByteArrayContent(FichiersDeTest.Png()), "file", "scan.png");
+        contenu.Add(new StringContent("[\"RIB\"]"), "types");
+
+        using var response = await client.PostAsync("/api/documents/classify", contenu);
+
+        // Sans modèles ONNX dans l'environnement de test, le dispatch vers PP-OCR se traduit
+        // en 503 « Moteur indisponible » : la preuve est l'absence de 400/415/422.
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        using var probleme = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("Moteur indisponible.", probleme.RootElement.GetProperty("title").GetString());
+        Assert.Equal(0, classifieur.Appels);
+    }
+
+    [Fact]
+    public async Task LotMelesFormatsEtIsolentLeursErreurs()
+    {
+        var classifieur = new ClassifieurDeTest((_, _) => new ClassificationResult("RIB", 0.9));
+        await using var application = CreerApplication("Development", classifieur);
+        using var client = application.CreateClient();
+        var contenu = new MultipartFormDataContent();
+        contenu.Add(
+            new ByteArrayContent(PdfDeTest.Construire("Document valide")),
+            "files",
+            "valide.pdf");
+        contenu.Add(
+            new ByteArrayContent(FichiersDeTest.Docx("Document word")),
+            "files",
+            "valide.docx");
+        contenu.Add(new ByteArrayContent("format inconnu"u8.ToArray()), "files", "inconnu.bin");
+        contenu.Add(new StringContent("[\"RIB\"]"), "types");
+        contenu.Add(new StringContent("auto"), "engine");
+
+        using var response = await client.PostAsync("/api/documents/classify-batch", contenu);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var payload = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var resultats = payload.RootElement.EnumerateArray().ToArray();
+        Assert.Equal(3, resultats.Length);
+        Assert.Equal("pdfpig", resultats[0].GetProperty("resultat").GetProperty("moteur").GetString());
+        Assert.Equal("openxml", resultats[1].GetProperty("resultat").GetProperty("moteur").GetString());
+        Assert.Equal(JsonValueKind.Null, resultats[2].GetProperty("resultat").ValueKind);
+        Assert.Equal(415, resultats[2].GetProperty("erreur").GetProperty("status").GetInt32());
+        Assert.Equal(2, classifieur.Appels);
     }
 
     [Fact]
@@ -1028,6 +1169,8 @@ public class DemarrageTests
 
         public int Appels => _appels;
 
+        public string? DernierTexte { get; private set; }
+
         public IReadOnlyCollection<TypeDocumentaire>? DerniersTypes { get; private set; }
 
         public Task<ClassificationResult> ClassifyAsync(
@@ -1035,6 +1178,7 @@ public class DemarrageTests
             IReadOnlyCollection<TypeDocumentaire> types,
             CancellationToken cancellationToken = default)
         {
+            DernierTexte = texte;
             DerniersTypes = types;
             // Les tests envoient des requêtes concurrentes sur la même instance : sans incrément
             // atomique, un appel se perd et le compteur devient intermittent.
