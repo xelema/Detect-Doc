@@ -27,9 +27,10 @@ Méthode manuelle (sans capture de logs ni de stats) :
 docker run --rm -i `
     -v "${PWD}:/scripts" `
     -v "${PWD}\..\corpus:/corpus:ro" `
-    -v "${PWD}\..\tools\ClassificationEvaluation\descriptions-types.json:/scripts/descriptions-types.json:ro" `
+    -v "${PWD}\..\tools\ClassificationEvaluation\descriptions-types.json:/types/descriptions-types.json:ro" `
     -e DETECTDOC_BASE_URL=http://host.docker.internal:8080 `
     -e K6_CORPUS_DIR=/corpus `
+    -e K6_TYPES_PATH=/types/descriptions-types.json `
     -e LOAD_VUS=5 `
     -e K6_RUN_ID=vus5 `
     -e K6_RESULTS_DIR=/scripts/results `
