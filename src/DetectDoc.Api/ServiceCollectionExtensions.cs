@@ -42,6 +42,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<RegexPiiDetector>();
         // Le constructeur de PresidioPiiDetector lance le sous-processus Python : la composition
         // passe par une fabrique paresseuse pour qu'il ne démarre qu'à la première résolution d'IPiiDetector.
+        services.AddSingleton<PresidioHealth>();
         services.AddSingleton<PresidioPiiDetector>();
         services.AddSingleton<IPiiDetector>(fournisseur => new HybridPresidioPiiDetector(
             fournisseur.GetRequiredService<RegexPiiDetector>(),
