@@ -36,6 +36,7 @@ En conteneur, l'image embarque modèles et Python : `docker build --tag detect-d
 | Variable | Défaut | Effet |
 |---|---|---|
 | `PII_PYTHON` | `python3` | exécutable Python du sous-processus Presidio |
+| `PII_PYTHON_SCRIPT` | `Pii/detecteur.py` à côté du binaire | script servi par le sous-processus, surtout utile aux tests |
 | `PII_PRESIDIO_MODELE` | `fr_core_news_md` | modèle spaCy chargé par `detecteur.py` |
 | `PII_PRESIDIO_ENTITES` | toutes | entités Presidio demandées, séparées par des virgules |
 | `PII_PRESIDIO_EXCLURE` | composants hors `tok2vec` et `ner` | composants spaCy à ne pas charger |

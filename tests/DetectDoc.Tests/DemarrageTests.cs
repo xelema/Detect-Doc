@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 using DetectDoc.Core.Classification;
 using DetectDoc.Core.Pii;
 using DetectDoc.Infrastructure.Classification;
+using DetectDoc.Infrastructure.Pii;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
@@ -695,6 +696,27 @@ public class DemarrageTests
         using var client = application.CreateClient();
         using var health = await client.GetAsync("/health");
         Assert.Equal(HttpStatusCode.OK, health.StatusCode);
+    }
+
+    [Fact]
+    public async Task SanteDegradeeQuandPresidioEstIrrecuperable()
+    {
+        // Le budget de relances épuisé marque l'état partagé : /health doit le rapporter
+        // dégradé sans résoudre le détecteur, ce qui lancerait le sous-processus.
+        await using var application = new WebApplicationFactory<Program>()
+            .WithWebHostBuilder(builder =>
+            {
+                builder.ConfigureServices(services =>
+                    services.AddSingleton(new PresidioHealth { Unrecoverable = true }));
+                builder.ConfigureLogging(logging => logging.ClearProviders());
+            });
+        using var client = application.CreateClient();
+
+        using var health = await client.GetAsync("/health");
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, health.StatusCode);
+        using var etat = JsonDocument.Parse(await health.Content.ReadAsStringAsync());
+        Assert.Equal("degraded", etat.RootElement.GetProperty("statut").GetString());
     }
 
     [Fact]

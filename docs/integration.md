@@ -71,7 +71,7 @@ Deux alternatives au bypass, toutes deux pratiquées dans Valia-Stack : monter l
 
 | Route | Objet |
 |---|---|
-| `GET /health` | `200 {"statut":"ok"}` |
+| `GET /health` | `200 {"statut":"ok"}`, `503 {"statut":"degraded"}` quand le sous-processus Presidio est tombé et son budget de relances est épuisé |
 | `POST /api/documents/classify` | extraction, masquage PII puis classification d'un PDF |
 | `POST /api/documents/classify-batch` | même chaîne sur un lot de PDF, erreur par document |
 
