@@ -25,6 +25,13 @@ obj/
 *.user
 .env
 
+# Secrets locaux : variantes d'env, clés et fichiers de configuration sensibles.
+.env.*
+!.env.exemple
+*.pem
+*.key
+secrets.json
+
 # Sorties d'execution du comparatif de masquage PII, un dossier par run.
 tools/PiiMaskingComparison/PiiMaskingComparison/run/
 
