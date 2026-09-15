@@ -40,13 +40,13 @@ En conteneur, l'image embarque modèles et Python : `docker build --tag detect-d
 | `PII_PRESIDIO_ENTITES` | toutes | entités Presidio demandées, séparées par des virgules |
 | `PII_PRESIDIO_EXCLURE` | composants hors `tok2vec` et `ner` | composants spaCy à ne pas charger |
 | `Flowise__BaseUrl`, `Flowise__FlowId` | absents | cible du flow de classification |
-| `Flowise__AllowInvalidTls` | `false` | accepte un certificat interne, refusé en `Production` |
+| `Flowise__AllowInvalidTls` | `false` | accepte un certificat interne, admis seulement en `Development` et `Recette` |
 | `PpOcr__ModelsDirectory` | `models/` à côté du binaire | dossier contenant `v6/` |
 | `PpOcr__ReconnaissancesParalleles` | `1` | lignes reconnues en parallèle par PP-OCR |
 
 ## Routes de diagnostic
 
-Exposées en `Development` uniquement, pour tester chaque brique sans la chaîne complète :
+Exposées en `Development` et `Recette` uniquement, pour tester chaque brique sans la chaîne complète :
 
 | Route | Entrée | Sortie |
 |---|---|---|
