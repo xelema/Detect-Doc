@@ -96,6 +96,7 @@ public class PresidioPiiDetectorTests
     }
 
     [Fact]
+    [Trait("Category", "Python")]
     public async Task RelanceUnEnfantMortPuisRepond()
     {
         // Le stub meurt dès le handshake à son premier démarrage puis sert le protocole :
@@ -115,6 +116,7 @@ public class PresidioPiiDetectorTests
     }
 
     [Fact]
+    [Trait("Category", "Python")]
     public async Task ResteEnFauteQuandLeBudgetDeRelancesEstEpuise()
     {
         // Sans PII_STUB_ETAT le stub meurt après chaque handshake : trois relances au plus,
@@ -136,6 +138,7 @@ public class PresidioPiiDetectorTests
     }
 
     [Fact]
+    [Trait("Category", "Python")]
     public void GardeLaFinDuStderrPourLeDiagnosticDeDemarrage()
     {
         // Le stub inonde stderr avant son handshake d'erreur : la rétention bornée doit garder
@@ -150,6 +153,7 @@ public class PresidioPiiDetectorTests
     }
 
     [Fact]
+    [Trait("Category", "Python")]
     public async Task BorneLEcritureQuandLEnfantNeLitPlus()
     {
         // Un enfant qui ne lit plus son entrée finit par remplir le tube : l'écriture sous le

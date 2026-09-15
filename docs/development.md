@@ -27,7 +27,7 @@ $env:Flowise__FlowId = "<flow-id>"
 dotnet run --project src/DetectDoc.Api -- --environment Development --urls http://localhost:5080
 ```
 
-Le test marqué `Category=Corpus` dépend de `corpus/raw/`, non versionné : il est exclu du filtre. En `Development`, Swagger UI répond sur `/swagger` et sert à envoyer un PDF depuis le navigateur.
+Le test marqué `Category=Corpus` dépend de `corpus/raw/`, non versionné : il est exclu du filtre. Les tests marqués `Category=Python` exécutent un vrai `python` local via des scripts stub (`PII_PYTHON`/`PII_PYTHON_SCRIPT`) : l'étape de test du Dockerfile les exclut, l'image de build n'embarque pas d'interpréteur. En `Development`, Swagger UI répond sur `/swagger` et sert à envoyer un PDF depuis le navigateur.
 
 En conteneur, l'image embarque modèles et Python : `docker build --tag detect-doc:local .` puis `docker run --rm --publish 8080:8080 --env-file .env detect-doc:local`, ou `docker compose --env-file .env up -d --build`. Détail et variables d'environnement dans `docs/integration.md`.
 
