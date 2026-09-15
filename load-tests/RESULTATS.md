@@ -1,7 +1,5 @@
 # Résultats des tests de charge (K6)
 
-Convention reprise de `Valia-Stack/documentation/load-testing/` : un fichier daté par campagne, tableau comparatif par palier, section d'interprétation.
-
 ## Index
 
 - [2026-09-15 - detect-doc - classify.js (local)](2026-09-15_detectdoc_classify_local.md)

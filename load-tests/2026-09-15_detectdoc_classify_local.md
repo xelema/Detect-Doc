@@ -73,3 +73,16 @@ Fichiers `results/k6-vus<N>.summary.txt` et `results/stats-vus<N>.csv`.
 - Le débit plafonne autour de 0.44-0.46 req/s à 10 VUs et ne progresse plus ensuite (0.39 a 15, 0.44 a 20).
 - La RAM croît avec la concurrence (~390 Mio a 1 VU, ~2.2 Gio a 10, ~3.1 Gio a 20 VUs, soit environ 140 Mio par document en vol au-delà du socle).
 - Sans volumétrie cible, le seuil retenu est : stable jusqu'à ~10 documents en parallèle, requêtes individuelles dépassant le timeout client dès 15.
+
+## Coût IA (traces Langfuse, 15/09)
+
+| Run | Requêtes | Traces Mistral | Coût | Tokens in | Tokens out |
+|---|---:|---:|---:|---:|---:|
+| vus1 | 5 | 5 | $0.0018 | ~9 400 | ~620 |
+| vus2 | 10 | 10 | $0.0038 | ~19 300 | ~1 470 |
+| vus5 | 25 | 25 | $0.0091 | ~44 700 | ~4 020 |
+| vus10 | 50 | 50 | $0.0170 | ~82 500 | ~7 670 |
+| vus15 | 75 | 70 | $0.0238 | ~117 800 | ~10 220 |
+| vus20 | 100 | 92 | $0.0315 | ~157 400 | ~13 180 |
+
+- **Coût IA moyen par document classé : ~$0.00034** (≈ $0,34 pour 1 000 documents), en moyenne ~1 700 tokens en entrée et ~147 en sortie.

@@ -20,14 +20,10 @@ Méthode recommandée, tout-en-un (logs du conteneur, stats, run K6, récapitula
 
 Elle produit dans `results/` : `k6-<RunId>.summary.txt`, `k6-<RunId>.requests.csv` (une ligne par requête : statut, durées par étape, moteur, executionId Flowise, titre d'erreur), `stats-<RunId>.csv`, `logs-<RunId>.txt`, `run-<RunId>.meta.json`. Ajouter `-LocalK6` pour utiliser un binaire `k6` local au lieu de Docker.
 
-Méthode manuelle, deux terminaux depuis `load-tests/` :
+Méthode manuelle (sans capture de logs ni de stats) :
 
 ```powershell
-# 1. Echantillonnage RAM/CPU du conteneur API (Ctrl+C a la fin du run)
-# Sans -ContainerName, le script resout le conteneur par l'image detect-doc:local.
-.\Measure-ContainerStats.ps1 -RunId vus5
-
-# 2. Run K6 a 5 VUs, 25 requetes
+# Run K6 a 5 VUs, 25 requetes
 docker run --rm -i `
     -v "${PWD}:/scripts" `
     -v "${PWD}\..\corpus:/corpus:ro" `
