@@ -18,9 +18,12 @@ namespace DetectDoc.Tests;
 public class DemarrageTests
 {
     [Theory]
-    [InlineData("Development", true)]
-    [InlineData("Production", false)]
-    public async Task ExposeLesRoutesSelonEnvironnement(string environnement, bool documentationExposee)
+    [InlineData("Development", HttpStatusCode.OK)]
+    [InlineData("Recette", HttpStatusCode.OK)]
+    [InlineData("Production", HttpStatusCode.NotFound)]
+    [InlineData("Staging", HttpStatusCode.NotFound)]
+    public async Task ExposeLaSurfaceDeDiagnosticEnDevelopmentEtRecette(
+        string environnement, HttpStatusCode statutDocumentation)
     {
         await using var application = new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder => builder.UseEnvironment(environnement));
@@ -34,11 +37,10 @@ public class DemarrageTests
 
         using var openApi = await client.GetAsync("/openapi/v1.json");
         using var swagger = await client.GetAsync("/swagger/index.html");
-        var statutDocumentation = documentationExposee ? HttpStatusCode.OK : HttpStatusCode.NotFound;
         Assert.Equal(statutDocumentation, openApi.StatusCode);
         Assert.Equal(statutDocumentation, swagger.StatusCode);
 
-        if (documentationExposee)
+        if (statutDocumentation == HttpStatusCode.OK)
         {
             using var contrat = JsonDocument.Parse(await openApi.Content.ReadAsStringAsync());
             Assert.True(contrat.RootElement.GetProperty("paths").GetProperty("/health")
@@ -486,19 +488,33 @@ public class DemarrageTests
         Assert.Equal(2, classifieur.Appels);
     }
 
-    [Fact]
-    public async Task FauteInterneResteUne500SurLaRouteUnitaire()
+    [Theory]
+    [InlineData("Development", true)]
+    [InlineData("Recette", true)]
+    [InlineData("Production", false)]
+    public async Task FauteInterneResteUne500SurLaRouteUnitaire(string environnement, bool detailExpose)
     {
         var classifieur = new ClassifieurDeTest((_, _) => throw new NullReferenceException("défaut interne"));
-        await using var application = CreerApplication("Development", classifieur);
+        await using var application = CreerApplication(environnement, classifieur);
         using var client = application.CreateClient();
         using var contenu = CreerPdfMultipart("Texte natif lisible");
         contenu.Add(new StringContent("[\"RIB\"]"), "types");
         contenu.Add(new StringContent("pdfpig"), "engine");
 
+        if (!detailExpose)
+        {
+            // Hors Development et Recette, aucune page d'exception n'est inscrite :
+            // la faute remonte brute au client de test.
+            await Assert.ThrowsAsync<NullReferenceException>(
+                () => client.PostAsync("/api/documents/classify", contenu));
+            return;
+        }
+
         using var response = await client.PostAsync("/api/documents/classify", contenu);
 
         Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        // La page d'exception détaillée fait partie de la surface de diagnostic.
+        Assert.Contains("NullReferenceException", await response.Content.ReadAsStringAsync());
     }
 
     [Fact]
@@ -651,10 +667,12 @@ public class DemarrageTests
         Assert.Equal(3, classifieur.Appels);
     }
 
-    [Fact]
-    public async Task NExposePasLesRoutesDeDiagnosticEnProduction()
+    [Theory]
+    [InlineData("Production")]
+    [InlineData("Staging")]
+    public async Task NExposePasLesRoutesDeDiagnosticHorsDevelopmentEtRecette(string environnement)
     {
-        await using var application = CreerApplication("Production");
+        await using var application = CreerApplication(environnement);
         using var client = application.CreateClient();
         using var contenu = CreerPdfMultipart("contenu");
 
@@ -665,17 +683,22 @@ public class DemarrageTests
         using var maskingResponse = await client.PostAsJsonAsync(
             "/api/dev/pii/mask",
             new { text = "Jean Dupont" });
+        using var classifyResponse = await client.PostAsJsonAsync(
+            "/api/dev/classify",
+            new { text = "contenu", types = new[] { "RIB" } });
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, piiResponse.StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, maskingResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, classifyResponse.StatusCode);
     }
 
     [Theory]
-    [InlineData("Production", false)]
-    [InlineData("Recette", true)]
     [InlineData("Development", true)]
-    public async Task AllowInvalidTlsEstRefuseEnProductionUniquement(string environnement, bool accepte)
+    [InlineData("Recette", true)]
+    [InlineData("Production", false)]
+    [InlineData("Staging", false)]
+    public async Task AllowInvalidTlsEstRefuseHorsDevelopmentEtRecette(string environnement, bool accepte)
     {
         await using var application = new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder =>
@@ -697,13 +720,15 @@ public class DemarrageTests
         Assert.Equal(HttpStatusCode.OK, health.StatusCode);
     }
 
-    [Fact]
-    public async Task DetecteLesPiiEnDevelopment()
+    [Theory]
+    [InlineData("Development")]
+    [InlineData("Recette")]
+    public async Task DetecteLesPiiEnDevelopmentEtRecette(string environnement)
     {
         await using var application = new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder =>
             {
-                builder.UseEnvironment("Development");
+                builder.UseEnvironment(environnement);
                 builder.ConfigureServices(services => services.AddSingleton<IPiiDetector>(new PiiDetectorDeTest()));
                 builder.ConfigureLogging(logging => logging.ClearProviders());
             });

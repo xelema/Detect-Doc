@@ -20,10 +20,12 @@ public static class ServiceCollectionExtensions
 
         var accepterCertificatInvalide = configuration.GetValue<bool>("Flowise:AllowInvalidTls");
         // Le bypass TLS sert en Development comme en recette, où le certificat interne de Flowise
-        // n'est pas reconnu ; il reste interdit en Production.
-        if (accepterCertificatInvalide && environment.IsProduction())
+        // n'est pas reconnu ; tout autre nom d'environnement le refuse.
+        if (accepterCertificatInvalide
+            && environment.EnvironmentName is not ("Development" or "Recette"))
         {
-            throw new InvalidOperationException("Flowise:AllowInvalidTls est refusé en Production.");
+            throw new InvalidOperationException(
+                "Flowise:AllowInvalidTls est refusé hors Development et Recette.");
         }
 
         services.AddSingleton<PdfPigNativeTextEngine>();
@@ -54,13 +56,18 @@ public static class ServiceCollectionExtensions
             configuration["Flowise:FlowId"]));
         services.AddHttpClient<IDocumentClassifier, FlowiseDocumentClassifier>(client =>
                 client.Timeout = TimeSpan.FromSeconds(60))
-            .ConfigurePrimaryHttpMessageHandler(() => accepterCertificatInvalide
-                ? new HttpClientHandler
+            .ConfigurePrimaryHttpMessageHandler(() =>
+            {
+                // Une redirection renverrait le corps POST vers une autre origine : refusée.
+                var handler = new HttpClientHandler { AllowAutoRedirect = false };
+                if (accepterCertificatInvalide)
                 {
-                    ServerCertificateCustomValidationCallback =
-                        HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+                    handler.ServerCertificateCustomValidationCallback =
+                        HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
                 }
-                : new HttpClientHandler());
+
+                return handler;
+            });
 
         return services;
     }
