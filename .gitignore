@@ -30,3 +30,6 @@ tools/PiiMaskingComparison/PiiMaskingComparison/run/
 
 # Sorties d'exécution du runner de classification, un dossier par run.
 tools/ClassificationEvaluation/ClassificationEvaluation/run/
+
+# Syntheses K6 et echantillons docker stats des tests de charge.
+load-tests/results/
