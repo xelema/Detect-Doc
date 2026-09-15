@@ -1,6 +1,8 @@
+using System.Text;
 using System.Xml;
 using DetectDoc.Core.Engines;
 using DocumentFormat.OpenXml.Packaging;
+using W = DocumentFormat.OpenXml.Wordprocessing;
 
 namespace DetectDoc.Infrastructure.Engines;
 
@@ -24,11 +26,10 @@ public sealed class OpenXmlTextEngine : ITextExtractionEngine
         try
         {
             using var document = WordprocessingDocument.Open(fluxDocument, isEditable: false);
-            var texte = string.Join(
-                Environment.NewLine,
-                document.MainDocumentPart?.Document?.Body?
-                    .Descendants<DocumentFormat.OpenXml.Wordprocessing.Paragraph>()
-                    .Select(paragraphe => paragraphe.InnerText) ?? []);
+            var corps = document.MainDocumentPart?.Document?.Body;
+            var texte = corps is null
+                ? string.Empty
+                : string.Join(Environment.NewLine, corps.Descendants<W.Paragraph>().Select(TexteParagraphe));
             return [new PageExtractionResult(1, texte, null)];
         }
         catch (Exception exception) when (exception
@@ -36,5 +37,28 @@ public sealed class OpenXmlTextEngine : ITextExtractionEngine
         {
             throw new InvalidDataException("Le document DOCX n'a pas pu être lu.", exception);
         }
+    }
+
+    // InnerText avalerait les tabulations et sauts de ligne, qui portent la structure du texte.
+    private static string TexteParagraphe(W.Paragraph paragraphe)
+    {
+        var texte = new StringBuilder();
+        foreach (var element in paragraphe.Descendants())
+        {
+            switch (element)
+            {
+                case W.Text texteRun:
+                    texte.Append(texteRun.Text);
+                    break;
+                case W.TabChar:
+                    texte.Append('\t');
+                    break;
+                case W.Break or W.CarriageReturn:
+                    texte.Append('\n');
+                    break;
+            }
+        }
+
+        return texte.ToString();
     }
 }

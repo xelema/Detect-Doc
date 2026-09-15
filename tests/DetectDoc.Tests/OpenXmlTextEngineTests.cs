@@ -23,6 +23,16 @@ public class OpenXmlTextEngineTests
     }
 
     [Fact]
+    public void Extract_ConserveTabulationsEtSautsDeLigne()
+    {
+        using var flux = new MemoryStream(FichiersDeTest.DocxAvecTabEtSaut());
+
+        var texte = _moteur.Extract(flux)[0].Texte;
+
+        Assert.Equal("RIB\tFR76\nfin", texte);
+    }
+
+    [Fact]
     public void Extract_InclutLeTexteDesTableaux()
     {
         var docx = FichiersDeTest.DocxAvecTableau("Cellule A", "Cellule B");

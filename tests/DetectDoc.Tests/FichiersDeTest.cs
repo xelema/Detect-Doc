@@ -59,6 +59,25 @@ internal static class FichiersDeTest
         return flux.ToArray();
     }
 
+    // Un paragraphe portant un w:tab et un w:br, pour vérifier que les séparateurs survivent.
+    public static byte[] DocxAvecTabEtSaut()
+    {
+        using var flux = new MemoryStream();
+        using (var document = WordprocessingDocument.Create(flux, WordprocessingDocumentType.Document))
+        {
+            var partie = document.AddMainDocumentPart();
+            partie.Document = new Document(new Body(new Paragraph(new Run(
+                new Text("RIB"),
+                new TabChar(),
+                new Text("FR76"),
+                new Break(),
+                new Text("fin")))));
+            partie.Document.Save();
+        }
+
+        return flux.ToArray();
+    }
+
     // DOCX valide dont seul word/document.xml est remplacé par du XML cassé : le package reste
     // ouvrable mais la lecture du corps échoue.
     public static byte[] DocxCorrompu()
