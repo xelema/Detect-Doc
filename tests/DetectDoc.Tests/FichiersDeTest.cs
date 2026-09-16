@@ -103,6 +103,46 @@ internal static class FichiersDeTest
         return flux.ToArray();
     }
 
+    // Un paragraphe portant un w:noBreakHyphen et un w:softHyphen : les coupures de mot
+    // portent un caractère que l'extraction doit conserver.
+    public static byte[] DocxAvecTraitsDUnion()
+    {
+        using var flux = new MemoryStream();
+        using (var document = WordprocessingDocument.Create(flux, WordprocessingDocumentType.Document))
+        {
+            var partie = document.AddMainDocumentPart();
+            partie.Document = new Document(new Body(new Paragraph(new Run(
+                new Text("RIB"),
+                new NoBreakHyphen(),
+                new Text("FR76"),
+                new SoftHyphen(),
+                new Text("fin")))));
+            partie.Document.Save();
+        }
+
+        return flux.ToArray();
+    }
+
+    // mc:AlternateContent au niveau corps : mc:Fallback répète en VML ce que mc:Choice porte
+    // en DrawingML, le texte d'une zone de texte ne doit être extrait qu'une fois.
+    public static byte[] DocxAvecContenuAlternatif()
+    {
+        using var flux = new MemoryStream();
+        using (var document = WordprocessingDocument.Create(flux, WordprocessingDocumentType.Document))
+        {
+            var partie = document.AddMainDocumentPart();
+            partie.Document = new Document(new Body(new AlternateContent(
+                new AlternateContentChoice(new Paragraph(new Run(new Text("texte retenu"))))
+                {
+                    Requires = "wps"
+                },
+                new AlternateContentFallback(new Paragraph(new Run(new Text("texte duplique")))))));
+            partie.Document.Save();
+        }
+
+        return flux.ToArray();
+    }
+
     // Signature PK puis archive tronquée : le conteneur est reconnu mais illisible.
     public static byte[] PkTronque() => Docx("texte")[..20];
 

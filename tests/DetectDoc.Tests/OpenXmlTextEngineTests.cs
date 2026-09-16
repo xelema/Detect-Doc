@@ -54,6 +54,26 @@ public class OpenXmlTextEngineTests
     }
 
     [Fact]
+    public void Extract_ConserveLesTraitsDUnion()
+    {
+        using var flux = new MemoryStream(FichiersDeTest.DocxAvecTraitsDUnion());
+
+        var texte = _moteur.Extract(flux)[0].Texte;
+
+        Assert.Equal("RIB-FR76\u00ADfin", texte);
+    }
+
+    [Fact]
+    public void Extract_ExtraitLeContenuAlternatifUneSeuleFois()
+    {
+        using var flux = new MemoryStream(FichiersDeTest.DocxAvecContenuAlternatif());
+
+        var texte = _moteur.Extract(flux)[0].Texte;
+
+        Assert.Equal("texte retenu", texte);
+    }
+
+    [Fact]
     public void Extract_RefuseUnAutreFormat()
     {
         using var flux = new MemoryStream(PdfDeTest.Construire("texte"));
