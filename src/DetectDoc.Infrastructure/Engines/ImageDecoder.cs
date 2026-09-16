@@ -11,13 +11,21 @@ public static class ImageDecoder
             ?? throw new InvalidDataException("L'image n'a pas pu être décodée.");
         var decodee = SKBitmap.Decode(codec)
             ?? throw new InvalidDataException("L'image n'a pas pu être décodée.");
-        var orientee = AppliquerOrientation(decodee, codec.EncodedOrigin);
-        if (!ReferenceEquals(orientee, decodee))
+        try
+        {
+            var orientee = AppliquerOrientation(decodee, codec.EncodedOrigin);
+            if (!ReferenceEquals(orientee, decodee))
+            {
+                decodee.Dispose();
+            }
+
+            return orientee;
+        }
+        catch
         {
             decodee.Dispose();
+            throw;
         }
-
-        return orientee;
     }
 
     // L'orientation EXIF n'est pas appliquée par le décodage : sans ce redressement une photo
@@ -35,43 +43,51 @@ public static class ImageDecoder
         var cible = new SKBitmap(
             transpose ? source.Height : source.Width,
             transpose ? source.Width : source.Height);
-        using var canvas = new SKCanvas(cible);
-        switch (origine)
+        try
         {
-            case SKEncodedOrigin.TopRight:
-                canvas.Translate(source.Width, 0);
-                canvas.Scale(-1, 1);
-                break;
-            case SKEncodedOrigin.BottomRight:
-                canvas.Translate(source.Width, source.Height);
-                canvas.RotateDegrees(180);
-                break;
-            case SKEncodedOrigin.BottomLeft:
-                canvas.Translate(0, source.Height);
-                canvas.Scale(1, -1);
-                break;
-            case SKEncodedOrigin.LeftTop:
-                canvas.RotateDegrees(90);
-                canvas.Scale(1, -1);
-                break;
-            case SKEncodedOrigin.RightTop:
-                canvas.Translate(source.Height, 0);
-                canvas.RotateDegrees(90);
-                break;
-            case SKEncodedOrigin.RightBottom:
-                canvas.Translate(source.Height, source.Width);
-                canvas.RotateDegrees(90);
-                canvas.Scale(-1, 1);
-                break;
-            case SKEncodedOrigin.LeftBottom:
-                canvas.Translate(0, source.Width);
-                canvas.RotateDegrees(270);
-                break;
-        }
+            using var canvas = new SKCanvas(cible);
+            switch (origine)
+            {
+                case SKEncodedOrigin.TopRight:
+                    canvas.Translate(source.Width, 0);
+                    canvas.Scale(-1, 1);
+                    break;
+                case SKEncodedOrigin.BottomRight:
+                    canvas.Translate(source.Width, source.Height);
+                    canvas.RotateDegrees(180);
+                    break;
+                case SKEncodedOrigin.BottomLeft:
+                    canvas.Translate(0, source.Height);
+                    canvas.Scale(1, -1);
+                    break;
+                case SKEncodedOrigin.LeftTop:
+                    canvas.RotateDegrees(90);
+                    canvas.Scale(1, -1);
+                    break;
+                case SKEncodedOrigin.RightTop:
+                    canvas.Translate(source.Height, 0);
+                    canvas.RotateDegrees(90);
+                    break;
+                case SKEncodedOrigin.RightBottom:
+                    canvas.Translate(source.Height, source.Width);
+                    canvas.RotateDegrees(90);
+                    canvas.Scale(-1, 1);
+                    break;
+                case SKEncodedOrigin.LeftBottom:
+                    canvas.Translate(0, source.Width);
+                    canvas.RotateDegrees(270);
+                    break;
+            }
 
-        // Rotation et miroir exacts : l'échantillonnage au plus proche évite tout adoucissement.
-        canvas.DrawBitmap(source, 0, 0, new SKSamplingOptions(SKFilterMode.Nearest));
-        canvas.Flush();
-        return cible;
+            // Rotation et miroir exacts : l'échantillonnage au plus proche évite tout adoucissement.
+            canvas.DrawBitmap(source, 0, 0, new SKSamplingOptions(SKFilterMode.Nearest));
+            canvas.Flush();
+            return cible;
+        }
+        catch
+        {
+            cible.Dispose();
+            throw;
+        }
     }
 }
