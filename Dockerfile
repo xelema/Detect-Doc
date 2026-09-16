@@ -32,7 +32,7 @@ WORKDIR /app
 
 RUN sed --in-place 's|http://archive.ubuntu.com|https://archive.ubuntu.com|g; s|http://security.ubuntu.com|https://security.ubuntu.com|g' /etc/apt/sources.list.d/ubuntu.sources \
     && apt-get update \
-    && apt-get install --yes --no-install-recommends "python3=3.12.*" "python3-venv=3.12.*" \
+    && apt-get install --yes --no-install-recommends "python3=3.12.*" "python3-venv=3.12.*" "curl=8.5.*" \
     && rm -rf /var/lib/apt/lists/* \
     && python3 -m venv /opt/pii
 
