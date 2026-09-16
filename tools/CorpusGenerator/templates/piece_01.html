@@ -1,0 +1,282 @@
+{# Facture ou devis, presentation des logiciels de facturation recents : logo, couleur
+   d'accent, destinataire encadre a droite, tableau dense, total TTC en bandeau.
+   La police, le corps, la couleur, le style de tableau et la presence de chaque bloc
+   viennent du style, pas du template.
+   Les deux types partagent ce template : ce qui les distingue est dans les intitules,
+   les dates et le cartouche d'acceptation, jamais dans la mise en page. #}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>{{ p.libelle }} {{ p.numero }}</title>
+<style>
+  @page {
+    size: A4;
+    margin: 14mm 15mm 18mm 15mm;
+    @bottom-center {
+      content: "{{ p.libelle }} {{ p.numero }} - page " counter(page) " / " counter(pages);
+      font-family: "{{ s.police }}", sans-serif;
+      font-size: 7pt;
+      color: #666;
+    }
+  }
+  body {
+    font-family: "{{ s.police }}", Arial, sans-serif;
+    font-size: {{ s.corps_pt }}pt;
+    color: #1a1a1a;
+    line-height: 1.35;
+  }
+  table { border-collapse: collapse; width: 100%; }
+  .entete td { vertical-align: top; }
+  .emetteur-nom { font-size: {{ s.corps_pt + 4 }}pt; font-weight: bold; }
+  .emetteur-detail { font-size: {{ s.corps_pt - 1.5 }}pt; color: #444; }
+  .titre-doc {
+    font-size: {{ s.corps_pt + 11 }}pt; font-weight: bold; letter-spacing: 2px;
+    text-transform: uppercase; text-align: right; color: {{ s.couleur }};
+  }
+  .bloc-client {
+    border: 1px solid #bbb; padding: 6px 8px; margin-top: 4mm;
+    width: 78mm; float: right;
+  }
+  .bloc-client .intitule {
+    font-size: {{ s.corps_pt - 2 }}pt; text-transform: uppercase; color: #666;
+    letter-spacing: 1px;
+  }
+  .bloc-client .nom { font-weight: bold; }
+  .references { clear: both; margin-top: 6mm; font-size: {{ s.corps_pt - 1 }}pt; }
+  .references th {
+    background: #f0f0f0; border: 1px solid #ccc; padding: 3px 6px; text-align: left;
+    font-size: {{ s.corps_pt - 2 }}pt; text-transform: uppercase; color: #555;
+  }
+  .references td { border: 1px solid #ccc; padding: 3px 6px; }
+  .objet { margin-top: 5mm; }
+  .objet .intitule { font-weight: bold; }
+  .lignes { margin-top: 3mm; }
+  .lignes th {
+    background: {{ s.couleur }}; color: #fff; padding: 5px 6px;
+    font-size: {{ s.corps_pt - 1.5 }}pt; text-transform: uppercase;
+  }
+  .lignes .detail { font-size: {{ s.corps_pt - 1.5 }}pt; color: #555; }
+  .lignes .num { text-align: right; white-space: nowrap; }
+  {% if s.tableau == "filets" %}
+  .lignes td { border: 1px solid #ccc; padding: 5px 6px; }
+  {% elif s.tableau == "horizontaux" %}
+  .lignes td { border-bottom: 1px solid #ddd; padding: 5px 6px; }
+  {% else %}
+  .lignes td { padding: 5px 6px; }
+  .lignes tr:nth-child(even) td { background: #f4f4f4; }
+  {% endif %}
+  .totaux { margin-top: 4mm; width: 72mm; float: right; }
+  .totaux td { padding: 3px 6px; }
+  .totaux .libelle { text-align: right; color: #444; }
+  .totaux .valeur { text-align: right; white-space: nowrap; }
+  .totaux .ttc td {
+    background: {{ s.couleur }}; color: #fff; font-weight: bold;
+    font-size: {{ s.corps_pt + 1.5 }}pt;
+  }
+  .paiement { clear: both; padding-top: 6mm; }
+  .pave-rib {
+    border: 1px solid #bbb; padding: 6px 8px; width: 105mm;
+    font-size: {{ s.corps_pt - 1.5 }}pt;
+  }
+  .pave-rib .intitule {
+    font-size: {{ s.corps_pt - 2 }}pt; text-transform: uppercase; color: #666;
+    letter-spacing: 1px; margin-bottom: 2px;
+  }
+  .pave-rib .iban {
+    font-family: "{{ s.police_mono }}", monospace; font-size: {{ s.corps_pt - 1 }}pt;
+  }
+  .mentions { margin-top: 5mm; font-size: {{ s.corps_pt - 2 }}pt; color: #444; }
+  .mentions p { margin: 1.5px 0; }
+  .acceptation {
+    margin-top: 6mm; border: 1px solid {{ s.couleur }}; padding: 4px 8px 0 8px;
+    width: 88mm; float: right;
+  }
+  .acceptation .intitule {
+    font-weight: bold; text-transform: uppercase; letter-spacing: 1px;
+    color: {{ s.couleur }};
+  }
+  .acceptation .consigne { font-size: {{ s.corps_pt - 2 }}pt; color: #555; }
+  .acceptation .espace { height: 20mm; }
+  .pied-legal {
+    clear: both; margin-top: 6mm; padding-top: 3px; border-top: 1px solid #ccc;
+    font-size: {{ s.corps_pt - 2.7 }}pt; color: #666; text-align: center;
+  }
+</style>
+</head>
+<body>
+
+{% include "_filigrane.html" %}
+
+<table class="entete">
+  <tr>
+    <td style="width: 55%">
+      <table>
+        <tr>
+          {% if s.avec_logo %}<td style="width: 60px">{{ logo }}</td>{% endif %}
+          <td>
+            <div class="emetteur-nom">{{ p.organisme.raison_sociale }}</div>
+            <div class="emetteur-detail">
+              {{ p.organisme.adresse.ligne1 }}<br>
+              {{ p.organisme.adresse.code_postal }} {{ p.organisme.adresse.ville }}<br>
+              Tél. {{ p.organisme.telephone }}<br>
+              {{ p.organisme.email }}
+            </div>
+          </td>
+        </tr>
+      </table>
+    </td>
+    <td style="width: 45%"><div class="titre-doc">{{ p.libelle }}</div></td>
+  </tr>
+</table>
+
+<div class="bloc-client">
+  <div class="intitule">{% if p.est_devis %}Établi pour{% else %}Facturé à{% endif %}</div>
+  <div class="nom">{{ p.client.designation }}</div>
+  {% if p.client.contact %}<div>À l'attention de {{ p.client.contact }}</div>{% endif %}
+  <div>{{ p.client.adresse.ligne1 }}</div>
+  <div>{{ p.client.adresse.code_postal }} {{ p.client.adresse.ville }}</div>
+  {% if p.client.est_professionnel %}
+    <div style="margin-top: 3px; font-size: {{ s.corps_pt - 1.5 }}pt; color: #555">
+      SIREN {{ p.client.siren }}
+      {%- if not p.est_devis and p.nouvelles_mentions %} · TVA {{ p.client.tva }}{% endif %}
+    </div>
+  {% endif %}
+</div>
+
+<table class="references">
+  <tr>
+    <th>{% if p.est_devis %}Numéro{% else %}N° de facture{% endif %}</th>
+    <th>Date d'émission</th>
+    <th>{% if p.est_devis %}Début prévu{% else %}Date d'exécution{% endif %}</th>
+    <th>{% if p.est_devis %}Valable jusqu'au{% else %}Échéance{% endif %}</th>
+    {% if s.avec_reference %}<th>{{ p.libelle_reference }}</th>{% endif %}
+  </tr>
+  <tr>
+    <td><strong>{{ p.numero }}</strong></td>
+    <td>{{ p.date_emission | date_fr }}</td>
+    {% if p.est_devis %}
+      <td>{{ p.date_debut_prevue | date_fr }}</td>
+      <td>{{ p.date_validite | date_fr }}</td>
+    {% else %}
+      <td>{{ p.date_execution | date_fr }}</td>
+      <td>{{ p.date_echeance | date_fr }}</td>
+    {% endif %}
+    {% if s.avec_reference %}<td>{{ p.reference_dossier }}</td>{% endif %}
+  </tr>
+</table>
+
+<div class="objet">
+  <span class="intitule">Objet :</span> action de formation « {{ p.intitule_action }} »
+  {#- Les marqueurs de rognage sont indispensables ici : sans eux, le saut de ligne du
+      template devient une espace avant la virgule, ce qui ne se fait pas en francais. -#}
+  {%- if s.avec_stagiaires -%}
+    {%- if p.stagiaires | length == 1 -%}
+      , stagiaire : {{ p.stagiaires[0] }}
+    {%- else -%}
+      , {{ p.stagiaires | length }} stagiaires : {{ p.stagiaires | join(', ') }}
+    {%- endif -%}
+  {%- endif %}
+</div>
+
+<table class="lignes">
+  <tr>
+    <th style="width: 46%">Désignation</th>
+    <th style="width: 11%" class="num">Quantité</th>
+    <th style="width: 13%" class="num">P.U. HT</th>
+    <th style="width: 10%" class="num">TVA</th>
+    <th style="width: 20%" class="num">Total HT</th>
+  </tr>
+  {% for ligne in p.lignes %}
+  <tr>
+    <td>
+      {{ ligne.designation }}
+      <div class="detail">{{ ligne.detail }}</div>
+    </td>
+    <td class="num">{{ ligne.quantite }} {{ ligne.unite }}{{ 's' if ligne.quantite > 1 }}</td>
+    <td class="num">{{ ligne.prix_unitaire_ht | euros }}</td>
+    <td class="num">{{ ligne.taux_tva }} %</td>
+    <td class="num">{{ ligne.total_ht | euros }}</td>
+  </tr>
+  {% endfor %}
+</table>
+
+<table class="totaux">
+  <tr>
+    <td class="libelle">Total HT</td>
+    <td class="valeur">{{ p.total_ht | euros }}</td>
+  </tr>
+  <tr>
+    <td class="libelle">
+      {% if p.organisme.exonere_tva %}TVA (exonérée)
+      {%- else %}TVA {{ p.taux_tva }} %{% endif %}
+    </td>
+    <td class="valeur">{{ p.total_tva | euros }}</td>
+  </tr>
+  <tr class="ttc">
+    <td class="libelle" style="color: #fff">Total TTC</td>
+    <td class="valeur">{{ p.total_ttc | euros }}</td>
+  </tr>
+</table>
+
+<div class="paiement">
+  {% if s.avec_rib %}
+  <div class="pave-rib">
+    <div class="intitule">Coordonnées bancaires</div>
+    <div>{{ p.coordonnees_bancaires.banque }} · {{ p.coordonnees_bancaires.agence }}</div>
+    <div class="iban">IBAN {{ p.coordonnees_bancaires.iban_formate }}</div>
+    <div class="iban">BIC {{ p.coordonnees_bancaires.bic }}</div>
+  </div>
+  {% endif %}
+
+  <div class="mentions">
+    {% if p.est_devis %}
+    <p>Offre valable {{ p.duree_validite_jours }} jours, soit jusqu'au
+       {{ p.date_validite | date_fr }}. Établissement du devis gratuit.</p>
+    <p>Formation prévue à compter du {{ p.date_debut_prevue | date_fr }},
+       {{ p.delai_realisation }}.</p>
+    {% if p.acompte_pourcentage %}
+    <p>Acompte de {{ p.acompte_pourcentage }} % à la commande, soit
+       {{ p.montant_acompte | euros }}. Solde à l'issue de la formation.</p>
+    {% else %}
+    <p>Règlement par virement à trente jours à l'issue de la formation.</p>
+    {% endif %}
+    <p>Une convention de formation professionnelle sera établie après acceptation,
+       conformément à l'article L. 6353-1 du code du travail.</p>
+    {% else %}
+    <p>Règlement par virement à réception, au plus tard le {{ p.date_echeance | date_fr }}.</p>
+    {% if p.client.est_professionnel %}
+    <p>En cas de retard de paiement, pénalités au taux de trois fois le taux d'intérêt
+       légal, et indemnité forfaitaire pour frais de recouvrement de 40 €.</p>
+    {% endif %}
+    {% if p.nouvelles_mentions %}
+    <p>Nature de l'opération : {{ p.categorie_operation | lower }}.</p>
+    {% endif %}
+    {% endif %}
+    {% if p.organisme.exonere_tva %}
+    <p>TVA non applicable, exonération au titre de l'article 261-4-4° a du CGI.</p>
+    {% endif %}
+    <p>Déclaration d'activité enregistrée sous le numéro
+       {{ p.organisme.numero_declaration_activite }} auprès du préfet de région.
+       Cet enregistrement ne vaut pas agrément de l'État.</p>
+  </div>
+</div>
+
+{% if s.avec_acceptation %}
+<div class="acceptation">
+  <div class="intitule">Bon pour accord</div>
+  <div class="consigne">Date, cachet et signature du client, précédés de la mention
+    manuscrite « Bon pour accord »</div>
+  <div class="espace"></div>
+</div>
+{% endif %}
+
+<div class="pied-legal">
+  {{ p.organisme.raison_sociale }} · {{ p.organisme.forme_juridique }} au capital de
+  {{ p.organisme.capital | nombre }} € · SIRET {{ p.organisme.siret }} ·
+  TVA {{ p.organisme.tva }} · RCS {{ p.organisme.rcs_ville }} ·
+  {{ p.organisme.site_web }}
+</div>
+
+</body>
+</html>

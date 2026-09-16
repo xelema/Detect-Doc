@@ -1,0 +1,77 @@
+using DetectDoc.Core.Classification;
+using DetectDoc.Core.Engines;
+using DetectDoc.Core.Pii;
+using DetectDoc.Infrastructure.Classification;
+using DetectDoc.Infrastructure.Engines;
+using DetectDoc.Infrastructure.Pii;
+
+namespace DetectDoc.Api;
+
+public static class ServiceCollectionExtensions
+{
+    public static IServiceCollection AddDetectDoc(
+        this IServiceCollection services,
+        IConfiguration configuration,
+        IHostEnvironment environment)
+    {
+        var repertoireModeles = configuration["PpOcr:ModelsDirectory"]
+            ?? Path.Combine(AppContext.BaseDirectory, "models");
+        var reconnaissancesParalleles = configuration.GetValue("PpOcr:ReconnaissancesParalleles", 1);
+
+        var accepterCertificatInvalide = configuration.GetValue<bool>("Flowise:AllowInvalidTls");
+        // Le bypass TLS sert en Development comme en recette, où le certificat interne de Flowise
+        // n'est pas reconnu ; tout autre nom d'environnement le refuse.
+        if (accepterCertificatInvalide
+            && environment.EnvironmentName is not ("Development" or "Recette"))
+        {
+            throw new InvalidOperationException(
+                "Flowise:AllowInvalidTls est refusé hors Development et Recette.");
+        }
+
+        services.AddSingleton<PdfPigNativeTextEngine>();
+        services.AddSingleton<OpenXmlTextEngine>();
+        // Le constructeur charge les modèles ONNX : la résolution reste paresseuse pour que
+        // l'API démarre sans modèle et que leur absence se traduise par une erreur de requête.
+        services.AddSingleton(_ => new PpOcrEngine("tiny", repertoireModeles, reconnaissancesParalleles));
+        services.AddSingleton(fournisseur => new AutomaticExtraction(
+            fournisseur.GetRequiredService<PdfPigNativeTextEngine>(),
+            () => fournisseur.GetRequiredService<PpOcrEngine>()));
+        services.AddSingleton<IExtractionSelector>(fournisseur => new ExtractionSelector(
+            fournisseur.GetRequiredService<AutomaticExtraction>(),
+            fournisseur.GetRequiredService<PdfPigNativeTextEngine>(),
+            () => fournisseur.GetRequiredService<PpOcrEngine>(),
+            fournisseur.GetRequiredService<OpenXmlTextEngine>()));
+        services.AddSingleton<RegexPiiDetector>();
+        // Le constructeur de PresidioPiiDetector lance le sous-processus Python : la composition
+        // passe par une fabrique paresseuse pour qu'il ne démarre qu'à la première résolution d'IPiiDetector.
+        services.AddSingleton<PresidioHealth>();
+        services.AddSingleton<PresidioPiiDetector>();
+        services.AddSingleton<IPiiDetector>(fournisseur => new HybridPresidioPiiDetector(
+            fournisseur.GetRequiredService<RegexPiiDetector>(),
+            fournisseur.GetRequiredService<PresidioPiiDetector>()));
+        services.AddSingleton<PiiTextMasker>();
+        services.AddSingleton(fournisseur => new DocumentClassification(
+            fournisseur.GetRequiredService<IExtractionSelector>(),
+            () => fournisseur.GetRequiredService<PiiTextMasker>(),
+            fournisseur.GetRequiredService<IDocumentClassifier>()));
+        services.AddSingleton(new FlowiseOptions(
+            configuration["Flowise:BaseUrl"],
+            configuration["Flowise:FlowId"]));
+        services.AddHttpClient<IDocumentClassifier, FlowiseDocumentClassifier>(client =>
+                client.Timeout = TimeSpan.FromSeconds(60))
+            .ConfigurePrimaryHttpMessageHandler(() =>
+            {
+                // Une redirection renverrait le corps POST vers une autre origine : refusée.
+                var handler = new HttpClientHandler { AllowAutoRedirect = false };
+                if (accepterCertificatInvalide)
+                {
+                    handler.ServerCertificateCustomValidationCallback =
+                        HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
+                }
+
+                return handler;
+            });
+
+        return services;
+    }
+}

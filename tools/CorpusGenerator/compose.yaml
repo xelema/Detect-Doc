@@ -1,0 +1,19 @@
+services:
+  generator:
+    build:
+      context: .
+    image: valia-corpus-generator:local
+    # Le conteneur ecrit dans le corpus monte depuis l'hote. En root, il laisse derriere
+    # lui des fichiers qu'une execution suivante hors Docker ne peut plus remplacer, et
+    # `chown` n'y peut rien : /mnt/c est monte sans l'option `metadata`. 1000 est le
+    # premier compte cree par Ubuntu comme par la plupart des distributions, donc celui
+    # qui developpe sous WSL.
+    user: "1000:1000"
+    volumes:
+      - ../../corpus:/corpus
+      # Le generateur reecrit la composition dans docs/corpus.md a partir du manifest
+      # qu'il vient d'ecrire. Sans ce montage, la generation sous Docker echouerait la ou
+      # elle passe sous WSL, et la documentation ne serait a jour que dans un des deux
+      # environnements.
+      - ../../docs:/docs
+      - ./corpus-generator.toml:/app/corpus-generator.toml:ro

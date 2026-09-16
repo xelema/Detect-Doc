@@ -1,0 +1,69 @@
+{# Support commun aux cinq templates d'OFF_STAG_EMP.
+
+   Il ne fixe que ce que les dix plateformes sources ont en commun : l'en-tête et le
+   pied de page d'une impression de navigateur, horodatage, titre de page et URL, qui
+   sont le marqueur le plus universel du type, présent quel que soit le site d'origine.
+   Chaque template `offre_0X.html` hérite de ce support et écrit sa propre mise en page
+   dans le bloc `contenu`, sans rien partager d'autre : aucun tronc commun de mise en
+   page n'a été observé sur les vingt-quatre exemples réels, et c'est cette variété qui
+   porte le signal, comme pour la carte de visite. #}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>{{ o.intitule_poste }} | {{ o.entreprise }}</title>
+<style>
+  @page {
+    size: A4;
+    margin: 17mm 14mm 14mm 14mm;
+    @top-left { content: "{{ o.horodatage_impression }}"; font-size: 7pt; color: #666;
+                font-family: "Liberation Sans", sans-serif; }
+    @top-right { content: "{{ o.intitule_poste }} | {{ o.entreprise }}"; font-size: 7pt;
+                 color: #666; font-family: "Liberation Sans", sans-serif; }
+    @bottom-left { content: "{{ o.url_capture }}"; font-size: 6.5pt; color: #666;
+                   font-family: "Liberation Sans", sans-serif; }
+    @bottom-right { content: counter(page) "/" counter(pages); font-size: 7pt;
+                    color: #666; font-family: "Liberation Sans", sans-serif; }
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "{{ s.police }}", "Liberation Sans", sans-serif;
+    font-size: {{ s.corps_pt }}pt;
+    color: #1c1c1c;
+    line-height: 1.42;
+  }
+
+  /* Une page de bruit force son propre saut de page : c'est ce qui garantit le nombre
+     de pages prévu par le style, sans dépendre du flux naturel du contenu. */
+  .page-bruit { break-before: page; page-break-before: always; }
+
+  .fort { font-weight: 700; }
+  .muted { color: #666; }
+  .petit { font-size: 0.82em; }
+  ul.simple { margin: 2mm 0 3mm 0; padding-left: 5mm; }
+  ul.simple li { margin-bottom: 1.4mm; }
+
+  .bloc-similaires .titre-bloc { margin-bottom: 3.5mm; }
+  .similaire {
+    border-bottom: 0.25mm solid #ddd;
+    padding: 2.5mm 0;
+  }
+  .similaire:last-child { border-bottom: none; }
+
+  .contact {
+    display: flex;
+    gap: 3mm;
+    align-items: center;
+    margin: 4mm 0;
+  }
+  .contact svg { width: 12mm; height: 12mm; flex-shrink: 0; }
+
+{% block style_template %}{% endblock %}
+</style>
+</head>
+<body>
+{% block contenu %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,42 @@
+# Environnements Python locaux du generateur de corpus. Jamais partages entre Windows
+# et WSL : chacun recree le sien a partir de requirements.txt.
+.venv/
+__pycache__/
+*.pyc
+
+# Documents produits par le generateur. Ils ne sont pas versionnes : le manifest et la
+# seed de generation suffisent a les refabriquer a l'identique.
+# `corpus/manifest.jsonl` est versionne, lui : c'est le livrable.
+corpus/raw/
+augraphy_cache/
+
+# Modeles OCR. Meme regle que le corpus : trop lourds pour l'historique, et refabriquables a
+# l'identique. `Get-Modeles.ps1` porte leur source et leur empreinte sha256.
+models/
+
+# Sorties d'execution du comparatif OCR, un dossier par run.
+tools/OcrComparison/OcrComparison/run/
+
+# Sorties de build .NET et fichiers d'IDE.
+bin/
+obj/
+.vs/
+.idea/
+*.user
+.env
+
+# Secrets locaux : variantes d'env, clés et fichiers de configuration sensibles.
+.env.*
+!.env.exemple
+*.pem
+*.key
+secrets.json
+
+# Sorties d'execution du comparatif de masquage PII, un dossier par run.
+tools/PiiMaskingComparison/PiiMaskingComparison/run/
+
+# Sorties d'exécution du runner de classification, un dossier par run.
+tools/ClassificationEvaluation/ClassificationEvaluation/run/
+
+# Syntheses K6 et echantillons docker stats des tests de charge.
+load-tests/results/

@@ -1,0 +1,75 @@
+{# Template éditorial et jeune : bandeau de cookies répété sur chaque page, tutoiement,
+   portrait d'un collaborateur, suggestions d'articles de blog en bruit de fin de
+   document, comme les impressions Welcome to the Jungle et Jobs that makesense
+   réelles. `position: fixed` répète le bandeau sur chaque page rendue, exactement comme
+   `_filigrane.html` répète une marque sur une pièce comptable. #}
+{% extends "_offre_page.html" %}
+{% import "_offre_macros.html" as om %}
+
+{% block style_template %}
+  .cookies {
+    position: fixed; left: 14mm; right: 14mm; bottom: 4mm;
+    border: 0.25mm solid #ccc; background: #fafafa; padding: 2.5mm 4mm;
+    font-size: 0.72em; color: #555;
+  }
+  .onglets { font-size: 0.8em; color: #888; margin-bottom: 5mm; }
+  .onglets span:first-child { color: {{ s.couleur }}; font-weight: 700; }
+  .titre-poste { font-size: 1.45em; font-weight: 700; }
+  .badges { font-size: 0.82em; color: #444; margin: 2mm 0 5mm; }
+  .badges span:not(:last-child)::after { content: " · "; }
+  .section-titre { font-weight: 700; color: {{ s.couleur }}; margin: 5mm 0 2mm; }
+  .rencontre { margin-top: 6mm; }
+  .article {
+    border-bottom: 0.25mm solid #ddd; padding: 3mm 0;
+  }
+{% endblock %}
+
+{% block contenu %}
+<div class="onglets"><span>Le poste</span> &nbsp; L'entreprise</div>
+
+<div class="fort">{{ o.entreprise }}</div>
+<div class="titre-poste">{{ o.intitule_poste }}</div>
+<div class="badges">
+  <span>{{ o.type_contrat_affiche }}</span><span>{{ o.ville }}</span>
+  <span>{{ o.remuneration }}</span><span>Télétravail {{ o.teletravail | lower }}</span>
+</div>
+
+<p>{{ o.presentation_entreprise }}</p>
+
+<div class="section-titre">Descriptif du poste</div>
+<ul class="simple">
+  {% for mission in o.missions %}<li>{{ mission }}</li>{% endfor %}
+</ul>
+
+<div class="section-titre">Profil recherché</div>
+<ul class="simple">
+  {% for ligne in o.profil %}<li>{{ ligne }}</li>{% endfor %}
+</ul>
+
+<div class="petit muted" style="margin-top: 5mm">
+  {{ o.secteur }} · {{ o.taille_entreprise }}
+</div>
+
+{% if o.contact %}
+<div class="rencontre">
+  <div class="petit muted" style="margin-bottom: 2mm">Envie d'en savoir plus ?</div>
+  <div class="fort" style="margin-bottom: 2mm">Rencontrez {{ o.contact.prenom }}, {{ o.contact.role }}</div>
+  {{ om.contact_bloc(o.contact, contact_portrait) }}
+</div>
+{% endif %}
+
+{{ om.bandeau_cookies() }}
+
+{% for i in range(s.nombre_pages - 1) %}
+<section class="page-bruit">
+  {% if i is even %}
+  <div class="fort" style="margin-bottom: 3mm">Notre sélection d'articles</div>
+  {% for article in articles[i // 2 * 2 : i // 2 * 2 + 2] %}
+  <div class="article"><div class="fort petit">{{ article }}</div></div>
+  {% endfor %}
+  {% else %}
+  {{ om.offres_similaires(o.offres_similaires[i * 4 : i * 4 + 4], "Annonces similaires") }}
+  {% endif %}
+</section>
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,154 @@
+{# Page qui porte une carte de visite.
+
+   Ce qui arrive en gestion documentaire est presque toujours la reprise d'un carton
+   physique. Cette page reproduit le support de cette reprise, feuille A4 passée au
+   scanner ou plan de travail photographié, et le carton n'en occupe qu'une petite partie.
+   C'est ce rapport de surface, une page vide à quatre-vingt-dix pour cent, qui fait la
+   difficulté du type.
+
+   Le mode `fichier` est l'exception : un export d'outil de mise en page, déposé tel quel.
+   La page fait alors la taille du carton et il n'y a plus de support du tout.
+
+   Les trois templates `carte_0X.html` héritent de celui-ci et ne décrivent que la face
+   imprimée, dans le bloc `face`, avec leur propre habillage dans le bloc `style_face`. #}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Carte de visite</title>
+<style>
+  {% set largeur = 54 if s.orientation == "portrait" else 85 %}
+  {% set hauteur = 85 if s.orientation == "portrait" else 54 %}
+
+  {# En mode `fichier`, le document est la carte : la page fait la taille du carton, il
+     n'y a ni feuille, ni plan de travail, ni couvercle de scanner. Dans les deux autres
+     modes, la carte n'occupe qu'un coin d'une page A4, et c'est ce rapport de surface
+     qui fait la difficulté du type. #}
+  @page { size: {{ "%smm %smm" % (largeur, hauteur) if s.acquisition == "fichier"
+                   else "A4" }}; margin: 0; }
+  body { margin: 0; }
+
+  {# Le plan de travail d'une photo n'est jamais blanc, et cette différence de fond
+     compte : elle prive l'OCR du contraste franc que lui donne une feuille scannée. #}
+  .support {
+    position: relative;
+    width: {{ largeur if s.acquisition == "fichier" else 210 }}mm;
+    height: {{ hauteur if s.acquisition == "fichier" else 297 }}mm;
+    overflow: hidden;
+    background: {{ s.fond_scene }};
+  }
+  .support + .support { break-before: page; page-break-before: always; }
+
+  {# Bande du couvercle resté ouvert, en haut de la vitre. Presque tous les scans de
+     petit format en portent une. #}
+  .couvercle {
+    position: absolute; top: 0; left: 0; right: 0; height: 3mm;
+    background: #2a2a2a;
+    transform: rotate(-0.4deg);
+  }
+
+  .carte {
+    position: absolute;
+    width: {{ largeur }}mm;
+    height: {{ hauteur }}mm;
+    box-sizing: border-box;
+    overflow: hidden;
+    background: #ffffff;
+    transform: rotate({{ s.angle_deg }}deg);
+    font-family: "{{ s.police }}", "Liberation Sans", sans-serif;
+    font-size: {{ s.corps_pt }}pt;
+    line-height: 1.35;
+    color: #1a1a1a;
+    {# Le bord du carton reste visible dans les deux régimes. WeasyPrint ne rend pas
+       `box-shadow`, un filet est donc le seul moyen de détacher une carte blanche d'un
+       fond clair, sans quoi elle disparaît purement et simplement de la page. #}
+    border: 0.2mm solid rgba(0, 0, 0, 0.22);
+  }
+
+  {# Emplacements du carton sur la feuille. Tous à plus de 20 mm des bords : un carton
+     de 85 sur 54 pivoté d'un quart de tour autour de son centre déborde de 15,5 mm de
+     sa boîte, et sortirait sinon de la page. #}
+  .haut-gauche { left: 25mm; top: 25mm; }
+  .haut-droite { left: 100mm; top: 25mm; }
+  .centre      { left: 62mm;  top: 120mm; }
+  .bas-gauche  { left: 25mm;  top: 210mm; }
+  .bas-droite  { left: 100mm; top: 210mm; }
+  {# Un fichier exporté n'a pas de bord de carton : la carte est la page. #}
+  .fichier     { left: 0; top: 0; border: none; }
+
+  {# Horodatage incrusté par l'appareil. C'est la seule date que porte ce type de
+     document, et elle ne vient pas du carton. #}
+  .horodatage {
+    position: absolute; right: 9mm; bottom: 7mm;
+    color: #ffffff; font-size: 12pt; letter-spacing: 0.4px;
+    font-family: "Liberation Sans", sans-serif;
+  }
+
+  {# Identité portée au stylo sur un carton qui ne l'imprime pas. Le corps est agrandi
+     parce qu'une main écrit plus gros qu'une presse, et la ligne est légèrement de
+     travers pour la même raison. #}
+  .manuscrit {
+    font-family: "{{ s.police_manuscrite }}", cursive;
+    color: {{ s.encre }};
+    font-size: 1.55em;
+    line-height: 1.15;
+    transform: rotate(-1.4deg);
+  }
+  .manuscrit .nom { font-size: 1em; font-weight: normal; letter-spacing: 0; }
+
+  .verso-bloc { position: absolute; left: 6mm; right: 6mm; text-align: center; }
+
+{% block style_face %}{% endblock %}
+</style>
+</head>
+<body>
+
+<div class="support">
+  {% if s.acquisition == "scan" %}<div class="couvercle"></div>{% endif %}
+  <div class="carte {{ 'fichier' if s.acquisition == 'fichier' else s.position }}">
+{% block face %}{% endblock %}
+  </div>
+  {% if s.acquisition == "photo" %}
+  <div class="horodatage">{{ c.date_prise | date_fr }} {{ c.heure_prise }}</div>
+  {% endif %}
+</div>
+
+{% if s.verso != "aucun" %}
+{# Le verso part au scanner en seconde page, reposé à la main : il n'a donc ni le même
+   angle ni tout à fait la même place. Il ne porte jamais le nom de la personne, ce qui
+   fait de lui une page dont le type ne se lit que sur l'autre. #}
+<div class="support">
+  {% if s.acquisition == "scan" %}<div class="couvercle"></div>{% endif %}
+  <div class="carte {{ 'fichier' if s.acquisition == 'fichier' else s.position }}"
+       style="transform: rotate({{ -s.angle_deg }}deg)">
+    {% if s.verso == "logo" %}
+    <div class="verso-bloc" style="top: 8mm">
+      {% if s.avec_logo %}{{ logo }}{% endif %}
+      <div style="font-weight: bold; margin-top: 2mm">{{ c.organisme }}</div>
+      <div style="margin-top: 1mm">{{ c.accroche }}</div>
+    </div>
+    <div class="verso-bloc" style="bottom: 5mm">
+      {% if s.avec_qr %}{{ qr }}{% endif %}
+      <div style="margin-top: 1mm">{{ c.site }}</div>
+    </div>
+    {% else %}
+    <div class="verso-bloc" style="top: 10mm">
+      <div style="font-size: 1.9em; font-weight: bold; color: {{ s.couleur }}">
+        {{ c.accroche }}
+      </div>
+      <div style="margin-top: 4mm">{{ c.organisme }}</div>
+      {% if s.avec_certification %}
+      <div style="margin-top: 2mm; font-size: 0.85em">{{ c.certification }}</div>
+      {% endif %}
+      <div style="margin-top: 4mm">{{ c.site }}</div>
+    </div>
+    {% endif %}
+  </div>
+  {% if s.acquisition == "photo" %}
+  <div class="horodatage">{{ c.date_prise | date_fr }} {{ c.heure_prise }}</div>
+  {% endif %}
+</div>
+{% endif %}
+
+</body>
+</html>

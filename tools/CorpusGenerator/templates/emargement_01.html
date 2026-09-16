@@ -1,0 +1,106 @@
+{# Séance unique, grille verticale avec deux signatures par participant. #}
+{% extends "_emargement_page.html" %}
+{% import "_emargement_macros.html" as m %}
+
+{% block style %}
+  .entete {
+    display: grid;
+    grid-template-columns: 1fr 72mm;
+    gap: 7mm;
+    align-items: start;
+    border-bottom: 0.7mm solid {{ s.couleur }};
+    padding-bottom: 4mm;
+  }
+  .organisme { display: flex; gap: 3mm; align-items: center; }
+  .session {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1mm 7mm;
+    margin: 5mm 0;
+  }
+  .formateur {
+    border: 0.3mm solid #444;
+    padding: 3mm;
+    min-height: 28mm;
+  }
+  .grille td { height: 13mm; }
+  .col-nom { width: 30%; }
+  .col-meta { width: 18%; }
+  .col-signature { width: 17%; text-align: center; }
+{% endblock %}
+
+{% block contenu %}
+{% for groupe in groupes %}
+<section class="feuille">
+  {% if not loop.first %}
+  <div class="continuation">Suite, page {{ loop.index }} sur {{ groupes | length }}</div>
+  {% endif %}
+
+  <header class="entete">
+    <div>
+      <div class="organisme">{{ m.identite_organisme(f, logo) }}</div>
+      {% if s.titre %}<div class="titre" style="margin-top: 5mm">{{ s.titre }}</div>{% endif %}
+    </div>
+    {% if s.avec_bloc_formateur %}
+    <div class="formateur">
+      <div class="fort">Formateur</div>
+      <div>{{ f.formateur.nom_complet }}</div>
+      <div class="petit">Matricule : {{ f.formateur.matricule }}</div>
+      <table style="margin-top: 2mm">
+        <tr>
+          <th>Matin</th>
+          <th>Après-midi</th>
+        </tr>
+        <tr>
+          <td>{{ m.case_emargement(f.formateur.cases[0], s) }}</td>
+          <td>{{ m.case_emargement(f.formateur.cases[1], s) }}</td>
+        </tr>
+      </table>
+    </div>
+    {% endif %}
+  </header>
+
+  <div class="session">
+    <div><span class="fort">Session :</span> {{ f.numero_session }}</div>
+    <div><span class="fort">Date :</span> {{ f.date_debut | date_fr }}</div>
+    <div><span class="fort">Formation :</span> {{ f.intitule_action }}</div>
+    <div><span class="fort">Lieu :</span> {{ f.lieu }}</div>
+    {% if s.residu_publipostage %}
+    <div><span class="fort">Organisme commanditaire :</span> « OrgFor_Nom »</div>
+    {% endif %}
+  </div>
+
+  <table class="grille">
+    <thead>
+      <tr>
+        <th class="col-nom">Participant</th>
+        {% if s.avec_matricule %}<th class="col-meta">Matricule</th>{% endif %}
+        {% if s.avec_entreprise %}<th class="col-meta">Entreprise</th>{% endif %}
+        {% if s.avec_fonction %}<th class="col-meta">Fonction</th>{% endif %}
+        <th class="col-signature">Matin<br><span class="petit">{{ f.creneaux[0].horaire }}</span></th>
+        <th class="col-signature">Après-midi<br><span class="petit">{{ f.creneaux[1].horaire }}</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in groupe %}
+      <tr>
+        <td class="fort">{{ p.nom_complet }}</td>
+        {% if s.avec_matricule %}<td>{{ p.matricule }}</td>{% endif %}
+        {% if s.avec_entreprise %}<td>{{ p.entreprise }}</td>{% endif %}
+        {% if s.avec_fonction %}<td>{{ p.fonction }}</td>{% endif %}
+        <td class="col-signature">{{ m.case_emargement(p.cases[0], s) }}</td>
+        <td class="col-signature">{{ m.case_emargement(p.cases[1], s) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {{ m.pied_session(f, s) }}
+  {% if s.avec_cachet %}
+  <div style="margin-top: 8mm; text-align: right">
+    <span class="cachet">{{ f.organisme.raison_sociale }}<br>FORMATION</span>
+  </div>
+  {% endif %}
+</section>
+{% endfor %}
+{% endblock %}

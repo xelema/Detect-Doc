@@ -1,0 +1,97 @@
+trigger:
+  branches:
+    include:
+    - main
+  paths:
+    include:
+    - Detect-Doc
+
+variables:
+- name: poolNameForBuildAndTests
+  value: 'IC_LINUX'
+- name: poolNameForBuildAndPush
+  value: 'IC_LINUX'
+- name: buildConfiguration
+  value: 'Release'
+- group: Docker-Registries
+
+resources:
+  containers:
+  - container: hadolint
+    image: hadolint/hadolint:v2.15.1-debian
+
+jobs:
+  - job: BuildAndTests
+    displayName: 'Build and Tests'
+    pool: ${{variables.poolNameForBuildAndTests}}
+    steps:
+      - checkout: self
+        persistCredentials: true
+      - task: UseDotNet@2
+        displayName: 'Use .NET SDK'
+        inputs:
+          version: 10.x
+      # Agent ancien : `python` manque ou pointe vers Python 2 alors que les stubs de
+      # test exigent Python 3, et UseDotNet n'arrive pas à ajouter le SDK au PATH.
+      # Alias et prepend se font à la main, sans droits admin.
+      - script: |
+          if ! python --version 2>&1 | grep -q "Python 3" && command -v python3 >/dev/null 2>&1; then
+            mkdir -p "$AGENT_TEMPDIRECTORY/pybin"
+            ln -sf "$(command -v python3)" "$AGENT_TEMPDIRECTORY/pybin/python"
+            echo "##vso[task.prependpath]$AGENT_TEMPDIRECTORY/pybin"
+          fi
+          DOTNET_DIR=$(ls -d "$AGENT_TOOLSDIRECTORY"/dotnet/*/x64 2>/dev/null | head -1)
+          if [ -n "$DOTNET_DIR" ] && ! command -v dotnet >/dev/null 2>&1; then
+            echo "##vso[task.prependpath]$DOTNET_DIR"
+          fi
+        displayName: 'Prepare PATH (python, dotnet)'
+      - task: DotNetCoreCLI@2
+        displayName: 'Restore projects'
+        inputs:
+          command: 'restore'
+          projects: 'Detect-Doc/DetectDoc.slnx'
+          workingDirectory: '$(Build.SourcesDirectory)/Detect-Doc'
+      - task: DotNetCoreCLI@2
+        displayName: 'Build projects'
+        inputs:
+          command: 'build'
+          arguments: '--no-restore --configuration $(buildConfiguration)'
+          projects: 'Detect-Doc/DetectDoc.slnx'
+          workingDirectory: '$(Build.SourcesDirectory)/Detect-Doc'
+      - task: DotNetCoreCLI@2
+        displayName: 'Run tests'
+        inputs:
+          command: 'test'
+          arguments: '--no-build --configuration $(buildConfiguration) --filter "Category!=Corpus" --verbosity minimal'
+          projects: 'Detect-Doc/DetectDoc.slnx'
+          publishTestResults: true
+          workingDirectory: '$(Build.SourcesDirectory)/Detect-Doc'
+
+  - job: BuildAndPush
+    displayName: 'Build and Push Docker Image'
+    dependsOn: BuildAndTests
+    pool: ${{variables.poolNameForBuildAndPush}}
+    steps:
+      - checkout: self
+        persistCredentials: true
+      - script: hadolint Detect-Doc/Dockerfile
+        displayName: 'Run hadolint'
+        target:
+          container: hadolint
+      - task: Docker@2
+        displayName: 'Login to Docker Registry'
+        inputs:
+          command: login
+          containerRegistry: '$(registry-Service-Connection-Val-Apps)'
+      - task: Docker@2
+        displayName: 'Build and Push API Image'
+        inputs:
+          command: 'buildAndPush'
+          dockerfile: '$(Build.SourcesDirectory)/Detect-Doc/Dockerfile'
+          containerRegistry: '$(registry-Service-Connection-Val-Apps)'
+          repository: 'valia/poc-detect-doc'
+          tags: 'latest'
+          buildContext: 'Detect-Doc'
+      - script: |
+          docker system prune -af
+        displayName: 'Supprime tous les containers, images, réseaux et caches inutilisés'

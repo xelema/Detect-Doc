@@ -1,0 +1,29 @@
+{% macro case_emargement(case, s) -%}
+  {% if case.nature == "signature" %}
+    <span class="signature">{{ case.texte | paraphe }}</span>
+  {% elif case.nature == "barre" %}
+    <div class="barre"></div>
+  {% elif case.nature != "vide" %}
+    <span class="annotation">{{ case.texte }}</span>
+  {% endif %}
+{%- endmacro %}
+
+{% macro identite_organisme(f, logo) -%}
+  <span class="logo">{{ logo }}</span>
+  <span>
+    <strong>{{ f.organisme.raison_sociale }}</strong><br>
+    <span class="petit">
+      Organisme de formation, déclaration d'activité
+      {{ f.organisme.numero_declaration_activite }}
+    </span>
+  </span>
+{%- endmacro %}
+
+{% macro pied_session(f, s) -%}
+  <div class="pied">
+    {% if s.avec_opco %}Prise en charge : {{ f.reference_opco }}. {% endif %}
+    {% if s.avec_consignes_qualiopi %}
+      Le formateur consigne les absences et retards au début de chaque créneau.
+    {% endif %}
+  </div>
+{%- endmacro %}

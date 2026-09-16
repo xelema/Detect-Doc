@@ -1,0 +1,10 @@
+.git/
+.vs/
+.idea/
+.env
+**/bin/
+**/obj/
+*.user
+corpus/
+docs/
+tools/

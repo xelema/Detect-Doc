@@ -1,0 +1,113 @@
+{# Récapitulatif mensuel, stagiaires en colonnes et dates en lignes. #}
+{% extends "_emargement_page.html" %}
+{% import "_emargement_macros.html" as m %}
+
+{% block style %}
+  .entete {
+    display: grid;
+    grid-template-columns: 56mm 1fr 68mm;
+    gap: 6mm;
+    align-items: center;
+    margin-bottom: 5mm;
+  }
+  .organisme { display: flex; gap: 3mm; align-items: center; }
+  .periode {
+    border: 0.5mm solid {{ s.couleur }};
+    padding: 3mm;
+    text-align: center;
+  }
+  .mensuel th, .mensuel td { padding: 0.8mm 1.2mm; }
+  .mensuel td { height: 7mm; text-align: center; }
+  .mensuel .date { width: 17%; text-align: left; font-weight: 700; }
+  .participant { background: {{ s.couleur }}; color: white; }
+  .suivi td { background: #f4f4f4; font-size: 0.9em; }
+  .bloc-formateur {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8mm;
+    margin-top: 5mm;
+  }
+  .cadre { border: 0.3mm solid #555; padding: 2mm 3mm; min-height: 18mm; }
+{% endblock %}
+
+{% block contenu %}
+{% for groupe in groupes %}
+<section class="feuille">
+  {% if not loop.first %}
+  <div class="continuation">Suite, page {{ loop.index }} sur {{ groupes | length }}</div>
+  {% endif %}
+
+  <header class="entete">
+    <div class="organisme">{{ m.identite_organisme(f, logo) }}</div>
+    <div>
+      {% if s.titre %}<div class="titre">{{ s.titre }}</div>{% endif %}
+      <div class="sous-titre">{{ f.intitule_action }}</div>
+      <div>Session {{ f.numero_session }}</div>
+    </div>
+    <div class="periode">
+      <div class="fort">Suivi mensuel</div>
+      <div>{{ f.date_debut | date_fr }} au {{ f.date_fin | date_fr }}</div>
+      <div class="petit">{{ f.lieu }}</div>
+    </div>
+  </header>
+
+  <table class="mensuel">
+    <thead>
+      <tr>
+        <th>Date et horaire</th>
+        {% for p in groupe %}
+        <th class="participant">
+          {{ p.nom_complet }}
+          {% if s.avec_matricule %}<br><span class="petit">{{ p.matricule }}</span>{% endif %}
+        </th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in f.creneaux %}
+      {% set creneau_index = loop.index0 %}
+      <tr>
+        <td class="date">{{ c.date_session | date_fr }}<br><span class="petit">{{ c.horaire }}</span></td>
+        {% for p in groupe %}
+        <td>{{ m.case_emargement(p.cases[creneau_index], s) }}</td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+      {% if s.avec_suivi_heures %}
+      <tr class="suivi">
+        <td class="date">Heures suivies</td>
+        {% for p in groupe %}<td>{{ p.heures_suivies }} h</td>{% endfor %}
+      </tr>
+      <tr class="suivi">
+        <td class="date">Heures souscrites</td>
+        {% for p in groupe %}<td>{{ p.heures_souscrites }} h</td>{% endfor %}
+      </tr>
+      <tr class="suivi">
+        <td class="date">Report précédent</td>
+        {% for p in groupe %}<td>{{ p.report_heures }} h</td>{% endfor %}
+      </tr>
+      {% endif %}
+    </tbody>
+  </table>
+
+  <div class="bloc-formateur">
+    {% if s.avec_bloc_formateur %}
+    <div class="cadre">
+      <div class="fort">Émargement du formateur</div>
+      <div>{{ f.formateur.nom_complet }}, matricule {{ f.formateur.matricule }}</div>
+      <div style="margin-top: 3mm">{{ m.case_emargement(f.formateur.cases[0], s) }}</div>
+    </div>
+    {% endif %}
+    <div class="cadre">
+      <div class="fort">Organisme de formation</div>
+      <div>{{ f.organisme.raison_sociale }}</div>
+      {% if s.avec_cachet %}
+      <div style="margin-top: 3mm"><span class="cachet">SERVICE FORMATION</span></div>
+      {% endif %}
+    </div>
+  </div>
+
+  {{ m.pied_session(f, s) }}
+</section>
+{% endfor %}
+{% endblock %}

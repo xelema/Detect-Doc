@@ -1,0 +1,60 @@
+{# Carte de visite, variante 01 : carte d'imprimeur en ligne.
+
+   Logo en tête, filet de couleur, coordonnées alignées sous l'identité. La forme la plus
+   courante et la plus riche en texte du type, donc la plus favorable au classifieur. #}
+{% extends "_carte_page.html" %}
+
+{% block style_face %}
+  .corps { padding: 4.5mm 5.5mm; }
+  .tete { margin-bottom: 2.5mm; }
+  .tete svg { width: 9mm; height: 9mm; vertical-align: middle; }
+  .organisme {
+    display: inline-block; vertical-align: middle; margin-left: 2mm;
+    font-weight: bold; font-size: 1.25em; color: {{ s.couleur }};
+    letter-spacing: 0.2px;
+  }
+  .accroche { font-size: 0.85em; color: #666; margin-bottom: 2.5mm; }
+  .identite { margin-bottom: 2mm; }
+  .identite .nom { font-size: 1.35em; letter-spacing: 0.3px; }
+  .identite .fonction { font-size: 0.9em; color: {{ s.couleur }}; }
+  .contacts {
+    border-left: 0.7mm solid {{ s.couleur }};
+    padding-left: 2mm;
+    font-size: 0.95em;
+  }
+  .qr { position: absolute; right: 4mm; bottom: 4mm; }
+  .certif {
+    position: absolute; left: 5.5mm; bottom: 3.5mm;
+    font-size: 0.75em; color: #777;
+  }
+{% endblock %}
+
+{% block face %}
+    <div class="corps">
+      <div class="tete">
+        {% if s.avec_logo %}{{ logo }}{% endif %}
+        <span class="organisme">{{ c.organisme }}</span>
+      </div>
+
+      {% if s.avec_accroche %}<div class="accroche">{{ c.accroche }}</div>{% endif %}
+
+      <div class="identite{% if s.manuscrite %} manuscrit{% endif %}">
+        <div class="nom">{{ c.prenom }} <strong>{{ c.nom | upper }}</strong></div>
+        {% if s.avec_fonction %}<div class="fonction">{{ c.fonction }}</div>{% endif %}
+      </div>
+
+      <div class="contacts{% if s.manuscrite %} manuscrit{% endif %}">
+        <div>{{ c.mobile }}</div>
+        {% if s.avec_fixe %}<div>{{ c.fixe }}</div>{% endif %}
+        <div>{{ c.email }}</div>
+        {% if s.avec_site %}<div>{{ c.site }}</div>{% endif %}
+        {% if s.avec_reseau %}<div>{{ c.reseau }}</div>{% endif %}
+        {% if s.avec_adresse %}
+        <div>{{ c.adresse.ligne1 }} · {{ c.adresse.code_postal }} {{ c.adresse.ville }}</div>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if s.avec_qr %}<div class="qr">{{ qr }}</div>{% endif %}
+    {% if s.avec_certification %}<div class="certif">{{ c.certification }}</div>{% endif %}
+{% endblock %}

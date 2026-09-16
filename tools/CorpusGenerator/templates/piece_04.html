@@ -1,0 +1,277 @@
+{# Piece d'un service en ligne : bandeau colore pleine largeur, police condensee, petit
+   corps, grille d'informations sur deux colonnes, tableau sans filets a bandes alternees,
+   totaux dans un pave teinte, filigrane occasionnel.
+   C'est le cas le plus hostile a l'OCR du lot : texte petit et serre, contrastes faibles,
+   et un filigrane qui passe par-dessus le contenu.
+   Le devis edite par ce meme service s'accepte le plus souvent en ligne, d'ou un
+   cartouche a signer bien plus rare ici qu'ailleurs. #}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>{{ p.libelle }} {{ p.numero }}</title>
+<style>
+  @page {
+    size: A4;
+    margin: 0 0 14mm 0;
+    @bottom-center {
+      content: "{{ p.organisme.raison_sociale }} · {{ p.numero }} · "
+               counter(page) "/" counter(pages);
+      font-family: "{{ s.police }}", sans-serif;
+      font-size: 6.5pt;
+      color: #999;
+    }
+  }
+  body {
+    font-family: "{{ s.police }}", "Arial Narrow", sans-serif;
+    font-size: {{ s.corps_pt }}pt;
+    color: #2b2b2b;
+    line-height: 1.3;
+  }
+  table { border-collapse: collapse; width: 100%; }
+  .bandeau {
+    background: {{ s.couleur }}; color: #fff; padding: 9mm 14mm 7mm 14mm;
+  }
+  .bandeau .nom { font-size: {{ s.corps_pt + 6 }}pt; font-weight: bold; }
+  .bandeau .coordonnees { font-size: {{ s.corps_pt - 0.5 }}pt; opacity: 0.9; }
+  .bandeau .titre {
+    font-size: {{ s.corps_pt + 10 }}pt; font-weight: bold; text-align: right;
+    text-transform: uppercase; letter-spacing: 3px;
+  }
+  .bandeau .numero { text-align: right; font-size: {{ s.corps_pt + 0.5 }}pt; }
+  .contenu { padding: 8mm 14mm 0 14mm; }
+  .grille { margin-bottom: 6mm; }
+  .grille td {
+    vertical-align: top; padding-right: 6mm; width: 25%;
+    border-left: 2px solid {{ s.couleur }}; padding-left: 3mm;
+  }
+  .grille .cle {
+    font-size: {{ s.corps_pt - 1 }}pt; text-transform: uppercase;
+    letter-spacing: 0.8px; color: #888;
+  }
+  .grille .valeur { font-weight: bold; }
+  .lignes th {
+    text-align: left; padding: 3px 4px; font-size: {{ s.corps_pt - 1 }}pt;
+    text-transform: uppercase; letter-spacing: 0.6px; color: {{ s.couleur }};
+    border-bottom: 2px solid {{ s.couleur }};
+  }
+  {% if s.tableau == "bandes" %}
+  .lignes td { padding: 4px; }
+  .lignes tr:nth-child(odd) td { background: #f5f5f5; }
+  {% else %}
+  .lignes td { padding: 4px; }
+  {% endif %}
+  .lignes .num { text-align: right; white-space: nowrap; }
+  .lignes .detail { font-size: {{ s.corps_pt - 1 }}pt; color: #777; }
+  .pave-totaux {
+    float: right; width: 68mm; margin-top: 5mm; padding: 4mm;
+    background: #f0f0f0; border-top: 3px solid {{ s.couleur }};
+  }
+  .pave-totaux td { padding: 2px 0; }
+  .pave-totaux .libelle { color: #555; }
+  .pave-totaux .valeur { text-align: right; white-space: nowrap; }
+  .pave-totaux .ttc td {
+    font-weight: bold; font-size: {{ s.corps_pt + 3 }}pt; color: {{ s.couleur }};
+    padding-top: 3px; border-top: 1px solid #bbb;
+  }
+  .bas { clear: both; padding-top: 6mm; }
+  .encart {
+    border: 1px dashed #bbb; padding: 3mm; width: 100mm;
+    font-size: {{ s.corps_pt - 0.5 }}pt;
+  }
+  .encart .cle {
+    font-size: {{ s.corps_pt - 1 }}pt; text-transform: uppercase; color: #888;
+  }
+  .encart .mono { font-family: "{{ s.police_mono }}", monospace; }
+  .acceptation {
+    margin-top: 5mm; border: 1px solid {{ s.couleur }}; padding: 3mm; width: 100mm;
+    font-size: {{ s.corps_pt - 0.5 }}pt;
+  }
+  .acceptation .cle {
+    font-size: {{ s.corps_pt - 1 }}pt; text-transform: uppercase; color: {{ s.couleur }};
+    font-weight: bold; letter-spacing: 0.8px;
+  }
+  .acceptation .espace { height: 16mm; }
+  .mentions {
+    margin-top: 5mm; font-size: {{ s.corps_pt - 1.5 }}pt; color: #8a8a8a;
+    text-align: justify;
+  }
+</style>
+</head>
+<body>
+
+{% include "_filigrane.html" %}
+
+<table class="bandeau">
+  <tr>
+    <td style="width: 58%">
+      {% if s.avec_logo %}
+      <table><tr>
+        <td style="width: 62px">{{ logo }}</td>
+        <td>
+      {% endif %}
+          <div class="nom">{{ p.organisme.raison_sociale }}</div>
+          <div class="coordonnees">
+            {{ p.organisme.adresse.ligne1 }} · {{ p.organisme.adresse.code_postal }}
+            {{ p.organisme.adresse.ville }} · {{ p.organisme.email }}
+          </div>
+      {% if s.avec_logo %}
+        </td>
+      </tr></table>
+      {% endif %}
+    </td>
+    <td style="width: 42%">
+      <div class="titre">{{ p.libelle }}</div>
+      <div class="numero">{{ p.numero }}</div>
+    </td>
+  </tr>
+</table>
+
+<div class="contenu">
+
+  <table class="grille">
+    <tr>
+      <td>
+        <div class="cle">{% if p.est_devis %}Établi pour{% else %}Facturé à{% endif %}</div>
+        <div class="valeur">{{ p.client.designation }}</div>
+        <div>{{ p.client.adresse.code_postal }} {{ p.client.adresse.ville }}</div>
+        {% if p.client.est_professionnel %}<div>SIREN {{ p.client.siren }}</div>{% endif %}
+      </td>
+      <td>
+        <div class="cle">Émis le</div>
+        <div class="valeur">{{ p.date_emission | date_fr }}</div>
+        {% if p.est_devis %}
+        <div class="cle" style="margin-top: 2mm">Début prévu</div>
+        <div class="valeur">{{ p.date_debut_prevue | date_fr }}</div>
+        {% else %}
+        <div class="cle" style="margin-top: 2mm">Exécutée le</div>
+        <div class="valeur">{{ p.date_execution | date_fr }}</div>
+        {% endif %}
+      </td>
+      <td>
+        <div class="cle">{% if p.est_devis %}Valable jusqu'au{% else %}Échéance{% endif %}</div>
+        <div class="valeur">
+          {%- if p.est_devis %}{{ p.date_validite | date_fr }}
+          {%- else %}{{ p.date_echeance | date_fr }}{% endif -%}
+        </div>
+        {% if s.avec_reference %}
+        <div class="cle" style="margin-top: 2mm">{{ p.libelle_reference }}</div>
+        <div class="valeur">{{ p.reference_dossier }}</div>
+        {% endif %}
+      </td>
+      <td>
+        <div class="cle">{% if p.est_devis %}Montant estimé{% else %}Montant dû{% endif %}</div>
+        <div class="valeur" style="font-size: {{ s.corps_pt + 3 }}pt;
+             color: {{ s.couleur }}">{{ p.total_ttc | euros }}</div>
+      </td>
+    </tr>
+  </table>
+
+  <div style="margin-bottom: 3mm">
+    <strong>{{ p.intitule_action }}</strong>
+    {%- if s.avec_stagiaires %} · {{ p.stagiaires | join(' · ') }}{% endif %}
+  </div>
+
+  <table class="lignes">
+    <tr>
+      <th style="width: 48%">Prestation</th>
+      <th style="width: 12%" class="num">Qté</th>
+      <th style="width: 14%" class="num">P.U. HT</th>
+      <th style="width: 9%" class="num">TVA</th>
+      <th style="width: 17%" class="num">Total HT</th>
+    </tr>
+    {% for ligne in p.lignes %}
+    <tr>
+      <td>
+        {{ ligne.designation }}
+        <div class="detail">{{ ligne.detail }}</div>
+      </td>
+      <td class="num">{{ ligne.quantite }}</td>
+      <td class="num">{{ ligne.prix_unitaire_ht | euros }}</td>
+      <td class="num">{{ ligne.taux_tva }} %</td>
+      <td class="num">{{ ligne.total_ht | euros }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+
+  <table class="pave-totaux">
+    <tr>
+      <td class="libelle">Sous-total HT</td>
+      <td class="valeur">{{ p.total_ht | euros }}</td>
+    </tr>
+    <tr>
+      <td class="libelle">
+        {% if p.organisme.exonere_tva %}TVA exonérée
+        {%- else %}TVA {{ p.taux_tva }} %{% endif %}
+      </td>
+      <td class="valeur">{{ p.total_tva | euros }}</td>
+    </tr>
+    <tr class="ttc">
+      <td class="libelle" style="color: {{ s.couleur }}">Total TTC</td>
+      <td class="valeur">{{ p.total_ttc | euros }}</td>
+    </tr>
+    {% if p.est_devis and p.acompte_pourcentage %}
+    <tr>
+      <td class="libelle">Acompte {{ p.acompte_pourcentage }} %</td>
+      <td class="valeur">{{ p.montant_acompte | euros }}</td>
+    </tr>
+    {% endif %}
+  </table>
+
+  <div class="bas">
+    {% if s.avec_rib %}
+    <div class="encart">
+      <div class="cle">Virement bancaire</div>
+      <div class="mono">{{ p.coordonnees_bancaires.iban_formate }}</div>
+      <div class="mono">{{ p.coordonnees_bancaires.bic }}
+        · {{ p.coordonnees_bancaires.banque }}</div>
+    </div>
+    {% endif %}
+
+    {% if s.avec_acceptation %}
+    <div class="acceptation">
+      <div class="cle">Bon pour accord</div>
+      <div>Date et signature du client, précédées de la mention manuscrite
+        « Bon pour accord »</div>
+      <div class="espace"></div>
+    </div>
+    {% endif %}
+
+    <div class="mentions">
+      {% if p.est_devis %}
+      Offre valable {{ p.duree_validite_jours }} jours, jusqu'au
+      {{ p.date_validite | date_fr }}. Établissement du devis gratuit. Formation prévue
+      sur {{ p.delai_realisation }} à compter du {{ p.date_debut_prevue | date_fr }}.
+      {% if p.acompte_pourcentage %}
+      Acompte de {{ p.acompte_pourcentage }} % à la commande, solde à l'issue de la
+      formation.
+      {% else %}
+      Règlement par virement à trente jours à l'issue de la formation.
+      {% endif %}
+      Une convention de formation professionnelle sera établie après acceptation,
+      conformément à l'article L. 6353-1 du code du travail.
+      {% else %}
+      Règlement par virement au plus tard le {{ p.date_echeance | date_fr }}.
+      {% if p.client.est_professionnel %}
+      Pénalités de retard au taux de trois fois le taux d'intérêt légal, indemnité
+      forfaitaire pour frais de recouvrement de 40 €.
+      {% endif %}
+      {% if p.nouvelles_mentions %}
+      Nature de l'opération : {{ p.categorie_operation | lower }}.
+      {% endif %}
+      {% endif %}
+      {% if p.organisme.exonere_tva %}
+      TVA non applicable, article 261-4-4° a du CGI.
+      {% endif %}
+      Déclaration d'activité {{ p.organisme.numero_declaration_activite }} auprès du
+      préfet de région, ne vaut pas agrément de l'État.
+      {{ p.organisme.forme_juridique }} au capital de
+      {{ p.organisme.capital | nombre }} €, SIRET {{ p.organisme.siret }},
+      TVA {{ p.organisme.tva }}, RCS {{ p.organisme.rcs_ville }}.
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

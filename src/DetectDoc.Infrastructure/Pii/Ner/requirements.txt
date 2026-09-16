@@ -1,0 +1,3 @@
+presidio-analyzer==2.2.364
+spacy==3.8.16
+https://github.com/explosion/spacy-models/releases/download/fr_core_news_md-3.8.0/fr_core_news_md-3.8.0-py3-none-any.whl#sha256=8a70d090a54ef77525c3ffa6a6195b9d365f2cf369ae1cd84ede93f3d709079e

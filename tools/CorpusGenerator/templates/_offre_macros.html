@@ -1,0 +1,34 @@
+{% macro offres_similaires(liste, titre="D'autres offres pourraient vous intéresser") -%}
+<div class="bloc-similaires">
+  <div class="fort titre-bloc">{{ titre }}</div>
+  {% for item in liste %}
+  <div class="similaire">
+    <div class="fort">{{ item.intitule }}</div>
+    <div class="petit muted">{{ item.entreprise }} · {{ item.ville }} · {{ item.contrat }}</div>
+  </div>
+  {% endfor %}
+</div>
+{%- endmacro %}
+
+{% macro bandeau_cookies() -%}
+<div class="cookies">
+  Nous utilisons des cookies pour améliorer votre expérience et à des fins de mesure
+  d'audience. En poursuivant votre navigation, vous acceptez notre politique de
+  confidentialité. <span class="fort">Accepter</span>
+</div>
+{%- endmacro %}
+
+{% macro contact_bloc(contact, portrait, libelle="Contact") -%}
+{% if contact %}
+<div class="contact">
+  {% if portrait %}{{ portrait }}{% endif %}
+  <div>
+    <div class="fort">
+      {{ contact.prenom }}{% if contact.nom %} {{ contact.nom }}{% endif %}
+    </div>
+    <div class="petit muted">{{ contact.role }}</div>
+    {% if not portrait %}<div class="petit muted">{{ libelle }}</div>{% endif %}
+  </div>
+</div>
+{% endif %}
+{%- endmacro %}

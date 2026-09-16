@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.pyc
+augraphy_cache/
+# Exemples métier fournis en entrée. Ils ne servent qu'à écrire les templates et n'ont
+# rien à faire dans l'image, qui ne doit transporter aucune donnée personnelle.
+exemples/
+# Aperçus de la boucle de mise au point : le dossier est monté au moment voulu, il n'a
+# pas à être copié dans l'image, où il invaliderait le cache à chaque essai.
+apercu/
+# Consignes et skills des assistants. Ils s'adressent à qui écrit le code, jamais au
+# conteneur qui l'exécute, et les y copier invaliderait le cache à chaque retouche.
+.agents/
+.claude/
+AGENTS.md
+CLAUDE.md
+AJOUTER-UN-TYPE.md

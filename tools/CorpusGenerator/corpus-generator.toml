@@ -1,0 +1,79 @@
+# Configuration du générateur de corpus : effectifs, seed, numérisation, découpage dev et
+# test. Le code ne porte que la présentation des documents et l'implémentation des profils.
+#
+# Trois étages, le plus précis gagne : les tables globales, [defaults] pour tout type qui ne
+# dit rien, [types.<nom>] pour ce qui lui est propre. Une clé inconnue, un type sans bloc ou
+# un réglage sans effet sur son type font échouer la génération. Détail dans le README.
+
+[corpus]
+output_dir = "../../corpus"
+# Tout le corpus en dérive. La changer redistribue tout, la garder redonne les mêmes octets.
+seed = 1
+# Réécrit le tableau de composition de docs/corpus.md. À false le temps d'un essai.
+write_composition = true
+
+[split]
+# Une unité sur N part dans le jeu de réglage, dans chaque type pris séparément.
+dev_every = 4
+
+[degradation]
+# À false, plus aucune rastérisation : tout reste à texte natif et la génération va bien
+# plus vite. Le réglage à prendre pour itérer sur les templates.
+enabled = true
+dpi = 200
+container_jpeg_quality = 88
+
+[defaults]
+# Documents écrits au manifest, jumeaux numérisés compris. 0 retire le type du corpus.
+count = 36
+# Part numérisée en pourcentage, soit la colonne « Numérisés » de docs/corpus.md. Décidée
+# par le rang et non tirée au sort. Plafond de 50 pour un type qui garde son original.
+scanned_share = 33
+# Part des documents numérisés posés de travers d'un quart de tour. Types physiques seuls.
+rotated_share = 0
+
+# Poids des profils de numérisation. La table d'un type remplace celle-ci et ne s'y ajoute
+# pas : un profil qu'elle ne cite pas n'arrive jamais à ce type.
+[defaults.profiles]
+"scan-propre" = 45       # numérisation correcte sur matériel entretenu
+"scan-degrade" = 30      # rouleaux sales, encre qui bave, compression agressive
+"photo-smartphone" = 15  # éclairage inégal, ombre portée, cadrage de travers
+photocopie = 5           # copie de copie, caractères rongés, tambour sale
+fax = 5                  # binarisation brutale et lignes manquantes
+
+# Facture et devis à parité, et les trois voisins bancaires à parité entre eux : une matrice
+# de confusion ne se lit que sur des effectifs comparables.
+[types.facture]
+
+[types.devis]
+
+[types.rib]
+count = 24
+
+[types.sepa]
+count = 24
+
+[types.rib_sepa]
+count = 24
+
+# Reprise d'un objet physique : le profil tiré décide aussi de la reprise, photo pour
+# `photo-smartphone`, scanner pour tout autre. Les 15 % restants sont un export resté
+# fichier. Douze cartes couvrent quatre fois chacune de leurs trois mises en page.
+[types.carte_visite]
+scanned_share = 85
+rotated_share = 30
+profiles = { "photo-smartphone" = 50, "scan-propre" = 22, "scan-degrade" = 15, photocopie = 8, fax = 5 }
+
+# Objet physique lui aussi, mais plus souvent scanné que photographié, et jamais faxé.
+# Quinze feuilles couvrent trois fois chacune de leurs cinq structures.
+[types.feuille_emar]
+count = 45
+scanned_share = 80
+rotated_share = 35
+profiles = { "photo-smartphone" = 25, "scan-propre" = 40, "scan-degrade" = 25, photocopie = 10 }
+
+# Capture d'une page web : la part numérisée est faite de captures d'écran nettes, aucun
+# profil ne s'y applique. Quinze offres couvrent trois fois chacun des cinq templates.
+[types.offre_emploi]
+count = 45
+scanned_share = 17
