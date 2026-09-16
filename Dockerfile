@@ -10,13 +10,14 @@ COPY ["tests/DetectDoc.Tests/DetectDoc.Tests.csproj", "tests/DetectDoc.Tests/"]
 RUN dotnet restore DetectDoc.slnx
 
 COPY . .
-RUN dotnet test DetectDoc.slnx --no-restore --filter "Category!=Corpus&Category!=Python"
-RUN dotnet publish src/DetectDoc.Api/DetectDoc.Api.csproj --configuration Release --no-restore --output /app/publish /p:UseAppHost=false
+RUN dotnet test DetectDoc.slnx --no-restore --filter "Category!=Corpus&Category!=Python" \
+    && dotnet publish src/DetectDoc.Api/DetectDoc.Api.csproj --configuration Release --no-restore --output /app/publish /p:UseAppHost=false
 
 FROM build AS models
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN sed --in-place 's|http://archive.ubuntu.com|https://archive.ubuntu.com|g; s|http://security.ubuntu.com|https://security.ubuntu.com|g' /etc/apt/sources.list.d/ubuntu.sources \
     && apt-get update \
-    && apt-get install --yes --no-install-recommends ca-certificates curl \
+    && apt-get install --yes --no-install-recommends "curl=8.5.*" \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /models/v6 \
     && curl --fail --location --silent --show-error https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.9.2/onnx/PP-OCRv6/det/PP-OCRv6_det_tiny.onnx --output /models/v6/PP-OCRv6_det_tiny.onnx \
@@ -31,7 +32,7 @@ WORKDIR /app
 
 RUN sed --in-place 's|http://archive.ubuntu.com|https://archive.ubuntu.com|g; s|http://security.ubuntu.com|https://security.ubuntu.com|g' /etc/apt/sources.list.d/ubuntu.sources \
     && apt-get update \
-    && apt-get install --yes --no-install-recommends python3 python3-venv \
+    && apt-get install --yes --no-install-recommends "python3=3.12.*" "python3-venv=3.12.*" \
     && rm -rf /var/lib/apt/lists/* \
     && python3 -m venv /opt/pii
 
@@ -42,6 +43,7 @@ RUN /opt/pii/bin/pip install --no-cache-dir --requirement /tmp/pii-requirements.
 COPY --from=build --chown=app:app /app/publish .
 COPY --from=models --chown=app:app /models ./models
 
+# hadolint ignore=DL3066
 USER app
 EXPOSE 8080
 ENV ASPNETCORE_HTTP_PORTS=8080
