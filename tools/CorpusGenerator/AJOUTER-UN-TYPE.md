@@ -14,14 +14,14 @@ Dans les deux cas, la sortie est la même : une fiche de type, un module Python,
 `<CODE>` désigne le code métier du type voulu.
 
 1. **Déposer les exemples** dans `exemples/<CODE>/`, un dossier par type, ignoré par Git. Sans exemple, sauter cette ligne.
-2. **Lancer l'agent** : `/corpus-nouveau-type <CODE>`. Ajouter « en N variantes » si une seule mise en page ne convient pas. Si l'agent ne charge pas le skill, lui dire de lire ce fichier et de l'appliquer, ce qui suffit.
+2. **Lancer l'agent** : `/corpus-nouveau-type <CODE>`. Ajouter « en N variantes » si une seule mise en page ne convient pas. Si l'agent ne charge pas le skill, lui dire de lire ce fichier et de l'appliquer, ce qui suffit. Pour un utilisateur qui n'exécute rien lui-même, `/corpus-nouveau-type-auto <CODE>` : l'agent mène aussi le build, l'aperçu et la génération.
 3. **Régler les effectifs** dans `corpus-generator.toml`, bloc `[types.<nom>]` : `count` pour le nombre de documents, `scanned_share` pour la part numérisée, `profiles` pour les défauts qui peuvent lui arriver.
 4. **Générer** : `docker compose build && docker compose run --rm generator`.
 5. **Contrôler** : `docker compose run --rm --entrypoint python generator manifest.py`, puis la même commande sur `verifier.py`. Les deux doivent rendre zéro anomalie.
 
 ## Conduire le travail avec un agent
 
-Ce guide est la procédure, quel que soit l'assistant. Le skill `corpus-nouveau-type` ne fait que le déclencher ; il est posé à l'identique sous `.claude/skills/` et sous `.agents/skills/`, à la racine du CorpusGenerator où Claude Code, Codex et OpenCode le cherchent. Le `name` du frontmatter reste en minuscules à tirets et la `description` sous 1024 caractères, contraintes qu'OpenCode fait respecter.
+Ce guide est la procédure, quel que soit l'assistant. Deux skills le déclenchent, posés à l'identique sous `.claude/skills/` et sous `.agents/skills/`, à la racine du CorpusGenerator où Claude Code, Codex et OpenCode les cherchent : `corpus-nouveau-type` pour écrire sans exécuter, `corpus-nouveau-type-auto` pour mener aussi l'exécution à la place d'un utilisateur qui ne le peut pas. Le `name` du frontmatter reste en minuscules à tirets et la `description` sous 1024 caractères, contraintes qu'OpenCode fait respecter.
 
 **Déduire d'abord, demander ensuite.** L'agent rassemble seul ce qui se lit dans le dépôt, et ne pose en une seule fois que les questions restées ouvertes.
 
@@ -35,7 +35,7 @@ Ce guide est la procédure, quel que soit l'assistant. Le skill `corpus-nouveau-
 
 **Sans exemple**, en mode démonstration, la description fait autorité : inventer une mise en page plausible du domaine de la formation professionnelle, et le dire dans la fiche du type comme dans le compte rendu. Ne jamais présenter un type inventé comme observé sur des exemples réels.
 
-**L'agent écrit, il n'exécute pas.** Il produit le code, les templates, la configuration et les contrôles, tout fonctionnel, puis passe la main : c'est l'utilisateur qui génère, sur sa machine, et qui revient avec ce qu'il a vu. Le travail se termine donc par le compte rendu de l'étape 8.
+**L'agent écrit, il n'exécute pas.** Il produit le code, les templates, la configuration et les contrôles, tout fonctionnel, puis passe la main : c'est l'utilisateur qui génère, sur sa machine, et qui revient avec ce qu'il a vu. Le travail se termine donc par le compte rendu de l'étape 8. Sauf sous `corpus-nouveau-type-auto`, pensé pour un utilisateur qui ne peut rien exécuter : l'agent y mène le build, l'aperçu et la génération, et le compte rendu se résume au dossier des documents produits.
 
 Deux interdits. Ne jamais commiter les exemples fournis ni recopier une de leurs valeurs dans un fichier suivi. Ne pas commiter sans demande explicite.
 
