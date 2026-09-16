@@ -1,0 +1,81 @@
+trigger: none
+
+variables:
+- name: poolNameForBuildAndTests
+  value: 'IC_vmprodcompil03'
+- name: poolNameForBuildAndPush
+  value: 'IC_LINUX'
+- name: buildConfiguration
+  value: 'Release'
+- group: Docker-Registries
+
+resources:
+  containers:
+  - container: hadolint
+    image: hadolint/hadolint:v2.15.1-debian
+
+jobs:
+  - job: BuildAndTests
+    displayName: 'Build and Tests'
+    pool: ${{variables.poolNameForBuildAndTests}}
+    steps:
+      - checkout: self
+        persistCredentials: true
+      - task: UseDotNet@2
+        displayName: 'Use .NET SDK'
+        inputs:
+          version: 10.x
+      - task: UsePythonVersion@0
+        displayName: 'Use Python'
+        inputs:
+          versionSpec: '3.x'
+      - task: DotNetCoreCLI@2
+        displayName: 'Restore projects'
+        inputs:
+          command: 'restore'
+          projects: 'DetectDoc.slnx'
+          workingDirectory: '$(Build.SourcesDirectory)/Detect-Doc'
+      - task: DotNetCoreCLI@2
+        displayName: 'Build projects'
+        inputs:
+          command: 'build'
+          arguments: '--no-restore --configuration $(buildConfiguration)'
+          projects: 'DetectDoc.slnx'
+          workingDirectory: '$(Build.SourcesDirectory)/Detect-Doc'
+      - task: DotNetCoreCLI@2
+        displayName: 'Run tests'
+        inputs:
+          command: 'test'
+          arguments: '--no-build --configuration $(buildConfiguration) --filter "Category!=Corpus" --verbosity minimal'
+          projects: 'DetectDoc.slnx'
+          publishTestResults: true
+          workingDirectory: '$(Build.SourcesDirectory)/Detect-Doc'
+
+  - job: BuildAndPush
+    displayName: 'Build and Push Docker Image'
+    dependsOn: BuildAndTests
+    pool: ${{variables.poolNameForBuildAndPush}}
+    steps:
+      - checkout: self
+        persistCredentials: true
+      - script: hadolint Detect-Doc/Dockerfile
+        displayName: 'Run hadolint'
+        target:
+          container: hadolint
+      - task: Docker@2
+        displayName: 'Login to Docker Registry'
+        inputs:
+          command: login
+          containerRegistry: '$(registry-Service-Connection-Val-Apps)'
+      - task: Docker@2
+        displayName: 'Build and Push API Image'
+        inputs:
+          command: 'buildAndPush'
+          dockerfile: '$(Build.SourcesDirectory)/Detect-Doc/Dockerfile'
+          containerRegistry: '$(registry-Service-Connection-Val-Apps)'
+          repository: 'valia/poc-detect-doc'
+          tags: 'latest'
+          buildContext: 'Detect-Doc'
+      - script: |
+          docker system prune -af
+        displayName: 'Supprime tous les containers, images, réseaux et caches inutilisés'
