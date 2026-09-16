@@ -89,6 +89,43 @@ Formulaire `multipart/form-data` :
 
 `types` accepte un tableau JSON d'identifiants, `["RIB","FACTURE"]`, ou d'objets avec `libelle` et `description` facultatifs, `[{"id":"RIB","libelle":"Relevé d'identité bancaire","description":"Coordonnées bancaires du titulaire"}]`. Les libellés et descriptions sont montrés au modèle et améliorent la discrimination entre types proches. La liste séparée par des virgules (`RIB,FACTURE`) reste admise, c'est ce que poste Swagger. Chaque `id` doit être non vide et unique.
 
+Exemple d'entrée `types`, le catalogue de référence de l'évaluation, versionné dans `tools/ClassificationEvaluation/descriptions-types.json` :
+
+```json
+[
+  {
+    "id": "carte_visite",
+    "libelle": "Carte de visite",
+    "description": "Très court, quelques dizaines de mots : nom, fonction et coordonnées d'une personne. Aucune date, aucun montant, aucun corps de document."
+  },
+  {
+    "id": "feuille_emar",
+    "libelle": "Feuille d'émargement",
+    "description": "Liste nominative de participants avec une grille de signatures par créneau, sous un en-tête de session de formation."
+  },
+  {
+    "id": "offre_emploi",
+    "libelle": "Offre de stage, alternance ou emploi",
+    "description": "Capture imprimée d'une page web d'offre : URL et date en en-tête et pied de page, poste, entreprise, missions, bouton de candidature."
+  },
+  {
+    "id": "rib",
+    "libelle": "Relevé d'identité bancaire",
+    "description": "Document dont l'objet est de communiquer les coordonnées d'un compte : pavé des codes nationaux ou IBAN et BIC, jamais de cartouche de mandat à signer. Un bloc de coordonnées bancaires dans un document d'un autre objet n'est pas un rib."
+  },
+  {
+    "id": "rib_sepa",
+    "libelle": "Relevé d'identité bancaire et mandat SEPA",
+    "description": "Document combinant deux blocs : un bloc RIB avec code banque ou établissement, code guichet ou agence, numéro de compte et clé RIB ; un mandat avec autorisation de prélèvement, référence de mandat, identifiant créancier et emplacement de signature. Les deux blocs sont nécessaires. L’IBAN et le BIC seuls ne constituent pas le premier bloc."
+  },
+  {
+    "id": "sepa",
+    "libelle": "Mandat SEPA",
+    "description": "Mandat d’autorisation de prélèvement avec référence de mandat, identifiant créancier, IBAN/BIC du débiteur et emplacement de signature. Exclut les documents contenant également le bloc RIB distinct composé du code banque, code guichet, numéro de compte et clé RIB."
+  }
+]
+```
+
 `engine` choisit l'extraction, dans la limite du format détecté à la signature du contenu (l'extension et le `Content-Type` ne font pas foi) : `pdfpig` lit le texte natif d'un PDF, `ppocr-tiny` passe un PDF ou une image (PNG, JPEG, BMP, WebP, GIF première frame) par l'OCR, `openxml` lit le texte natif d'un DOCX. `auto` choisit selon le format : PDF natif puis OCR si une page est vide, OCR direct pour une image, `openxml` pour un DOCX. Une combinaison explicite incompatible (`pdfpig` sur une image, `ppocr-tiny` sur un DOCX…) est refusée en `400`. Laisser `auto` sauf essai reproductible.
 
 Réponse `200` :
