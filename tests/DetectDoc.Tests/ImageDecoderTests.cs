@@ -49,48 +49,27 @@ public class ImageDecoderTests
         Assert.Same(source, resultat);
     }
 
-    [Fact]
-    public void AppliquerOrientation_PivoteDe90Degres()
-    {
-        // Bitmap 2x3 avec un pixel marqué en haut à gauche : après rotation horaire il doit
-        // se retrouver en haut à droite d'un bitmap 3x2.
-        using var source = new SKBitmap(2, 3);
-        source.Erase(SKColors.White);
-        source.SetPixel(0, 0, SKColors.Black);
-
-        using var resultat = ImageDecoder.AppliquerOrientation(source, SKEncodedOrigin.RightTop);
-
-        Assert.Equal(3, resultat.Width);
-        Assert.Equal(2, resultat.Height);
-        Assert.Equal(SKColors.Black, resultat.GetPixel(2, 0));
-        Assert.Equal(SKColors.White, resultat.GetPixel(0, 0));
-    }
-
-    [Fact]
-    public void AppliquerOrientation_PivoteDe180Degres()
+    // Chaque origine EXIF est vérifiée par la destination du pixel (0,0) d'une source 2x3 :
+    // les cas transposés échangent largeur et hauteur, les autres les conservent.
+    [Theory]
+    [InlineData(SKEncodedOrigin.TopRight, 2, 3, 1, 0)]
+    [InlineData(SKEncodedOrigin.BottomRight, 2, 3, 1, 2)]
+    [InlineData(SKEncodedOrigin.BottomLeft, 2, 3, 0, 2)]
+    [InlineData(SKEncodedOrigin.LeftTop, 3, 2, 0, 0)]
+    [InlineData(SKEncodedOrigin.RightTop, 3, 2, 2, 0)]
+    [InlineData(SKEncodedOrigin.RightBottom, 3, 2, 2, 1)]
+    [InlineData(SKEncodedOrigin.LeftBottom, 3, 2, 0, 1)]
+    public void AppliquerOrientation_PlaceLePixelMarqueSelonLOrigine(
+        SKEncodedOrigin origine, int largeur, int hauteur, int xAttendu, int yAttendu)
     {
         using var source = new SKBitmap(2, 3);
         source.Erase(SKColors.White);
         source.SetPixel(0, 0, SKColors.Black);
 
-        using var resultat = ImageDecoder.AppliquerOrientation(source, SKEncodedOrigin.BottomRight);
+        using var resultat = ImageDecoder.AppliquerOrientation(source, origine);
 
-        Assert.Equal(2, resultat.Width);
-        Assert.Equal(3, resultat.Height);
-        Assert.Equal(SKColors.Black, resultat.GetPixel(1, 2));
-    }
-
-    [Fact]
-    public void AppliquerOrientation_MiroirHorizontal()
-    {
-        using var source = new SKBitmap(3, 2);
-        source.Erase(SKColors.White);
-        source.SetPixel(0, 0, SKColors.Black);
-
-        using var resultat = ImageDecoder.AppliquerOrientation(source, SKEncodedOrigin.TopRight);
-
-        Assert.Equal(3, resultat.Width);
-        Assert.Equal(2, resultat.Height);
-        Assert.Equal(SKColors.Black, resultat.GetPixel(2, 0));
+        Assert.Equal(largeur, resultat.Width);
+        Assert.Equal(hauteur, resultat.Height);
+        Assert.Equal(SKColors.Black, resultat.GetPixel(xAttendu, yAttendu));
     }
 }
