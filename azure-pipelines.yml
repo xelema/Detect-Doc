@@ -2,7 +2,7 @@ trigger: none
 
 variables:
 - name: poolNameForBuildAndTests
-  value: 'IC_vmprodcompil03'
+  value: 'IC_LINUX'
 - name: poolNameForBuildAndPush
   value: 'IC_LINUX'
 - name: buildConfiguration
