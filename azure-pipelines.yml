@@ -25,12 +25,13 @@ jobs:
         displayName: 'Use .NET SDK'
         inputs:
           version: 10.x
-      # Agent ancien : `python` manque quand seul `python3` existe, et UseDotNet n'arrive
-      # pas à ajouter le SDK au PATH. Alias et prepend se font à la main, sans admin.
+      # Agent ancien : `python` manque ou pointe vers Python 2 alors que les stubs de
+      # test exigent Python 3, et UseDotNet n'arrive pas à ajouter le SDK au PATH.
+      # Alias et prepend se font à la main, sans droits admin.
       - script: |
-          if ! command -v python >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
+          if ! python --version 2>&1 | grep -q "Python 3" && command -v python3 >/dev/null 2>&1; then
             mkdir -p "$AGENT_TEMPDIRECTORY/pybin"
-            ln -s "$(command -v python3)" "$AGENT_TEMPDIRECTORY/pybin/python"
+            ln -sf "$(command -v python3)" "$AGENT_TEMPDIRECTORY/pybin/python"
             echo "##vso[task.prependpath]$AGENT_TEMPDIRECTORY/pybin"
           fi
           DOTNET_DIR=$(ls -d "$AGENT_TOOLSDIRECTORY"/dotnet/*/x64 2>/dev/null | head -1)
