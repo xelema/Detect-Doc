@@ -25,10 +25,15 @@ jobs:
         displayName: 'Use .NET SDK'
         inputs:
           version: 10.x
-      - task: UsePythonVersion@0
-        displayName: 'Use Python'
-        inputs:
-          versionSpec: '3.x'
+      # Les tests Category=Python invoquent `python`, absent quand l'agent ne porte que
+      # `python3` : alias dans un dossier temporaire ajouté au PATH, sans droits admin.
+      - script: |
+          if ! command -v python >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
+            mkdir -p "$AGENT_TEMPDIRECTORY/pybin"
+            ln -s "$(command -v python3)" "$AGENT_TEMPDIRECTORY/pybin/python"
+            echo "##vso[task.prependpath]$AGENT_TEMPDIRECTORY/pybin"
+          fi
+        displayName: 'Alias python vers python3'
       - task: DotNetCoreCLI@2
         displayName: 'Restore projects'
         inputs:
