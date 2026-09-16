@@ -362,6 +362,23 @@ public class DemarrageTests
     }
 
     [Fact]
+    public async Task SignaleUnMoteurInconnuAvantLaDetectionDeFormat()
+    {
+        var classifieur = new ClassifieurDeTest((_, _) => new ClassificationResult("RIB", 0.9));
+        await using var application = CreerApplication("Development", classifieur);
+        using var client = application.CreateClient();
+        using var contenu = new MultipartFormDataContent();
+        contenu.Add(new ByteArrayContent("pas un document"u8.ToArray()), "file", "document.bin");
+        contenu.Add(new StringContent("[\"RIB\"]"), "types");
+        contenu.Add(new StringContent("tesseract"), "engine");
+
+        using var response = await client.PostAsync("/api/documents/classify", contenu);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(0, classifieur.Appels);
+    }
+
+    [Fact]
     public async Task SignaleUnZipSansPartieDocumentCommeNonPrisEnCharge()
     {
         var classifieur = new ClassifieurDeTest((_, _) => new ClassificationResult("RIB", 0.9));

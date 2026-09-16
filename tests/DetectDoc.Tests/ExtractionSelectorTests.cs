@@ -147,6 +147,16 @@ public class ExtractionSelectorTests
     }
 
     [Fact]
+    public void Extract_MoteurInconnuEstRefuseMemeSurUnFormatInconnu()
+    {
+        var selecteur = CreerSelecteur(new ExtracteurFictif("pdfpig", []), new ExtracteurFictif("ppocr-tiny", []));
+
+        var exception = Assert.Throws<ArgumentException>(
+            () => selecteur.Extract("tesseract", new MemoryStream("pas un document"u8.ToArray())));
+        Assert.Equal("engine", exception.ParamName);
+    }
+
+    [Fact]
     public void Extract_FormatInconnuLeveUnsupportedDocumentFormat()
     {
         var selecteur = CreerSelecteur(new ExtracteurFictif("pdfpig", []), new ExtracteurFictif("ppocr-tiny", []));

@@ -15,8 +15,16 @@ public sealed class ExtractionSelector(
         Stream document,
         CancellationToken cancellationToken = default)
     {
-        var format = DocumentFormats.Detect(document);
+        // Le jeton est validé avant la signature : un moteur inconnu est une erreur de
+        // vocabulaire (400), qui prime sur le constat de format (415) comme sur la route dev.
         var jeton = engine?.ToLowerInvariant();
+        if (jeton is not (null or "" or "auto" or "pdfpig" or "ppocr-tiny" or "openxml"))
+        {
+            throw new ArgumentException(
+                "Le moteur doit être auto, pdfpig, ppocr-tiny ou openxml.", nameof(engine));
+        }
+
+        var format = DocumentFormats.Detect(document);
         return (jeton, format) switch
         {
             (null or "" or "auto", DocumentFileFormat.Pdf) =>
