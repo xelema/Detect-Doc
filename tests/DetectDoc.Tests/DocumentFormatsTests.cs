@@ -42,6 +42,15 @@ public class DocumentFormatsTests
     }
 
     [Fact]
+    public void Detect_SignaleUneArchivePkIlisible()
+    {
+        // Signature PK mais archive tronquée : conteneur reconnu, contenu illisible (422).
+        using var flux = new MemoryStream(FichiersDeTest.PkTronque());
+
+        Assert.Throws<InvalidDataException>(() => DocumentFormats.Detect(flux));
+    }
+
+    [Fact]
     public void Detect_RejetteUnZipSansPartieDocument()
     {
         using var flux = new MemoryStream(FichiersDeTest.ZipSansDocx());

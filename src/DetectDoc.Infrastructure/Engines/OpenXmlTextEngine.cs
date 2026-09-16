@@ -33,7 +33,7 @@ public sealed class OpenXmlTextEngine : ITextExtractionEngine
             return [new PageExtractionResult(1, texte, null)];
         }
         catch (Exception exception) when (exception
-            is OpenXmlPackageException or FileFormatException or InvalidDataException or XmlException)
+            is OpenXmlPackageException or FileFormatException or InvalidDataException or IOException or XmlException)
         {
             throw new InvalidDataException("Le document DOCX n'a pas pu être lu.", exception);
         }

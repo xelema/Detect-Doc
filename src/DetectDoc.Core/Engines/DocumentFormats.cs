@@ -58,7 +58,7 @@ public static class DocumentFormats
             using var archive = new ZipArchive(fluxDocument, ZipArchiveMode.Read, leaveOpen: true);
             return archive.GetEntry("word/document.xml") is not null;
         }
-        catch (InvalidDataException exception)
+        catch (Exception exception) when (exception is InvalidDataException or IOException)
         {
             // Signature PK mais archive illisible : conteneur reconnu corrompu, pas un format inconnu.
             throw new InvalidDataException("L'archive du document est illisible.", exception);

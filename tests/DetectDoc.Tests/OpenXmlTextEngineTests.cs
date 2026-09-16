@@ -71,4 +71,23 @@ public class OpenXmlTextEngineTests
 
         Assert.Throws<InvalidDataException>(() => _moteur.Extract(flux));
     }
+
+    [Fact]
+    public void Extract_SignaleUneErreurDeLectureCommeDocumentInvalide()
+    {
+        // Le flux tombe en panne passé l'en-tête : l'archive s'ouvre sur la fin du flux,
+        // l'échec IO doit ressortir en document illisible (422), pas en faute interne.
+        using var flux = new FluxEnEchec(FichiersDeTest.Docx("texte"));
+
+        Assert.Throws<InvalidDataException>(() => _moteur.Extract(flux));
+    }
+
+    private sealed class FluxEnEchec(byte[] contenu) : MemoryStream(contenu)
+    {
+        public override int Read(byte[] buffer, int offset, int count) =>
+            Position > 500 ? throw new IOException("Panne simulée.") : base.Read(buffer, offset, count);
+
+        public override int Read(Span<byte> buffer) =>
+            Position > 500 ? throw new IOException("Panne simulée.") : base.Read(buffer);
+    }
 }

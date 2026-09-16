@@ -103,6 +103,9 @@ internal static class FichiersDeTest
         return flux.ToArray();
     }
 
+    // Signature PK puis archive tronquée : le conteneur est reconnu mais illisible.
+    public static byte[] PkTronque() => Docx("texte")[..20];
+
     // Conteneur zip sans word/document.xml : la signature PK seule ne fait pas un DOCX.
     public static byte[] ZipSansDocx()
     {

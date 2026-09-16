@@ -168,6 +168,21 @@ public class DemarrageTests
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
     }
 
+    [Fact]
+    public async Task RetourneUnProblemDetailsPourUneArchivePkTronquee()
+    {
+        await using var application = CreerApplication("Development");
+        using var client = application.CreateClient();
+        using var contenu = new MultipartFormDataContent();
+        contenu.Add(new ByteArrayContent(FichiersDeTest.PkTronque()), "file", "document.docx");
+
+        using var response = await client.PostAsync("/api/dev/extract/openxml", contenu);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        using var probleme = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("Document invalide.", probleme.RootElement.GetProperty("title").GetString());
+    }
+
     [Theory]
     [InlineData("[\"RIB\"]", typeof(TaskCanceledException), HttpStatusCode.GatewayTimeout)]
     [InlineData("DEVIS,FACTURE,RIB,FEUILLE_EMAR", typeof(InvalidDataException), HttpStatusCode.BadGateway)]
