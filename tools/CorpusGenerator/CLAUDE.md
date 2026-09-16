@@ -4,7 +4,7 @@
 
 Cet outil fabrique des documents de test synthétiques et le manifest qui les décrit. Il s'utilise seul, sans rien connaître du projet qui l'héberge.
 
-**Ajouter un type de document** : lire `AJOUTER-UN-TYPE.md` et l'appliquer. La procédure y vit en entier, du dépôt des exemples jusqu'au compte rendu de fin. C'est le même contenu que déclenche le skill `corpus-nouveau-type`, posé à l'identique sous `.claude/skills/` pour Claude Code et sous `.agents/skills/` pour Codex, OpenCode lisant les deux.
+**Ajouter un type de document** : lire `AJOUTER-UN-TYPE.md` et l'appliquer, la procédure y vit en entier. Le skill `corpus-nouveau-type`, posé à l'identique sous `.claude/skills/` et sous `.agents/skills/`, ne fait que la déclencher.
 
 **Comprendre l'outil** : `README.md`, qui porte l'architecture, la configuration et les schémas.
 

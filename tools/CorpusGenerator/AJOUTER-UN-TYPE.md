@@ -7,43 +7,35 @@ Chaîne complète, depuis un document reçu jusqu'à un type prêt à générer.
 | **exemples réels** | un ou plusieurs PDF ou images d'un type qui existe, déposés hors dépôt |
 | **description seule** | une phrase décrivant un document qui n'existe pas encore, pour une démonstration ou un essai |
 
-Dans les deux cas, la sortie est la même : une fiche de type, un module Python, un ou plusieurs templates, quatre inscriptions, des contrôles, et un compte rendu qui explique à l'utilisateur comment générer. Le reste de ce fichier décrit les huit étapes qui y mènent. Le [README](README.md) reste la référence sur le fonctionnement du générateur ; ce guide ne décrit que l'ajout d'un type.
+Dans les deux cas, la sortie est la même : une fiche de type, un module Python, un ou plusieurs templates, quatre inscriptions, des contrôles, et un compte rendu qui explique à l'utilisateur comment générer. Le [README](README.md) reste la référence sur le fonctionnement du générateur ; ce guide ne décrit que l'ajout d'un type.
 
 ## Mode d'emploi
 
-`<CODE>` désigne le nom du type de documents voulu.
+`<CODE>` désigne le code métier du type voulu.
 
-1. **Déposer les exemples** dans `exemples/<CODE>/`, un dossier par type, à la racine de `CorpusGenerator`, ignoré par Git. Sans exemple, sauter cette ligne et décrire le document voulu.
-2. **Lancer l'agent** : `/corpus-nouveau-type ajoute le type <CODE> à partir de exemples/<CODE>/`. Si l'agent ne charge pas les skills, lui dire de lire ce fichier et de l'appliquer, ce qui suffit. Ajouter « en N variantes » si une seule mise en page ne convient pas.
+1. **Déposer les exemples** dans `exemples/<CODE>/`, un dossier par type, ignoré par Git. Sans exemple, sauter cette ligne.
+2. **Lancer l'agent** : `/corpus-nouveau-type <CODE>`. Ajouter « en N variantes » si une seule mise en page ne convient pas. Si l'agent ne charge pas le skill, lui dire de lire ce fichier et de l'appliquer, ce qui suffit.
 3. **Régler les effectifs** dans `corpus-generator.toml`, bloc `[types.<nom>]` : `count` pour le nombre de documents, `scanned_share` pour la part numérisée, `profiles` pour les défauts qui peuvent lui arriver.
 4. **Générer** : `docker compose build && docker compose run --rm generator`.
 5. **Contrôler** : `docker compose run --rm --entrypoint python generator manifest.py`, puis la même commande sur `verifier.py`. Les deux doivent rendre zéro anomalie.
 
 ## Conduire le travail avec un agent
 
-Ce guide est la procédure, quel que soit l'assistant. Le skill `corpus-nouveau-type` ne fait que le déclencher, et il est posé dans les deux dossiers que se partagent les trois outils, à l'identique.
+Ce guide est la procédure, quel que soit l'assistant. Le skill `corpus-nouveau-type` ne fait que le déclencher ; il est posé à l'identique sous `.claude/skills/` et sous `.agents/skills/`, à la racine du CorpusGenerator où Claude Code, Codex et OpenCode le cherchent. Le `name` du frontmatter reste en minuscules à tirets et la `description` sous 1024 caractères, contraintes qu'OpenCode fait respecter.
 
-| Fichier | Lu par |
-|---|---|
-| `.claude/skills/corpus-nouveau-type/SKILL.md` | Claude Code, OpenCode |
-| `.agents/skills/corpus-nouveau-type/SKILL.md` | Codex, OpenCode |
-| `AGENTS.md`, recopié en `CLAUDE.md` | les trois, à chaque session, sans déclencheur |
+**Déduire d'abord, demander ensuite.** L'agent rassemble seul ce qui se lit dans le dépôt, et ne pose en une seule fois que les questions restées ouvertes.
 
-Codex balaie `.agents/skills` de son dossier courant jusqu'à la racine du dépôt, et Claude Code comme OpenCode lisent le `.claude/skills` du dossier depuis lequel ils sont lancés : les deux dossiers vivent donc ici, à la racine du CorpusGenerator, et non à celle du dépôt. Le `name` du frontmatter doit rester en minuscules à tirets et la `description` sous 1024 caractères, contraintes qu'OpenCode fait respecter. Pour tout autre assistant, pointer ce guide revient au même.
-
-Trois points décident de tout le travail et ne se devinent pas. Les demander en une seule fois, puis avancer.
-
-| À savoir | Défaut si rien n'est dit |
-|---|---|
-| l'entrée : le dossier d'exemples, ou la description du document voulu | demander, rien ne le remplace |
-| le code du type et son libellé | le prendre dans la documentation des types du projet si le type y figure, sinon en proposer un et le faire valider |
-| le nombre de mises en page | **une seule**, qui suit l'exemple fourni |
+| À savoir | Comment le déduire | Quand demander |
+|---|---|---|
+| l'entrée | `exemples/<CODE>/` existe : exemples réels ; sinon la description portée par la demande | ni dossier ni description exploitable |
+| le code du type et son libellé | le type figure dans la documentation des types du projet | sinon en proposer un et le faire valider |
+| le nombre de mises en page | « en N variantes » dans la demande | jamais : une seule par défaut, qui suit l'exemple fourni |
 
 **Le nombre de mises en page se prend au mot.** Sans consigne, produire un clone visuel de l'exemple. Si N variantes sont demandées, en produire exactement N, et franchement distinctes, au sens de l'étape 3.
 
 **Sans exemple**, en mode démonstration, la description fait autorité : inventer une mise en page plausible du domaine de la formation professionnelle, et le dire dans la fiche du type comme dans le compte rendu. Ne jamais présenter un type inventé comme observé sur des exemples réels.
 
-**L'agent écrit, il n'exécute pas.** Il produit le code, les templates, la configuration et les contrôles, tout fonctionnel, puis passe la main : c'est l'utilisateur qui génère, sur sa machine, et qui revient avec ce qu'il a vu. Le travail se termine donc par un compte rendu qui explique comment exécuter, comment régler, comment regarder le résultat et ce qui reste à faire, détail à l'étape 8.
+**L'agent écrit, il n'exécute pas.** Il produit le code, les templates, la configuration et les contrôles, tout fonctionnel, puis passe la main : c'est l'utilisateur qui génère, sur sa machine, et qui revient avec ce qu'il a vu. Le travail se termine donc par le compte rendu de l'étape 8.
 
 Deux interdits. Ne jamais commiter les exemples fournis ni recopier une de leurs valeurs dans un fichier suivi. Ne pas commiter sans demande explicite.
 
@@ -61,7 +53,7 @@ Deux interdits. Ne jamais commiter les exemples fournis ni recopier une de leurs
 
 ## Étape 1, rassembler l'entrée
 
-Les exemples fournis vont dans `exemples/<CODE>/`, à la racine de `CorpusGenerator`, où `<CODE>` est le code du type. Le dossier est ignoré par Git et doit le rester : un exemple métier réel contient des données personnelles, et rien de ce qu'il porte ne doit entrer dans le dépôt. Les exemples dépouillés avant l'écriture de ce guide sont restés dans `tmp/samples/` à la racine du dépôt, emplacement que citent les fiches déjà écrites.
+Les exemples fournis vont dans `exemples/<CODE>/`, ignoré par Git et qui doit le rester : un exemple métier réel contient des données personnelles, et rien de ce qu'il porte ne doit entrer dans le dépôt.
 
 Un exemple se regarde page par page, pas seulement en texte extrait : la mise en page est la moitié de l'information, et un exemple numérisé n'a aucune couche texte à extraire.
 
@@ -229,41 +221,29 @@ Le travail s'arrête ici : tout est écrit, rien n'a été exécuté. C'est l'ut
 **Ce qu'il contient.**
 
 1. **Ce qui a été ajouté** : le type, son code, sa nature, le nombre de mises en page, les fichiers créés et modifiés.
-2. **Comment regarder un document sans tout régénérer**, la commande ci-dessous, à recopier telle quelle avec le vrai nom du module.
+2. **Comment regarder le rendu, générer ce type seul et générer le corpus entier** : les trois commandes ci-dessous, recopiées avec le vrai nom du type.
 3. **Comment régler le corpus** : le bloc `[types.<nom>]` écrit dans le TOML, ce que chaque réglage change, et lesquels valent la peine d'être touchés en premier.
-4. **Comment générer et contrôler** : `docker compose build`, `docker compose run --rm generator`, puis `manifest.py` et `verifier.py` par `--entrypoint python`. Les deux doivent rendre zéro anomalie.
-5. **La suite** : ce sur quoi un retour est attendu, la mise en page tient-elle la page et ressemble-t-elle à l'exemple, puis ce qui viendra ensuite, régler les effectifs, régénérer le corpus complet, passer le type en revue.
+4. **La suite** : ce sur quoi un retour est attendu, la mise en page tient-elle la page et ressemble-t-elle à l'exemple, puis ce qui viendra ensuite, régler les effectifs, régénérer le corpus complet, passer le type en revue.
 
-**L'aperçu à donner.** Régénérer le corpus entier pour juger d'une mise en page coûte plusieurs minutes pour rien. Un rendu isolé suffit, et s'écrit dans `apercu/`, dossier de travail ignoré par Git, monté le temps de la commande :
+**Les trois commandes.** `apercu.py` produit dans `apercu/`, dossier de travail ignoré par Git, des PDF et un PNG par page. Le montage de `$(pwd)` sur `/app` rend les corrections de templates et de code visibles sans rebuild : seule une nouvelle police ou dépendance impose un `docker compose build`.
 
 ```bash
-mkdir -p apercu
-docker compose build
-docker compose run --rm -T -v "$(pwd)/apercu:/apercu" --entrypoint python generator - <<'PY'
-from pathlib import Path
+# Regarder le rendu : trois documents propres, PDF + PNG page par page.
+docker compose run --rm -v "$(pwd):/app" --entrypoint python generator apercu.py <nom>
 
-import fitz
+# Générer ce type seul comme le corpus le produirait : à l'effectif du TOML,
+# jumeaux numérisés ou reprises compris, entrées dans apercu/manifest.jsonl.
+docker compose run --rm -v "$(pwd):/app" --entrypoint python generator apercu.py <nom> --complet
 
-from documents.mon_type import generer_mon_type, style_mon_type
-from rendu import logo_svg, rendre_pdf
-
-for seed in range(1, 4):
-    document, style = generer_mon_type(seed), style_mon_type(seed)
-    chemin = Path(f"/apercu/apercu-{seed}.pdf")
-    pages = rendre_pdf(style.template, chemin, d=document, s=style,
-                       logo=logo_svg(document.organisme.raison_sociale, style.couleur))
-    # PyMuPDF plutôt que pdftoppm : il est déjà une dépendance du générateur, là où
-    # poppler ne serait installé dans l'image que pour cet aperçu.
-    with fitz.open(chemin) as pdf:
-        for numero, page in enumerate(pdf, start=1):
-            page.get_pixmap(dpi=110).save(f"/apercu/apercu-{seed}-{numero}.png")
-    print(seed, style.template, pages, "page(s)")
-PY
+# Générer le corpus entier, puis le contrôler : zéro anomalie attendu.
+docker compose build && docker compose run --rm generator
+docker compose run --rm --entrypoint python generator manifest.py
+docker compose run --rm --entrypoint python generator verifier.py
 ```
 
-`-T` coupe l'allocation d'un terminal, sans quoi le script passé sur l'entrée standard n'arriverait pas jusqu'à Python. `docker compose build` est à relancer après chaque correction, le code étant copié dans l'image : seules les dernières couches se reconstruisent, c'est l'affaire de quelques secondes.
+Sous le venv WSL, `.venv/bin/python apercu.py <nom>` fait la même chose sans conteneur.
 
-Les PNG produits sont ce sur quoi la correction se joue. Un débordement de page, un tableau qui casse, un bloc qui se chevauche : ni le manifest ni les contrôles ne les signalent, seul un œil sur l'image les voit. L'utilisateur les regarde ou les redonne à l'agent, qui corrige, et la boucle recommence jusqu'à ce que la page tienne debout.
+Les PNG sont ce sur quoi la correction se joue. Un débordement de page, un tableau qui casse, un bloc qui se chevauche : ni le manifest ni les contrôles ne les signalent, seul un œil sur l'image les voit. L'utilisateur les regarde ou les redonne à l'agent, qui corrige, et la boucle recommence jusqu'à ce que la page tienne debout.
 
 **Un raccourci utile à signaler** : `enabled = false` sous `[degradation]` supprime toute rastérisation et accélère franchement une génération complète, le temps d'itérer sur les templates. À remettre à `true` avant la génération finale, sans quoi le corpus sort sans un seul document numérisé.
 

@@ -4,6 +4,16 @@ Fabrique les documents du corpus de test : des PDF français réalistes, entièr
 
 Aucune donnée personnelle réelle n'entre ni ne sort d'ici. Les identifiants produits (IBAN, SIREN, SIRET, TVA) portent des clés de contrôle justes, mais ne désignent personne.
 
+## Démarrage rapide : ajouter un type de document
+
+Le seul prérequis est Docker Desktop. Deux entrées possibles : des exemples réels (PDF ou images) déposés dans `exemples/<CODE>/`, dossier ignoré par Git et qui le reste, ou une simple description portée par la demande. La procédure complète vit dans [AJOUTER-UN-TYPE.md](AJOUTER-UN-TYPE.md) ; ce qui suit suffit à démarrer.
+
+1. Depuis ce dossier (`tools/CorpusGenerator/`), déposer les exemples dans `exemples/<CODE>/`, un dossier par type. Sans exemple, sauter cette étape et décrire le document voulu dans la demande.
+2. Lancer l'agent (Claude Code, Codex ou OpenCode) : `/corpus-nouveau-type <CODE>`, avec « en N variantes » si une seule mise en page ne convient pas. L'agent écrit le module, les templates, la configuration et les contrôles, n'exécute rien, et rend un compte rendu avec les commandes.
+3. Construire l'image une fois, puis regarder le rendu : `docker compose build`, puis `docker compose run --rm -v "$(pwd):/app" --entrypoint python generator apercu.py <nom>`. Les PDF et un PNG par page tombent dans `apercu/` ; le montage de `$(pwd)` rend chaque correction visible sans rebuild. On corrige et on relance jusqu'à ce que la page tienne.
+4. Régler les effectifs dans `corpus-generator.toml`, bloc `[types.<nom>]` : `count`, `scanned_share`, `profiles`.
+5. Générer le corpus et le contrôler : `docker compose run --rm generator`, puis `manifest.py` et `verifier.py` par `--entrypoint python` (commandes ci-dessous). Zéro anomalie attendu.
+
 ## Exécuter avec Docker
 
 Depuis le dossier `CorpusGenerator` :
@@ -460,6 +470,8 @@ Si le nouveau type a un voisin confondable déjà présent, comme la facture et 
 **Ajouter un type dont la page n'est pas le document.** La carte de visite occupe un coin d'une feuille par ailleurs vide. Son template `_carte_page.html` décrit le support, feuille de scanner ou plan de travail, et les trois `carte_0X.html` en héritent pour ne décrire que la face imprimée. Reprendre ce découpage pour tout type dont le support compte autant que le contenu.
 
 Dans les deux cas, reporter l'ajout sur les schémas ci-dessus : ils ne servent qu'à condition de décrire le code tel qu'il est.
+
+**Regarder le rendu sans régénérer le corpus** : `apercu.py <type>` écrit des documents propres dans `apercu/`, PDF et un PNG par page ; `apercu.py <type> --complet` y produit la tranche du corpus pour ce type seul, numérisations et manifest compris. Détail à l'étape 8 d'[AJOUTER-UN-TYPE.md](AJOUTER-UN-TYPE.md).
 
 **Deux règles à ne pas enfreindre.**
 
