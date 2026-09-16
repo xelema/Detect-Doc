@@ -1,6 +1,6 @@
 # Detect-Doc
 
-POC de détection de type documentaire : le service reçoit un document PDF et une liste de types propre à l'appelant, puis renvoie le type le plus probable et un niveau de confiance, y compris quand ce score est faible. La chaîne est : extraction du texte, masquage des PII, classification par Mistral via Flowise. Objectif : réduire l'effort de qualification documentaire au dépôt en GED, puis réintégrer le service dans ValIAPI.
+POC de détection de type documentaire : le service reçoit un document (PDF, image PNG/JPEG/BMP/WebP/GIF ou DOCX) et une liste de types propre à l'appelant, puis renvoie le type le plus probable et un niveau de confiance, y compris quand ce score est faible. La chaîne est : extraction du texte, masquage des PII, classification par Mistral via Flowise. Objectif : réduire l'effort de qualification documentaire au dépôt en GED, puis réintégrer le service dans ValIAPI.
 
 ## Démarrer l'API
 
@@ -37,8 +37,8 @@ La dernière commande retourne `statut : ok`. Arrêter avec `Ctrl+C` ou `docker 
 | Route | Réponse | Disponibilité |
 |---|---|---|
 | [/health](http://localhost:5080/health) | HTTP 200, `{"statut":"ok"}` | Tous les environnements |
-| `POST /api/documents/classify` | Extraction puis classification d'un PDF | Tous les environnements |
-| `POST /api/documents/classify-batch` | Extraction puis classification d'un lot de PDF | Tous les environnements |
+| `POST /api/documents/classify` | Extraction puis classification d'un document (PDF, image, DOCX) | Tous les environnements |
+| `POST /api/documents/classify-batch` | Extraction puis classification d'un lot de documents | Tous les environnements |
 | `POST /api/dev/extract/{engine}` | Texte extrait page par page | Development et Recette |
 | `POST /api/dev/pii/detect` | Plages de PII détectées par les règles et Presidio | Development et Recette |
 | `POST /api/dev/pii/mask` | Texte avec les PII remplacées par des marqueurs | Development et Recette |
@@ -75,7 +75,7 @@ Detect-Doc/
 ├── src/
 │   ├── DetectDoc.Api/       démarrage, routes HTTP, contrats
 │   ├── DetectDoc.Core/      use case de classification, interfaces des adapteurs
-│   └── DetectDoc.Infrastructure/  adapteurs : PdfPig, PP-OCR, Presidio, Flowise
+│   └── DetectDoc.Infrastructure/  adapteurs : PdfPig, PP-OCR, OpenXml, Presidio, Flowise
 ├── tests/
 │   └── DetectDoc.Tests/     tests unitaires et HTTP, serveur en mémoire
 ├── corpus/

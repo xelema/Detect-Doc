@@ -37,9 +37,10 @@ public static class ClassificationEndpoints
                 : Results.Problem(HttpProblems.ForOutcome(outcome, cancellationToken));
         })
             .DisableAntiforgery()
-            .WithSummary("Extrait, masque les PII puis classe un PDF avec le moteur choisi.")
+            .WithSummary("Extrait, masque les PII puis classe un document (PDF, image ou DOCX) avec le moteur choisi.")
             .Produces<DocumentClassificationResult>()
             .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status415UnsupportedMediaType)
             .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
             .ProducesProblem(StatusCodes.Status502BadGateway)
             .ProducesProblem(StatusCodes.Status503ServiceUnavailable)
@@ -114,7 +115,7 @@ public static class ClassificationEndpoints
             return Results.Ok(resultats);
         })
             .DisableAntiforgery()
-            .WithSummary("Extrait, masque les PII puis classe plusieurs PDF indépendamment.")
+            .WithSummary("Extrait, masque les PII puis classe plusieurs documents (PDF, images ou DOCX) indépendamment.")
             .Produces<ResultatClassificationLotDocumentHttp[]>()
             .ProducesProblem(StatusCodes.Status400BadRequest);
     }

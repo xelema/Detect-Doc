@@ -1,6 +1,7 @@
 using System.Runtime.ExceptionServices;
 using UglyToad.PdfPig.Core;
 using DetectDoc.Core.Classification;
+using DetectDoc.Core.Engines;
 using Microsoft.AspNetCore.Mvc;
 
 namespace DetectDoc.Api.Endpoints;
@@ -14,9 +15,13 @@ internal static class HttpProblems
     // moteur dont les modèles manquent, qui est un défaut de déploiement.
     public static ProblemDetails? ForExtraction(Exception exception) => exception switch
     {
+        UnsupportedDocumentFormatException => Create(
+            StatusCodes.Status415UnsupportedMediaType,
+            "Format non pris en charge.",
+            "Formats acceptés : PDF, PNG, JPEG, BMP, WebP, GIF et DOCX."),
         InvalidDataException => Create(
             StatusCodes.Status422UnprocessableEntity,
-            "PDF invalide.",
+            "Document invalide.",
             exception.Message),
         // PdfPig accepte l'en-tête puis échoue sur la structure : la signature validée en amont ne
         // garantit pas un document ouvrable.

@@ -2,6 +2,7 @@ using DetectDoc.Core.Engines;
 using PDFtoImage;
 using PDFtoImage.Exceptions;
 using RapidOcrNet;
+using SkiaSharp;
 
 namespace DetectDoc.Infrastructure.Engines;
 
@@ -35,9 +36,19 @@ public sealed class PpOcrEngine : ITextExtractionEngine, IDisposable
 
     public IReadOnlyList<PageExtractionResult> Extract(Stream fluxDocument, CancellationToken cancellationToken = default)
     {
-        PdfStream.Validate(fluxDocument);
+        var format = DocumentFormats.Detect(fluxDocument);
         cancellationToken.ThrowIfCancellationRequested();
 
+        return format switch
+        {
+            DocumentFileFormat.Pdf => ExtrairePdf(fluxDocument, cancellationToken),
+            DocumentFileFormat.Image => [ExtraireImage(fluxDocument, cancellationToken)],
+            _ => throw new ArgumentException($"Le moteur {Name} ne lit que les PDF et les images.", "engine")
+        };
+    }
+
+    private IReadOnlyList<PageExtractionResult> ExtrairePdf(Stream fluxDocument, CancellationToken cancellationToken)
+    {
         var pages = new List<PageExtractionResult>();
         try
         {
@@ -52,21 +63,7 @@ public sealed class PpOcrEngine : ITextExtractionEngine, IDisposable
                 cancellationToken.ThrowIfCancellationRequested();
                 using (image)
                 {
-                    OcrResult resultat;
-                    lock (_verrouOcr)
-                    {
-                        resultat = _ocr.Detect(image, _optionsOcr);
-                    }
-                    var blocs = resultat.TextBlocks;
-                    var confiances = blocs
-                        .Where(bloc => bloc.CharScores is { Length: > 0 })
-                        .SelectMany(bloc => bloc.CharScores!)
-                        .ToArray();
-
-                    pages.Add(new PageExtractionResult(
-                        pages.Count + 1,
-                        string.Join(" ", blocs.Select(bloc => bloc.Text)),
-                        confiances.Length > 0 ? confiances.Average() : null));
+                    pages.Add(VersPage(pages.Count + 1, Detecter(image)));
                 }
             }
         }
@@ -78,6 +75,33 @@ public sealed class PpOcrEngine : ITextExtractionEngine, IDisposable
         }
 
         return pages;
+    }
+
+    private PageExtractionResult ExtraireImage(Stream fluxImage, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        using var image = ImageDecoder.DecodeOriented(fluxImage);
+        return VersPage(1, Detecter(image));
+    }
+
+    private OcrResult Detecter(SKBitmap image)
+    {
+        lock (_verrouOcr)
+        {
+            return _ocr.Detect(image, _optionsOcr);
+        }
+    }
+
+    private static PageExtractionResult VersPage(int numeroPage, OcrResult resultat)
+    {
+        var confiances = resultat.TextBlocks
+            .Where(bloc => bloc.CharScores is { Length: > 0 })
+            .SelectMany(bloc => bloc.CharScores!)
+            .ToArray();
+        return new PageExtractionResult(
+            numeroPage,
+            string.Join(" ", resultat.TextBlocks.Select(bloc => bloc.Text)),
+            confiances.Length > 0 ? confiances.Average() : null);
     }
 
     private static RapidOcrModelSet ModelSet(string taille, string repertoireModeles)
